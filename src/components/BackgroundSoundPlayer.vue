@@ -47,7 +47,7 @@
         <LjButton
           variant="danger"
           size="sm"
-          :icon="ICONS.CATEGORY.CLOSING"
+          :icon="ICONS.PLAYER.STOP_NOW"
           icon-only
           @click="bg.stop(0)"
         />
