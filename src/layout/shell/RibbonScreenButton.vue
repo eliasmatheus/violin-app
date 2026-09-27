@@ -1,20 +1,26 @@
 <template>
-  <div class="ribbon-screen-btn" :class="`ribbon-btn--${size}`">
+  <div
+    class="ribbon-screen-btn"
+    :class="[`ribbon-btn--${size}`, { 'ribbon-screen-btn--icon-only': iconOnly }]"
+  >
     <button
       type="button"
       class="ribbon-btn ribbon-btn--main"
-      :class="[`ribbon-btn--${size}`, { 'ribbon-btn--active': is_active }]"
+      :class="[
+        `ribbon-btn--${size}`,
+        { 'ribbon-btn--active': is_active, 'ribbon-btn--icon-only': iconOnly },
+      ]"
       :title="dynamicLabel"
       :data-testid="testid"
       @click="primaryClick"
     >
       <LjIcon
         :icon="dynamicIcon"
-        :size="size === 'large' ? 32 : 16"
+        :size="resolvedIconSize"
         :color="dynamicIconColor"
         class="ribbon-btn-icon"
       />
-      <span class="ribbon-btn-label">{{ dynamicLabel }}</span>
+      <span v-if="!iconOnly" class="ribbon-btn-label">{{ dynamicLabel }}</span>
     </button>
 
     <LjMenu :items="menuItems" side="bottom" align="end">
@@ -22,10 +28,11 @@
         <button
           type="button"
           class="ribbon-screen-btn__chevron"
+          :class="{ 'ribbon-screen-btn__chevron--static': iconOnly }"
           :title="$t('options.slides.open_at')"
           @click.stop
         >
-          <LjIcon :icon="ICONS.UI.CHEVRON_DOWN" :size="14" />
+          <LjIcon :icon="ICONS.UI.CHEVRON_DOWN" :size="iconOnly ? 12 : 14" />
         </button>
       </template>
     </LjMenu>
@@ -61,6 +68,15 @@ const props = defineProps({
   testid: { type: String, default: null },
   fullscreen: { type: Boolean, default: true },
   alwaysOnTop: { type: Boolean, default: false },
+  /** Sem rótulo visível — o `title` do botão faz o papel de tooltip. */
+  iconOnly: { type: Boolean, default: false },
+  /** Sobrepõe o tamanho calculado pelo `size` (usado pela faixa Violin). */
+  iconSize: { type: Number, default: null },
+});
+
+const resolvedIconSize = computed(() => {
+  if (props.iconSize) return props.iconSize;
+  return props.size === "large" ? 32 : 16;
 });
 
 const { t } = useI18n();
@@ -313,6 +329,29 @@ watch(() => props.feature, refresh);
 .ribbon-btn--active {
   background: var(--lj-rbtn-active-bg);
   border-color: var(--lj-rbtn-active-border);
+}
+
+/* Só-ícone (faixa contextual Violin): glifo centralizado, sem rótulo. */
+.ribbon-btn--icon-only {
+  justify-content: center;
+  align-items: center;
+  padding: var(--lj-space-1);
+  gap: 0;
+}
+
+/* No modo só-ícone o chevron sai de cima do botão e vira irmão ao lado —
+   split button de toolbar. Assim o menu de monitores continua acessível sem
+   cobrir o glifo na caixa pequena. */
+.ribbon-screen-btn--icon-only {
+  flex-direction: row;
+  align-items: center;
+}
+
+.ribbon-screen-btn__chevron--static {
+  position: static;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .ribbon-btn--large {

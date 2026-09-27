@@ -18,6 +18,7 @@ import Telemetry from "@/helpers/Telemetry";
 import { KEYS } from "@/constants/UserDataKeys";
 import { FONT, resolveDefaultFont } from "@/config/Fonts";
 import { startThemeSync } from "@/composables/useAppTheme";
+import { startUiStyleSync } from "@/composables/useUiStyle";
 import { BootOrchestrator } from "@/bootstrap/BootOrchestrator";
 import { requiresAuxiliaryIndexedDbBeforeMount } from "@/bootstrap/auxiliaryIdbPolicy";
 
@@ -55,6 +56,7 @@ watchEffect(() => {
   document.documentElement.style.setProperty(FONT.PROJECTION.CSS_VAR, projectionFont);
 });
 startThemeSync();
+startUiStyleSync();
 
 async function start() {
   await $storage.hydrate();

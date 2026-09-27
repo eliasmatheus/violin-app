@@ -240,6 +240,8 @@ import { DB_TABLE } from "@/constants/DbTables";
 import { getSetting, saveSetting } from "@/helpers/SettingsStorage";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { MediaFile } from "@/types/Media";
+import Platform from "@/helpers/Platform";
+import Path from "@/helpers/Path";
 
 /* ------------------------------------------------------------------ */
 /*  IDB Helpers                                                        */
@@ -656,7 +658,9 @@ async function addAudioFiles(categoryId: string): Promise<void> {
 }
 
 async function addFileRecord(f: File, categoryId: string): Promise<BgSoundFile> {
-  const filePath = (f as any).path;
+  // Electron 32+ removeu File.path; usar webUtils para obter o caminho real.
+  const filePath =
+    Platform.webUtils?.getPathForFile?.(f) || (f as unknown as { path?: string }).path || "";
   const fileId = crypto.randomUUID();
   const bgFile: BgSoundFile = {
     id: fileId,
@@ -733,7 +737,10 @@ async function saveFileEdit(): Promise<void> {
   storedFile.categoryId = editFileForm.value.categoryId;
 
   if (editFileForm.value.newFile) {
-    const filePath = (editFileForm.value.newFile as any).path;
+    const filePath =
+      Platform.webUtils?.getPathForFile?.(editFileForm.value.newFile) ||
+      (editFileForm.value.newFile as unknown as { path?: string }).path ||
+      "";
     storedFile.fileName = editFileForm.value.newFile.name;
     if (filePath) {
       storedFile.path = filePath;
@@ -790,7 +797,14 @@ function playFile(file: MediaFile): void {
 }
 
 function resolveFilePath(file: MediaFile): string {
-  if (file.path && !file.path.startsWith("blob:")) return file.path;
+  // Caminho de arquivo (desktop): converte para louvorja://local/...
+  if (file.path && !file.path.startsWith("blob:")) {
+    if (Platform.isDesktop && !/^(https?|blob|data|louvorja):/i.test(file.path)) {
+      return Path.local(file.path);
+    }
+    return file.path;
+  }
+  // Web / blob morto: reconstrói do IndexedDB (fallback).
   if (file.data && file.mime) {
     const existing = createdObjectUrls.get(file.id);
     if (existing) URL.revokeObjectURL(existing);

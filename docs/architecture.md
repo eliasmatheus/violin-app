@@ -175,6 +175,40 @@ export const contextualPages: RibbonPage[] = [
 | `screen`         | Botão de projeção com seletor de monitores      |
 | `customCategory` | Grupo inteiro substituído por componente Vue    |
 
+### Esquema Violin
+
+`options.ui_style` (`KEYS.OPTIONS.UI_STYLE`, default `classic`) alterna o
+esquema visual. O `useUiStyle()` espelha o valor no atributo
+`<html data-ui-style>`; os tokens do Violin vivem num bloco
+`[data-ui-style="violin"]` em `tokens.css`. No Violin:
+
+- As abas de página da ribbon saem do Shell — no web do `RibbonBar` e no
+  desktop da `SystemBar` — e o corpo de grupos não renderiza: o `RibbonBar`
+  vira o `ModuleLauncher` — todos os módulos visíveis como ícones de 24px
+  numa linha de ~40px (mesma ordem e filtro de visibilidade da ribbon).
+  Clique abre. A barra de abertas (`OpenModulesTabs`) também não renderiza
+  no Violin: o lançador é quem mostra o que está aberto — aberto ganha
+  preenchimento (`--open`) e o que está na tela ganha outro destaque
+  (`--active`, filete laranja); botão direito num ícone aberto oferece
+  Fechar.
+- O menu contextual deixa de ser aba da ribbon e vira a
+  `RibbonContextualStrip`, montada como primeiro filho do painel embedded
+  pelo `ModuleContainer` — acima do `#header` do módulo, teto de 70px,
+  2 linhas, scroll horizontal. A faixa se autogateia no esquema; só decide
+  a colocação quem tem o template. Módulos que não passam pelo container
+  (a liturgia, que tem page própria absolute) montam a faixa no próprio
+  template — sem isso, o módulo fica sem menu contextual nenhum no Violin.
+- O renderizador dos grupos é único: `RibbonPageBody`, usado pela ribbon
+  clássica (`variant="ribbon"`) e pela faixa (`variant="strip"`). A faixa
+  renderiza checkboxes/switches como toggle só-ícone; selects, sliders e
+  campos mantêm rótulo.
+- `ribbonStore` roteia seleções contextuais: `selectPage(ctx)` muda a aba
+  no clássico e grava a seleção por módulo no Violin
+  (`selectedCtxPageId`/`selectCtxPage`), que é o que a faixa exibe.
+  `visiblePages` omite páginas contextuais no Violin.
+- Módulos com mais de uma página contextual (hoje só `slide_editor`)
+  ganham chips de troca na faixa; popups não têm faixa.
+
 ### Ciclo de vida e desempenho das abas
 
 `src/layout/Modules.vue` importa o componente de cada módulo sob demanda. Para

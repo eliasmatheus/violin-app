@@ -7,6 +7,12 @@
     @dragleave="onDragLeaveCustom"
     @drop.prevent="onDrop"
   >
+    <!-- Faixa contextual Violin: a liturgia é o único módulo embedded que
+         não passa pelo ModuleContainer (tem page própria absolute), então
+         ela monta a faixa aqui. Em Violin este é o "menu contextual" que a
+         ribbon clássica mostrava como aba; no clássico a faixa não renderiza. -->
+    <RibbonContextualStrip module-id="liturgy" />
+
     <div v-if="isDraggingOver" class="liturgy-drop-overlay">
       <LjIcon :icon="ICONS.ACTIONS.ADD_CIRCLE" size="48" />
       <span>{{ t("data.drop_hint") }}</span>
@@ -133,6 +139,7 @@
 <script setup lang="ts">
 import { useLiturgyI18n } from "../i18n";
 import { LjButton, LjDialog, LjField, LjIcon, LjSelect, LjSpinner } from "@/components/ui";
+import RibbonContextualStrip from "@/layout/shell/RibbonContextualStrip.vue";
 import { ICONS } from "@/config/Icons";
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";

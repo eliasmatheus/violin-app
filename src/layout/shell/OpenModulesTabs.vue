@@ -1,6 +1,9 @@
 <template>
+  <!-- No Violin a barra de abas abertos some: quem mostra o que está aberto
+       é o próprio lançador de ícones (ModuleLauncher), com destaque de
+       aberto e de na-tela. -->
   <div
-    v-if="openModules.length > 0"
+    v-if="!isViolin && openModules.length > 0"
     class="subtabs-wrapper"
     role="tablist"
     :aria-label="$t('shell.open_modules')"
@@ -56,8 +59,10 @@ import $userdata from "@/helpers/UserData";
 import $modules from "@/helpers/Modules";
 import { getModules } from "@/config/modules";
 import { KEYS } from "@/constants/UserDataKeys";
+import { useUiStyle } from "@/composables/useUiStyle";
 
 const { t } = useI18n();
+const { isViolin } = useUiStyle();
 const modules = getModules;
 const openModules = computed({
   get() {

@@ -64,6 +64,7 @@ import { ModuleEnum } from "@/enums/ModuleEnum";
 import { KEYS } from "@/constants/UserDataKeys";
 import { FONT, resolveDefaultFont } from "@/config/Fonts";
 import { startThemeSync } from "@/composables/useAppTheme";
+import { startUiStyleSync } from "@/composables/useUiStyle";
 import { BootOrchestrator } from "@/bootstrap/BootOrchestrator";
 import { useLibrasState } from "@/modules/libras/composables/useLibrasState";
 import { handleProjectionStateRequest } from "@/helpers/ProjectionStateRequests";
@@ -321,6 +322,10 @@ watchEffect(() => {
 // projeção recebe o patch do UserData e continua pintando a paleta antiga —
 // no telão, no meio do culto. Também acompanha o sistema no modo Automático.
 startThemeSync();
+
+// O estilo de interface (classic/violin) segue o mesmo caminho: os tokens
+// enxutos da ribbon vivem em [data-ui-style] no <html> de cada janela.
+startUiStyleSync();
 
 function seedDefaultFonts() {
   const seeds = [

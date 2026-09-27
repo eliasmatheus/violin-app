@@ -8,7 +8,9 @@
     <!-- AppMenu + Abas (no-drag) -->
     <div class="systembar-left">
       <AppMenu class="systembar-appmenu" />
-      <RibbonTabs id-prefix="systembar" class="systembar-tabs" />
+      <!-- Violin: as abas de página saem da barra superior — no desktop o
+           lugar delas é o lançador de módulos no RibbonBar. -->
+      <RibbonTabs v-if="!isViolin" id-prefix="systembar" class="systembar-tabs" />
     </div>
 
     <!-- Título + logo (drag) -->
@@ -36,10 +38,10 @@ import LjLogo from "@/components/LjLogo.vue";
 import ShellTools from "@/layout/shell/ShellTools.vue";
 import AppMenu from "@/layout/shell/AppMenu.vue";
 import RibbonTabs from "@/components/RibbonTabs.vue";
-import { useRibbonStore } from "@/stores/ribbonStore";
+import { useUiStyle } from "@/composables/useUiStyle";
 
 const { t } = useI18n();
-const store = useRibbonStore();
+const { isViolin } = useUiStyle();
 
 const isDesktop = computed(() => $appdata.get("is_desktop"));
 const isMac = computed(() => Platform.platform === "darwin");

@@ -2,14 +2,17 @@
   <button
     type="button"
     class="ribbon-btn"
-    :class="[`ribbon-btn--${size}`, { 'ribbon-btn--active': active }]"
+    :class="[
+      `ribbon-btn--${size}`,
+      { 'ribbon-btn--active': active, 'ribbon-btn--icon-only': iconOnly },
+    ]"
     :title="label"
     :data-testid="testid"
     :disabled="disabled"
     @click="$emit('click', $event)"
   >
-    <LjIcon :icon="icon" :size="iconSize" :color="iconColor" class="ribbon-btn-icon" />
-    <span class="ribbon-btn-label">{{ label }}</span>
+    <LjIcon :icon="icon" :size="resolvedIconSize" :color="iconColor" class="ribbon-btn-icon" />
+    <span v-if="!iconOnly" class="ribbon-btn-label">{{ label }}</span>
   </button>
 </template>
 
@@ -26,11 +29,16 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   iconColor: { type: String, default: COLORS.PRIMARY },
   testid: { type: String, default: null },
+  /** Sem rótulo visível — o `title` do botão faz o papel de tooltip. */
+  iconOnly: { type: Boolean, default: false },
+  /** Sobrepõe o tamanho calculado pelo `size` (usado pela ribbon Violin). */
+  iconSize: { type: Number, default: null },
 });
 
 defineEmits(["click"]);
 
-const iconSize = computed(() => {
+const resolvedIconSize = computed(() => {
+  if (props.iconSize) return props.iconSize;
   if (props.size === "large") return 32;
   if (props.size === "medium") return 24;
   return 16;
@@ -73,6 +81,16 @@ const iconSize = computed(() => {
 .ribbon-btn--active {
   background: var(--lj-rbtn-active-bg);
   border-color: var(--lj-rbtn-active-border);
+}
+
+/* Só-ícone (ribbon Violin e faixa contextual): só o glifo, centralizado,
+   sem rótulo — o `title` do botão vira o tooltip. O tamanho da caixa vem
+   dos tokens de botão, que cada superfície declara no seu próprio escopo. */
+.ribbon-btn--icon-only {
+  justify-content: center;
+  align-items: center;
+  padding: var(--lj-space-1);
+  gap: 0;
 }
 
 /* Botão grande: ícone topo + label embaixo */

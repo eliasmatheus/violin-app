@@ -22,6 +22,13 @@
 
   <!-- Modo EMBEDDED (default — replica PageControl Delphi) -->
   <div v-else-if="show" v-show="isActiveEmbedded" class="module-embedded">
+    <!-- Faixa contextual Violin: primeiro filho do painel, acima do #header
+         do módulo. A faixa só renderiza no esquema Violin (autogate); aqui
+         só decidimos a colocação — popups não têm páginas contextuais.
+         Módulos que não passam por este container (liturgia) montam a
+         faixa no próprio template. -->
+    <RibbonContextualStrip v-if="!popup" :module-id="moduleId" />
+
     <header v-if="$slots.header" class="module-embedded-header">
       <div class="module-embedded-slot-header">
         <slot name="header" />
@@ -63,6 +70,7 @@ import {
 } from "vue";
 import { useI18n } from "vue-i18n";
 import Window from "@/components/Window.vue";
+import RibbonContextualStrip from "@/layout/shell/RibbonContextualStrip.vue";
 import Modules from "@/helpers/Modules";
 import AppData from "@/helpers/AppData";
 import UserData from "@/helpers/UserData";

@@ -342,6 +342,26 @@
 }
 
 /* =====================================================================
+ * Estilo de interface "violin" — lançador + faixa contextual
+ * =====================================================================
+ * Carimbado por useUiStyle em [data-ui-style] no <html>. No Violin a
+ * ribbon de página (abas + corpo de grupos) não renderiza: o RibbonBar vira
+ * o ModuleLauncher — todos os módulos visíveis como ícones de 24px numa
+ * linha de ~40px. As páginas contextuais moram na faixa no topo do módulo
+ * (RibbonContextualStrip), que declara os seus próprios tokens.
+ *
+ * Os tokens de ribbon continuam aqui com a geometria enxuta para qualquer
+ * renderer que ainda os leia dentro do Violin. --lj-fixed-btn-width, por
+ * exemplo, também dimensiona os checks da lista de liturgia e não pode
+ * encolher — por isso não entra no bloco. */
+[data-ui-style="violin"] {
+  --lj-ribbon-body-height: 44px;
+  --lj-group-label-height: 14px;
+  --lj-large-btn-width: 22px;
+  --lj-large-btn-height: 20px;
+}
+
+/* =====================================================================
  * Tema dark — overrides (mesmas keys, valores escuros)
  * ===================================================================== */
 /* [data-theme] fica no <html>: é de lá que o conteúdo teleportado para o
