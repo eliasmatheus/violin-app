@@ -100,6 +100,22 @@ function _soleExternalCandidate(connected, operatorDisplay) {
   return candidates.length === 1 ? candidates[0] : null;
 }
 
+/** Não empresta a um papel o monitor que outro papel já resolveu. */
+function _claimedByOtherRole({ userData, role, candidate, connected }) {
+  const config = getConfig(userData);
+  if (!config || !candidate) return false;
+  const candidates = (connected || []).map((d, i) => monitorIdentity.get().identityFromDisplay(d, i));
+  const candidateIndex = (connected || []).indexOf(candidate);
+  for (const [otherRole, entry] of Object.entries(config.roles || {})) {
+    if (otherRole === role || entry?.state !== "resolved" || !entry.identity) continue;
+    const match = monitorIdentity.get().matchIdentity(entry.identity, candidates);
+    if (match.status === "resolved" && candidates.indexOf(match.candidate) === candidateIndex) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * A tela onde o operador trabalha está sendo posta no lugar do monitor que
  * sumiu?
@@ -176,7 +192,9 @@ function resolveRole({ userData, role, connected, operatorDisplay }) {
   // quase certamente o projetor — usamos, mas sinalizamos para a UI avisar.
   if (role !== monitorIdentity.roles().ROLES.OPERATOR) {
     const sole = _soleExternalCandidate(list, operatorDisplay);
-    if (sole) return { status: STATUS.INFERRED, display: sole, reason: "sole-external" };
+    if (sole && !_claimedByOtherRole({ userData, role, candidate: sole, connected: list })) {
+      return { status: STATUS.INFERRED, display: sole, reason: "sole-external" };
+    }
   }
 
   // Chegou aqui com o papel configurado ("resolved" ou "pending") mas sem

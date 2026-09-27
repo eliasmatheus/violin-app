@@ -226,8 +226,7 @@ async function primaryClick() {
 }
 
 async function choose(displayId: number | string | null | undefined) {
-  const toSave = displayId === undefined ? null : displayId;
-  await setPreferredMonitor(props.feature, toSave);
+  await setPreferredMonitor(props.feature, displayId);
   await refresh();
   if (effective_id.value == null) {
     if (projection_open.value) await closeProjection(props.feature);

@@ -6,8 +6,8 @@
     <LjSelect :id="id" v-model="model" :items="options" item-value="role" item-label="label">
       <template #value="{ item }">
         <span class="lj-monitor-select__value">
-          {{ item?.label }}
-          <template v-if="item?.hint">— {{ item.hint }}</template>
+          <span class="lj-monitor-select__role">{{ item?.label }}</span>
+          <span v-if="item?.hint" class="lj-monitor-select__current">— {{ item.hint }}</span>
         </span>
       </template>
       <template #item="{ item }">
@@ -86,9 +86,29 @@ const options = computed(() => [
 }
 
 .lj-monitor-select__value {
+  display: flex;
+  align-items: center;
+  gap: var(--lj-space-2);
+  min-width: 0;
+  width: 100%;
+  font-family: var(--lj-font-shell);
+  font-size: var(--lj-ui-font-md);
+  font-weight: var(--lj-weight-regular);
+  line-height: 1.2;
+}
+
+.lj-monitor-select__role {
+  flex: none;
+  white-space: nowrap;
+}
+
+.lj-monitor-select__current {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--lj-text-muted);
 }
 
 .lj-monitor-select__option {

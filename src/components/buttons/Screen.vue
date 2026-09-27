@@ -310,10 +310,7 @@ async function primaryClick() {
  */
 async function choose(displayId) {
   if (!isProjectionMode.value) return;
-  // setPreferredMonitor com null limpa a preferência. Para "Padrão herdado"
-  // (undefined), também passamos null para limpar o explícito.
-  const toSave = displayId === undefined ? null : displayId;
-  await setPreferredMonitor(monitorFeature.value, toSave);
+  await setPreferredMonitor(monitorFeature.value, displayId);
   await refreshDisplays();
 
   if (effective_id.value == null) {

@@ -64,6 +64,14 @@ describe("buildConfig", () => {
     expect(config.roles.stage.identity.nativeId).toBe(1);
   });
 
+  it("migra a escolha do segundo monitor quando o Electron repete o id", () => {
+    const twin = { ...PROJECTOR, id: "2@3648,0", bounds: { ...PROJECTOR.bounds, x: 3648 } };
+    const first = { ...PROJECTOR, id: "2@1728,0" };
+    const { config } = build({ musicas: twin.id }, [LAPTOP, first, twin]);
+    expect(config.roles.projection.state).toBe("resolved");
+    expect(config.roles.projection.identity.nativeOrigin.x).toBe(3648);
+  });
+
   it('trata 0 e "" como "sem monitor", não como monitor 0', () => {
     const { config } = build({ musicas: 0, retorno: "" });
     expect(config.roles.projection.state).toBe("none");

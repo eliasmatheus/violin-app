@@ -17,7 +17,7 @@
  * @param {number|string|null|undefined} wanted  Valor salvo em monitor_prefs
  * @param {{primary: number|null, secondary: number|null}} roles
  *        Monitores atribuídos aos papéis (Opções → Monitores)
- * @returns {number|null}  null = sem preferência utilizável
+ * @returns {number|string|null}  null = sem preferência utilizável
  */
 function resolveWantedId(wanted, roles) {
   const { primary = null, secondary = null } = roles || {};
@@ -30,6 +30,11 @@ function resolveWantedId(wanted, roles) {
   if (value === "") return null;
   if (value === "primary") return typeof primary === "number" && primary > 0 ? primary : null;
   if (value === "secondary") return typeof secondary === "number" && secondary > 0 ? secondary : null;
+
+  // Dois displays idênticos podem receber o mesmo id numérico do Electron.
+  // A lista conectada distingue os dois com "<id>@<x>,<y>". Não converta essa
+  // chave em Number: ela precisa sobreviver ao dual-write e à migração v1→v2.
+  if (/^\d+@-?\d+,-?\d+$/.test(value)) return value;
 
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;

@@ -193,7 +193,7 @@ function getRoles() {
 /**
  * Atribui um monitor a um papel.
  * @param {string} role
- * @param {number|null} displayId  null = nenhum monitor
+ * @param {number|string|null} displayId  null = nenhum monitor
  * @returns {boolean}
  */
 function setRole(role, displayId) {
@@ -226,30 +226,50 @@ function getFeatureRole(feature) {
 /**
  * Salva preferência de display para uma feature.
  * @param {string} featureId
- * @param {number} displayId
+ * @param {number|string|null} displayId
  */
-function setPreferred(featureId, displayId) {
+async function setPreferred(featureId, displayId) {
+  if (typeof featureId !== "string" || !featureId || featureId.length > 100) return false;
+  const userData = _readUserData();
+  const conectados = connected();
+  const wantedId = displayId == null
+    ? null
+    : resolveWantedId(displayId, rolesFromUserData(userData));
+  const display = wantedId == null ? null : conectados.find((d) => d.id === wantedId) || null;
+  if (displayId != null && !display) return false;
+
   // Dual-write enquanto a UI ainda configura por feature: o formato antigo
   // segue intacto (rollback continua possível) e o papel correspondente é
   // atualizado para o novo resolvedor enxergar a escolha.
   const prefs = userStore.read(PREF_KEY) || {};
   prefs[featureId] = displayId;
-  userStore.write(PREF_KEY, prefs).catch((error) => {
+  try {
+    await userStore.write(PREF_KEY, prefs);
+  } catch (error) {
     console.warn("[displays] Falha ao persistir monitor preferido:", error?.message || error);
-  });
+    return;
+  }
 
-  const userData = _readUserData();
-  if (!monitorConfig.getConfig(userData)) return;
+  const config = monitorConfig.getConfig(userData);
+  if (!config) return;
 
   const role = monitorIdentity.roles().roleOfFeature(featureId);
   if (!role) return;
 
-  const conectados = connected();
-  const wantedId = resolveWantedId(displayId, rolesFromUserData(userData));
-  const display = wantedId == null ? null : conectados.find((d) => d.id === wantedId) || null;
-  if (wantedId != null && !display) return; // monitor desconhecido — não mexe no papel
+  if (displayId == null) {
+    // "Mesma janela" é uma escolha da feature. Limpar o monitor do papel
+    // inteiro também desligava projeção/retorno de todos os outros módulos.
+    monitorConfig.setFeatureRole({ userData, feature: featureId, role: null });
+    config.source_hash = monitorConfig.hashSource(prefs);
+    _saveUserData();
+    return;
+  }
 
+  monitorConfig.setFeatureRole({ userData, feature: featureId, role });
   monitorConfig.setRoleDisplay({ userData, role, display, connected: conectados });
+  // Já aplicamos a mudança no v2. Sem atualizar o hash, o próximo boot
+  // remigra todo o mapa legado e pode apagar papéis configurados só no v2.
+  config.source_hash = monitorConfig.hashSource(prefs);
   _saveUserData();
 }
 

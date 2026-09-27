@@ -16,6 +16,10 @@ describe("resolveWantedId", () => {
     expect(resolveWantedId("2", NO_ROLES)).toBe(2);
   });
 
+  it("preserva a chave de dois monitores com id nativo repetido", () => {
+    expect(resolveWantedId("2528732444@1920,0", NO_ROLES)).toBe("2528732444@1920,0");
+  });
+
   it.each([[0], [-1], [""], ["   "], [null], [undefined], [{}], [[]], ["abc"]])(
     'trata %p como "sem preferência"',
     (value) => {

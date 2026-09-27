@@ -128,6 +128,18 @@ describe("resolveRole", () => {
     expect(result.display).toBeNull();
   });
 
+  it("não coloca o retorno no projetor quando o monitor de retorno desaparece", () => {
+    migrate({ musicas: 2, retorno: 3 }, [LAPTOP, PROJECTOR, TV]);
+    const result = monitorConfig.resolveRole({
+      userData, role: "stage", connected: BOTH, operatorDisplay: LAPTOP,
+    });
+    expect(result.status).toBe(STATUS.PENDING);
+    expect(result.display).toBeNull();
+    expect(monitorConfig.resolveRole({
+      userData, role: "projection", connected: BOTH, operatorDisplay: LAPTOP,
+    }).display).toBe(PROJECTOR);
+  });
+
   it("nunca deduz monitor para o papel do operador", () => {
     migrate({ operador: 99 }, [LAPTOP]);
     const result = monitorConfig.resolveRole({
@@ -228,6 +240,16 @@ describe("papel por feature", () => {
     const result = monitorConfig.resolveFeature({ userData, feature: "bible", connected: BOTH });
     expect(result.display).toBeNull();
     expect(result.reason).toBe("no-role");
+  });
+
+  it('"mesma janela" não apaga o monitor de outras features', () => {
+    const all = [LAPTOP, PROJECTOR, TV];
+    migrate({ musicas: 2, retorno: 3 }, all);
+    monitorConfig.setFeatureRole({ userData, feature: "bible", role: null });
+    expect(monitorConfig.resolveFeature({ userData, feature: "musicas", connected: all }).display)
+      .toBe(PROJECTOR);
+    expect(monitorConfig.resolveFeature({ userData, feature: "retorno", connected: all }).display)
+      .toBe(TV);
   });
 
   it("recusa papel inexistente", () => {

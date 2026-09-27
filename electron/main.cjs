@@ -236,6 +236,9 @@ if (!app.requestSingleInstanceLock()) {
   return;
 }
 console.log("[LouvorJA] Instância única: lock adquirido.");
+// Mesmo AppUserModelID do instalador NSIS em todas as BrowserWindows. O Windows
+// agrupa as projeções sob o app, em vez de mostrá-las como aplicativos distintos.
+if (process.platform === "win32") app.setAppUserModelId("br.com.louvorja.app");
 
 function focusMainWindow() {
   // A projeção pode continuar aberta depois de a janela principal ser
@@ -816,7 +819,9 @@ async function _bootstrapMonitorConfig() {
 
   try {
     const prefs = userStore.read("monitor_prefs") || {};
-    const connected = screen.getAllDisplays();
+    // A UI e o resolvedor usam IDs únicos e ordem geométrica. Migração e
+    // promoção precisam receber exatamente o mesmo retrato dos monitores.
+    const connected = displays.connected();
     const alreadyV2 = !!monitorConfig.getConfig(_userDataMain);
 
     if (!alreadyV2 && Object.keys(prefs).length > 0) {
@@ -1454,9 +1459,9 @@ ipcMain.handle("displays:getPreferred", (_event, feature) => {
 });
 
 /** Salva preferência de display para uma feature */
-ipcMain.handle("displays:setPreferred", (_event, feature, displayId) => {
-  displays.setPreferred(feature, displayId);
-});
+ipcMain.handle("displays:setPreferred", (_event, feature, displayId) =>
+  displays.setPreferred(feature, displayId)
+);
 
 /** Retorna todas as preferências salvas de monitor por feature */
 ipcMain.handle("displays:getPrefs", () => displays.getPrefs());

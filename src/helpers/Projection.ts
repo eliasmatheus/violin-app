@@ -155,11 +155,12 @@ async function _getRawPreferred(feature: string): Promise<number | string | null
   if (api?.getPreferred) {
     try {
       const pref = (await api.getPreferred(_featureKey(feature))) as
-        | { id?: number | null }
+        | { id?: number | string | null }
         | number
+        | string
         | null;
       if (pref && typeof pref === "object") return pref.id ?? null;
-      if (typeof pref === "number") return pref;
+      if (typeof pref === "number" || typeof pref === "string") return pref;
       return null;
     } catch {
       /* falha silenciosa — usa fallback */
@@ -189,6 +190,17 @@ export async function getPreferredMonitor(
   const own = await _getRawPreferred(feature);
   if (own != null || opts.explicit) return own;
 
+  // "Mesma janela" escolhida para esta feature não deve herdar o monitor da
+  // música/retorno ao passar pelo fallback hierárquico.
+  const api = await _getDisplaysApi();
+  if (api?.getFeatureRole) {
+    try {
+      if ((await api.getFeatureRole(_featureKey(feature))) == null) return null;
+    } catch {
+      // IPC indisponível: conserva o fallback antigo em vez de bloquear a UI.
+    }
+  }
+
   const fallback = _fallbackFeature(feature);
   if (fallback) return await _getRawPreferred(fallback);
 
@@ -209,12 +221,17 @@ export async function isUsingFallback(feature: string): Promise<boolean> {
 /** Salva o monitorId preferido para a feature. Use null para "mesma janela". */
 export async function setPreferredMonitor(
   feature: string,
-  monitorId: number | string | null
+  monitorId: number | string | null | undefined
 ): Promise<void> {
   const api = await _getDisplaysApi();
   if (api?.setPreferred) {
     try {
-      await api.setPreferred(_featureKey(feature), monitorId);
+      await api.setPreferred(_featureKey(feature), monitorId ?? null);
+      // "Padrão herdado" limpa a escolha explícita sem desativar o papel.
+      // null, ao contrário, significa "Mesma janela" para esta feature.
+      if (monitorId === undefined && api.setFeatureRole) {
+        await api.setFeatureRole(_featureKey(feature), roleOfFeature(feature));
+      }
       return;
     } catch {
       /* falha silenciosa — usa fallback */

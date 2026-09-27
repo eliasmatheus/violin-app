@@ -170,6 +170,16 @@ function _routePath(route) {
   return String(route || "").split("?")[0].split("#")[0];
 }
 
+function _windowTitle(route) {
+  const path = _routePath(route);
+  const role = path === "/operator"
+    ? "Operador"
+    : path === "/clock" || path.includes("return")
+      ? "Retorno"
+      : "Projeção";
+  return `${role} — LouvorJA Violin`;
+}
+
 function _isProjectionPresentationWindow(route, feature) {
   const path = _routePath(route);
   return (
@@ -259,7 +269,7 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
     enableLargerThanScreen: fullscreen && isMac,
     frame,
     alwaysOnTop: !backgroundWindows && alwaysOnTop && !(fullscreen && isMac),
-    title: feature,
+    title: _windowTitle(route),
     show: false,
     autoHideMenuBar: true,
     roundedCorners: false, // Windows-only mas inofensivo nos demais
@@ -284,6 +294,11 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
   };
 
   const win = new BrowserWindow(winOpts);
+  if (isWin) {
+    // O título do HTML é igual em todas as rotas. Preserve no preview da
+    // taskbar o papel de cada janela, mesmo após o renderer atualizar <title>.
+    win.on("page-title-updated", (event) => event.preventDefault());
+  }
   prepareWindow(win);
   const windowMeta = {
     route,

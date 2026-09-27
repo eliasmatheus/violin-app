@@ -48,7 +48,7 @@ function _resolveDisplay(feature) {
 
 /** Aplica a mudança de monitores: papéis, janelas e renderers. */
 function apply() {
-  const connected = screen.getAllDisplays();
+  const connected = displays.connected();
 
   let promoted = [];
   try {
