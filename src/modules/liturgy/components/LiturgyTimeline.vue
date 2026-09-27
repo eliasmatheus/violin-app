@@ -17,7 +17,7 @@
         </LjButton>
       </LjEmpty>
     </div>
-    <div v-else class="liturgy-tl-scroll">
+    <div v-else ref="scroller" class="liturgy-tl-scroll" @scroll.passive="rememberScroll">
       <draggable
         :model-value="items"
         :item-key="(item: LiturgyItem) => item.id"
@@ -133,9 +133,10 @@
 
 <script setup lang="ts">
 import { useLiturgyI18n } from "../i18n";
+import { setScrollPosition, getScrollPosition } from "@/helpers/ScrollMemory";
 import { LjButton, LjEmpty, LjIcon } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
-import { ref } from "vue";
+import { nextTick, onActivated, onMounted, ref } from "vue";
 import draggable from "vuedraggable";
 import LiturgyItemComponent from "./LiturgyItem.vue";
 import type { LiturgyItem } from "@/types/Liturgy";
@@ -174,6 +175,23 @@ const { t } = useLiturgyI18n();
 
 const draggingBlocoId = ref<string | null>(null);
 const collapsedBlocos = ref(new Set<string>());
+
+const scroller = ref<HTMLElement | null>(null);
+
+function rememberScroll() {
+  if (scroller.value) setScrollPosition("liturgy:timeline", scroller.value.scrollTop);
+}
+
+function restoreScroll() {
+  void nextTick(() => {
+    // Na reativação o `mounted` roda com a subárvore ainda destacada; o
+    // `onActivated` dispara depois da reinserção e é o que faz grudar.
+    if (scroller.value) scroller.value.scrollTop = getScrollPosition("liturgy:timeline");
+  });
+}
+
+onMounted(restoreScroll);
+onActivated(restoreScroll);
 
 function toggleBlocoCollapse(blocoId: string) {
   const s = collapsedBlocos.value;

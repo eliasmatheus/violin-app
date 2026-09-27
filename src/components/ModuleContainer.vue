@@ -67,6 +67,7 @@ import Modules from "@/helpers/Modules";
 import AppData from "@/helpers/AppData";
 import UserData from "@/helpers/UserData";
 import Telemetry from "@/helpers/Telemetry";
+import { setScrollPosition, getScrollPosition } from "@/helpers/ScrollMemory";
 
 const props = defineProps({
   manifest: { type: Object, required: true },
@@ -87,6 +88,12 @@ const emit = defineEmits(["close", "minimize", "scroll", "hasScroll", "show"]);
 const embeddedContent = ref(null);
 let embeddedResizeObserver = null;
 let embeddedMutationObserver = null;
+/**
+ * Posição alvo da restauração da rolagem do `<main>` (helpers/ScrollMemory).
+ * `altura` guarda o último scrollHeight tentado: se deixa de crescer, os
+ * dados não alcançam o alvo e o loop de paginação do DataTable precisa parar.
+ */
+let restauracaoPendente = null;
 const moduleLifecycleStartedAt =
   typeof performance !== "undefined" ? performance.now() : Date.now();
 let firstPaintReported = false;
@@ -153,11 +160,42 @@ function onHasScroll(value) {
   emit("hasScroll", value);
 }
 
+function chaveContainerScroll() {
+  return `container:${moduleId.value || "sem-id"}`;
+}
+
+/**
+ * Pede restauração da última posição salva deste módulo. A aplicação de fato
+ * acontece em `onEmbeddedScroll`, que só rota com layout real — logo após a
+ * reanexação do KeepAlive o browser ainda informa métricas zeradas.
+ */
+function solicitarRestauracao() {
+  if (props.popup) return;
+  const alvo = getScrollPosition(chaveContainerScroll());
+  restauracaoPendente = alvo > 0 ? { alvo, altura: 0 } : null;
+}
+
+function aplicarRestauracaoPendente(el) {
+  if (!restauracaoPendente) return;
+  el.scrollTop = restauracaoPendente.alvo;
+  if (Math.abs(el.scrollTop - restauracaoPendente.alvo) <= 1) {
+    restauracaoPendente = null;
+    return;
+  }
+  // Sem crescimento de conteúdo o alvo é inalcançável (lista filtrada, fim dos
+  // dados): aborta em vez de repetir o `scrollTop` clamped para sempre.
+  if (el.scrollHeight <= restauracaoPendente.altura) {
+    restauracaoPendente = null;
+    return;
+  }
+  restauracaoPendente.altura = el.scrollHeight;
+}
+
 /**
  * O modo embedded rola no próprio `<main>`, não no componente Window. Sem
  * repassar estas métricas, DataTable acreditava que não havia scroll e
- * renderizava 300–400 linhas por RAF para "preencher" o espaço — justamente
- * o atraso visível ao abrir Músicas. O mesmo contrato do Window vale para os
+ * renderizava 300–400 linhas por RAF para "preencher" o espaço — justamente o
+ * atraso visível ao abrir Músicas. O mesmo contrato do Window vale para os
  * dois modos agora.
  */
 function onEmbeddedScroll() {
@@ -167,6 +205,12 @@ function onEmbeddedScroll() {
   // scroll no fim e faz DataTable paginar uma página extra a cada reabertura.
   // Espere o ResizeObserver/nextTick seguinte, quando há uma viewport real.
   if (!el || el.clientHeight <= 0 || el.scrollHeight <= 0) return;
+  // Salva a posição do operador — nunca durante uma restauração, senão a
+  // tentativa clamped pelo meio sobrescreveria o alvo guardado na memória.
+  if (!restauracaoPendente) setScrollPosition(chaveContainerScroll(), el.scrollTop);
+  // Antes dos emits: assim `scroll_bottom` sai já com a posição restaurada e
+  // a paginação do DataTable avança de uma vez na direção do alvo.
+  aplicarRestauracaoPendente(el);
   const hasOverflow = el.scrollHeight > el.clientHeight + 1;
   emit("hasScroll", hasOverflow);
   // Enquanto a lista ainda cabe na viewport, scroll_bottom=0 não significa
@@ -203,6 +247,7 @@ onMounted(() => {
       popup: props.popup,
     });
   }
+  solicitarRestauracao();
   if (!props.popup) observeEmbeddedContent();
   const durationMs = Math.max(
     0,
@@ -248,6 +293,7 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  solicitarRestauracao();
   if (!props.popup) observeEmbeddedContent();
   Telemetry.track("module_view_activated", { module_id: moduleId.value, popup: props.popup });
 });

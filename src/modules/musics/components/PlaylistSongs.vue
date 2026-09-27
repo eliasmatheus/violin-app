@@ -12,7 +12,7 @@
       </button>
     </div>
 
-    <div class="playlist-songs-list">
+    <div ref="scroller" class="playlist-songs-list" @scroll.passive="rememberScroll">
       <div
         v-for="(song, index) in playlist.songs"
         :key="song.id_music"
@@ -105,9 +105,10 @@
 
 <script setup lang="ts">
 import { LjIcon, LjTooltip } from "@/components/ui";
-import { ref } from "vue";
+import { nextTick, onActivated, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import DateTime from "@/helpers/DateTime";
+import { setScrollPosition, getScrollPosition } from "@/helpers/ScrollMemory";
 import $userdata from "@/helpers/UserData";
 import { KEYS } from "@/constants/UserDataKeys";
 import { ICONS } from "@/config/Icons";
@@ -126,6 +127,21 @@ const tm = (key: string, named?: Record<string, unknown>) =>
   named ? i18nT(`modules.musics.${key}`, named) : i18nT(`modules.musics.${key}`);
 const { selectPlaylist, removeSong, getPlaylistDuration } = usePlaylists();
 const { playPlaylist, currentSong, playedSongs } = usePlaylistPlayback();
+
+const scroller = ref<HTMLElement | null>(null);
+
+function rememberScroll() {
+  if (scroller.value) setScrollPosition("musics:faixas", scroller.value.scrollTop);
+}
+
+function restoreScroll() {
+  void nextTick(() => {
+    if (scroller.value) scroller.value.scrollTop = getScrollPosition("musics:faixas");
+  });
+}
+
+onMounted(restoreScroll);
+onActivated(restoreScroll);
 
 const shuffleEnabled = ref($userdata.get(KEYS.MODULES.MUSICS.PLAYLIST_SHUFFLE, false));
 const repeatEnabled = ref($userdata.get(KEYS.MODULES.MUSICS.PLAYLIST_REPEAT, false));

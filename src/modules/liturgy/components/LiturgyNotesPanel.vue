@@ -16,6 +16,7 @@
       @blur="onEditorInput"
       @keyup="guardarSelecao"
       @mouseup="guardarSelecao"
+      @scroll.passive="rememberScroll"
     />
 
     <div class="lit-notes-toolbar">
@@ -163,9 +164,10 @@
 
 <script setup lang="ts">
 import { useLiturgyI18n } from "../i18n";
+import { setScrollPosition, getScrollPosition } from "@/helpers/ScrollMemory";
 import { LjIcon, LjSelect } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
-import { ref, watch, onMounted } from "vue";
+import { ref, watch, onMounted, onActivated, nextTick } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -180,6 +182,16 @@ const props = withDefaults(
 const { t } = useLiturgyI18n();
 
 const editor = ref<HTMLElement | null>(null);
+
+function rememberScroll() {
+  if (editor.value) setScrollPosition("liturgy:notas", editor.value.scrollTop);
+}
+
+function restoreScroll() {
+  void nextTick(() => {
+    if (editor.value) editor.value.scrollTop = getScrollPosition("liturgy:notas");
+  });
+}
 
 const FONTS = ["Tahoma", "Arial", "Times New Roman", "Verdana", "Georgia", "Courier New"];
 const SIZES = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32];
@@ -275,7 +287,10 @@ function syncFromProp() {
 
 onMounted(() => {
   syncFromProp();
+  restoreScroll();
 });
+
+onActivated(restoreScroll);
 
 watch(() => props.noteHtml, syncFromProp);
 </script>

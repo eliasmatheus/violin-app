@@ -58,7 +58,7 @@
       </button>
     </div>
 
-    <div class="playlist-panel-list">
+    <div ref="scroller" class="playlist-panel-list" @scroll.passive="rememberScroll">
       <div
         v-for="playlist in playlists"
         :key="playlist.id"
@@ -111,9 +111,10 @@
 <script setup lang="ts">
 import { LjIcon, LjInput } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
-import { ref } from "vue";
+import { nextTick, onActivated, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import DateTime from "@/helpers/DateTime";
+import { setScrollPosition, getScrollPosition } from "@/helpers/ScrollMemory";
 import { usePlaylists } from "../composables/usePlaylists";
 import type { Playlist } from "@/types/Music";
 import Telemetry from "@/helpers/Telemetry";
@@ -132,6 +133,21 @@ const {
   exportPlaylist,
   importPlaylist,
 } = usePlaylists();
+
+const scroller = ref<HTMLElement | null>(null);
+
+function rememberScroll() {
+  if (scroller.value) setScrollPosition("musics:painel", scroller.value.scrollTop);
+}
+
+function restoreScroll() {
+  void nextTick(() => {
+    if (scroller.value) scroller.value.scrollTop = getScrollPosition("musics:painel");
+  });
+}
+
+onMounted(restoreScroll);
+onActivated(restoreScroll);
 
 const showCreate = ref(false);
 const newName = ref("");
