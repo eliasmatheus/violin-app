@@ -6,6 +6,7 @@ import { ICONS } from "@/config/Icons"
 import { ModuleEnum } from "@/enums/ModuleEnum"
 import { getModulePath } from "@/helpers/ModulePath"
 import { KEYS } from "@/constants/UserDataKeys"
+import { onlineVideoProjectionGroup } from "./ribbonProjection";
 
 const moduleId = ModuleEnum.ONLINE_VIDEOS;
 const modulePath = getModulePath(moduleId);
@@ -44,32 +45,9 @@ export const contextualPages: RibbonPage[] = [
             label: "ribbon.btn.settings",
             action: `${moduleId}_settings`,
           },
-          {
-            id: `${moduleId}_monitor`,
-            type: "select",
-            feature: "online_video",
-            label: `${modulePath}.ribbon.monitor`,
-          },
-          {
-            id: `${moduleId}_show_return`,
-            type: "checkbox",
-            optionKey: KEYS.OPTIONS.ONLINE_VIDEO_PROJECTION.SHOW_RETURN,
-            label: `${modulePath}.ribbon.show_return`,
-          },
-          {
-            id: `${moduleId}_return_monitor`,
-            type: "select",
-            feature: "online_video_return",
-            optionKey: KEYS.OPTIONS.DISPLAYS.ONLINE_VIDEO_RETURN,
-            label: `${modulePath}.ribbon.return_monitor`,
-            defaultValue: "",
-            dependsOnOption: {
-              path: KEYS.OPTIONS.ONLINE_VIDEO_PROJECTION.SHOW_RETURN,
-              value: "true",
-            },
-          },
         ],
       },
+      onlineVideoProjectionGroup,
       {
         id: "ctx_online_videos_actions",
         title: "ribbon.groups.actions",
@@ -82,9 +60,6 @@ export const contextualPages: RibbonPage[] = [
             placeholder: "ribbon.btn.online_videos_personal_url_placeholder",
             action: `${moduleId}_personal_url`,
             color: "#3498db",
-            style: {
-              width: "400px",
-            }
           },
           {
             id: `${moduleId}_toggle`,

@@ -2,12 +2,25 @@
   <!-- O invólucro existe para o CSS com escopo ter onde se prender: LjSelect
        envolve um SelectRoot, que não emite elemento próprio, então nem `:deep`
        alcançaria o gatilho sem um ancestral deste componente. -->
-  <div class="lj-monitor-select" :class="{ 'lj-monitor-select--inline': inline }">
-    <LjSelect :id="id" v-model="model" :items="options" item-value="role" item-label="label">
+  <div
+    class="lj-monitor-select"
+    :class="{ 'lj-monitor-select--inline': inline, 'lj-monitor-select--detailed': detailed }"
+  >
+    <LjSelect
+      :id="id"
+      v-model="model"
+      :items="options"
+      item-value="role"
+      item-label="label"
+      :size="size"
+      :disabled="disabled"
+    >
       <template #value="{ item }">
         <span class="lj-monitor-select__value">
           <span class="lj-monitor-select__role">{{ item?.label }}</span>
-          <span v-if="item?.hint" class="lj-monitor-select__current">— {{ item.hint }}</span>
+          <span v-if="item?.hint" class="lj-monitor-select__current" :title="item.hint">
+            {{ detailed ? item.hint : `— ${item.hint}` }}
+          </span>
         </span>
       </template>
       <template #item="{ item }">
@@ -31,6 +44,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import LjSelect from "@/components/ui/LjSelect.vue";
+import type { UiSize } from "@/components/ui/types";
 import { DISPLAY_ROLES, useDisplays } from "@/composables/useDisplays";
 
 const props = defineProps<{
@@ -38,6 +52,10 @@ const props = defineProps<{
   /** Papel escolhido: "projection" | "stage" | "operator", ou "" para mesma janela. */
   modelValue?: string | null;
   inline?: boolean;
+  /** No ribbon, mostra o papel e o monitor físico em linhas separadas. */
+  detailed?: boolean;
+  size?: UiSize;
+  disabled?: boolean;
 }>();
 
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
@@ -74,6 +92,7 @@ const options = computed(() => [
 
 <style scoped>
 .lj-monitor-select {
+  display: flex;
   width: var(--lj-opt-select-width);
 }
 
@@ -92,7 +111,7 @@ const options = computed(() => [
   min-width: 0;
   width: 100%;
   font-family: var(--lj-font-shell);
-  font-size: var(--lj-ui-font-md);
+  font-size: inherit;
   font-weight: var(--lj-weight-regular);
   line-height: 1.2;
 }
@@ -111,13 +130,40 @@ const options = computed(() => [
   color: var(--lj-text-muted);
 }
 
+.lj-monitor-select--detailed .lj-monitor-select__value {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.1;
+}
+
+.lj-monitor-select--detailed .lj-monitor-select__role,
+.lj-monitor-select--detailed .lj-monitor-select__current {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lj-monitor-select--detailed .lj-monitor-select__role {
+  font-weight: var(--lj-weight-medium);
+}
+
+.lj-monitor-select--detailed .lj-monitor-select__current {
+  flex: none;
+  font-size: var(--lj-text-xs);
+}
+
 .lj-monitor-select__option {
   display: flex;
   flex-direction: column;
+  max-width: min(320px, calc(100vw - 48px));
 }
 
 .lj-monitor-select__hint {
   color: var(--lj-text-subtle);
   font-size: var(--lj-text-xs);
+  overflow-wrap: anywhere;
 }
 </style>

@@ -1,4 +1,3 @@
-import { defineAsyncComponent } from "vue";
 import type { Module } from "@/types/Module"
 import type { RibbonPage } from "@/types/Ribbon"
 import { ModuleCategoryEnum } from "@/enums/ModuleCategoryEnum"
@@ -6,9 +5,7 @@ import { ModuleGroupEnum } from "@/enums/ModuleGroupEnum"
 import { ICONS } from "@/config/Icons"
 import { ModuleEnum } from "@/enums/ModuleEnum"
 import { getModulePath } from "@/helpers/ModulePath"
-const VideoMonitors = defineAsyncComponent(
-  () => import("@/modules/custom_online_videos/components/VideoMonitors.vue")
-);
+import { onlineVideoProjectionGroup } from "@/modules/online_videos/ribbonProjection";
 
 const moduleId = ModuleEnum.CUSTOM_ONLINE_VIDEOS;
 const modulePath = getModulePath(moduleId);
@@ -76,6 +73,7 @@ export const contextualPages: RibbonPage[] = [
           },
         ],
       },
+      onlineVideoProjectionGroup,
       {
         id: "ctx_custom_online_videos_actions",
         title: "ribbon.groups.actions",
@@ -97,11 +95,6 @@ export const contextualPages: RibbonPage[] = [
             color: "#e74c3c",
           },
         ],
-      },
-      {
-        id: "ctx_custom_online_videos_projection",
-        title: "ribbon.groups.projection",
-        customCategory: VideoMonitors,
       },
     ],
   },

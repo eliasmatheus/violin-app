@@ -126,7 +126,6 @@
                     :icon-color="resolveBtnColor(btn)"
                     :label="$t(btn.label)"
                     size="medium"
-                    :style="btn.style"
                     :testid="`ribbon-btn-${btn.id}`"
                     @click="executeInputAction(btn)"
                   />
@@ -505,6 +504,17 @@ onBeforeUnmount(() => observador?.disconnect());
 watch(
   () => activeGroups.value.map((g) => g.id).join(","),
   () => nextTick(medirSobra)
+);
+
+// O scroll horizontal pertence à aba atual. Ao sair de uma coleção larga para
+// uma página contextual, manter o scroll anterior escondia os primeiros campos.
+watch(
+  () => ribbonStore.activePage,
+  () =>
+    nextTick(() => {
+      if (corpoRibbon.value) corpoRibbon.value.scrollLeft = 0;
+      medirSobra();
+    })
 );
 const isContextualActive: ComputedRef<boolean> = computed(() => !!activePageObj.value?.contextual);
 const visiblePages: ComputedRef<RibbonPage[]> = computed(() => ribbonStore.visiblePages);
@@ -985,6 +995,10 @@ useBroadcastListener(BROADCAST_TYPE.RIBBON_SELECT_PAGE, (payload: unknown) => {
 }
 
 .ribbon-group-item--compact .ribbon-action-input__field {
+  width: var(--lj-opt-select-width);
+}
+
+.ribbon-group-item--compact .ribbon-action-input__field[type="time"] {
   width: 90px;
 }
 
