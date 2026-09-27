@@ -100,6 +100,7 @@ import packageJson from "@root/package.json";
 import $appdata from "@/helpers/AppData";
 import $userdata from "@/helpers/UserData";
 import Platform from "@/helpers/Platform";
+import Telemetry from "@/helpers/Telemetry";
 import { ICONS } from "@/config/Icons";
 import { KEYS } from "@/constants/UserDataKeys";
 import $popup from "@/helpers/Popup";
@@ -521,7 +522,14 @@ function onReleaseNotesClose() {
 // Handler: iniciar download da atualização a partir do dialog
 function onUpdateDialogDownload() {
   if (Platform.updater) {
-    Platform.updater.download();
+    // O download segue em segundo plano e o estado fica visível nas tarefas e
+    // em Opções → Atualizações. Não deixe o diálogo de boot cobrindo a Shell.
+    updateDialogOpen.value = false;
+    void _continueBootAfterUpdate();
+    void Platform.updater.download().catch((error: unknown) => {
+      console.error("[Shell] download da atualização falhou:", error);
+      Telemetry.captureException(error, { source: "app_update_download" });
+    });
   }
 }
 

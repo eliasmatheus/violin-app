@@ -49,8 +49,7 @@
         {{ t("options.updates.app_install_admin_required") }}
       </p>
       <div v-if="releaseNotes" class="ua-notes">
-        <div v-if="releaseNotesHtml" class="lj-md" v-html="releaseNotesHtml" />
-        <pre v-else class="ua-notes__raw">{{ releaseNotes }}</pre>
+        <pre class="ua-notes__raw">{{ releaseNotes }}</pre>
       </div>
     </template>
 
@@ -92,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import Platform from "@/helpers/Platform";
 import DontShowAgainCheckbox from "@/components/inputs/DontShowAgainCheckbox.vue";
@@ -127,7 +126,6 @@ const { t } = useI18n();
 
 const internalShow = ref(props.modelValue);
 const releaseNotes = ref<string | null>(null);
-const releaseNotesHtml = ref<string | null>(null);
 const appUpdate = ref<AppUpdateState>({
   status: "idle",
   version: "?",
@@ -138,15 +136,20 @@ const appUpdate = ref<AppUpdateState>({
 });
 
 let _unsub: (() => void) | null = null;
+let _loadId = 0;
+let _stateEventId = 0;
 
 watch(
   () => props.modelValue,
   (v) => {
     internalShow.value = v;
-    if (v) load();
+    if (v) void load();
     else cleanup();
-  }
+  },
+  { immediate: true }
 );
+
+onBeforeUnmount(cleanup);
 
 const isDownloading = computed(() => appUpdate.value.status === "downloading");
 const isDownloaded = computed(() => appUpdate.value.status === "downloaded");
@@ -182,36 +185,41 @@ function formatEta(seconds: number): string {
 }
 
 async function load() {
+  cleanup();
+  const loadId = ++_loadId;
+  const stateEventId = _stateEventId;
   releaseNotes.value = null;
-  releaseNotesHtml.value = null;
 
-  // Estado atual do updater
+  // Inscreve antes do snapshot para não perder a transição para "downloading"
+  // caso o main a emita durante a leitura assíncrona do estado.
   if (Platform.updater) {
-    appUpdate.value = (await Platform.updater.status()) as AppUpdateState;
+    _unsub = Platform.updater.onStateChange((s: AppUpdateState) => {
+      _stateEventId++;
+      appUpdate.value = s;
+    });
+    try {
+      const snapshot = (await Platform.updater.status()) as AppUpdateState;
+      if (loadId === _loadId && stateEventId === _stateEventId) appUpdate.value = snapshot;
+    } catch (error) {
+      console.warn("[UpdateAvailableDialog] status falhou:", error);
+    }
   }
 
   // Release notes da versão NOVA (a oferecida no dialog)
   if (Platform.updater) {
     try {
       const notes = await Platform.updater.getReleaseNotes(props.version);
-      if (notes) {
+      if (notes && loadId === _loadId) {
         releaseNotes.value = notes.body || null;
-        releaseNotesHtml.value = notes.bodyHtml || null;
       }
     } catch (_) {
       /* ignore */
     }
   }
-
-  // Inscrever mudanças de estado
-  if (Platform.updater) {
-    _unsub = Platform.updater.onStateChange((s: AppUpdateState) => {
-      appUpdate.value = s;
-    });
-  }
 }
 
 function cleanup() {
+  _loadId++;
   if (_unsub) {
     _unsub();
     _unsub = null;
@@ -320,8 +328,6 @@ function onClose() {
   white-space: pre-wrap;
   word-break: break-word;
 }
-
-/* Conteúdo vindo de `v-html` não recebe o atributo de escopo — daí o :deep(). */
 
 /* Empurra as ações para a direita, mantendo a caixa de seleção à esquerda. */
 .ua-footer-start {
