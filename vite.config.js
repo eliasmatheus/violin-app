@@ -63,7 +63,7 @@ export default async ({ mode }) => {
       ` script-src 'self' blob: ${DOMAINS_CSP.SCRIPT} 'wasm-unsafe-eval';` +
       ` style-src 'self' 'unsafe-inline' ${DOMAINS_CSP.STYLE};` +
       ` font-src 'self' data: ${DOMAINS_CSP.FONT};` +
-      ` img-src 'self' data: ${cspApi} ${DOMAINS_CSP.IMG};` +
+      ` img-src 'self' blob: data: ${cspApi} ${DOMAINS_CSP.IMG};` +
       ` media-src 'self' blob: ${cspApi} ${DOMAINS_CSP.MEDIA};` +
       ` connect-src 'self' blob: ${cspApi} http://localhost:* ws://localhost:* ${DOMAINS_CSP.CONNECT};` +
       ` worker-src 'self' blob: ${DOMAINS_CSP.WORKER};` +

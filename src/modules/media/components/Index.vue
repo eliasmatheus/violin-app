@@ -210,9 +210,8 @@ const videoPreviewFailed = ref(false);
 let videoSyncTimer = null;
 let mediaMounted = false;
 
-// O Slide.vue já resolve url_image relativo via Path.file internamente, então
-// repassamos o slide bruto. (Ainda mantemos pathFile() em Path.file via
-// computed para o image do <Window>.)
+// O Slide.vue já resolve imagens do banco e URLs blob das músicas personalizadas.
+// O cabeçalho e as miniaturas usam pathFile() para os mesmos dois formatos.
 const slideForRenderer = computed(() => slide.value);
 const isLocalVideo = computed(
   () => !!config.value?.video_file && !!config.value?.audio && !config.value?.is_youtube
@@ -359,6 +358,9 @@ watch(slide_index, async () => {
 });
 
 function pathFile(img) {
+  // AudioLibrary/SljaPlayer já resolveram a imagem em memória; não é um caminho
+  // do acervo remoto e o dono do blob continua responsável por revogar a URL.
+  if (typeof img === "string" && img.startsWith("blob:")) return img;
   return Path.file(img);
 }
 
