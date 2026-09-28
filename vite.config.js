@@ -4,6 +4,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import posthogRollupPlugin from "@posthog/rollup-plugin";
 import path from "path";
 import { createRequire } from "module";
+import { normalizeAppVersion } from "./src/helpers/AppVersion.js";
 
 const require_ = createRequire(import.meta.url);
 const { version: packageVersion } = require_("./package.json");
@@ -24,10 +25,9 @@ export default async ({ mode }) => {
   // canonical fallback for web/PWA deploys, which do not have Electron's
   // updater API available at runtime.
   const loadedEnv = loadEnv(mode, process.cwd());
-  const appVersion = String(loadedEnv.VITE_APP_VERSION || packageVersion || "unknown").replace(
-    /^v(?=\d)/,
-    ""
-  );
+  const appVersion =
+    normalizeAppVersion(loadedEnv.VITE_APP_VERSION) || normalizeAppVersion(packageVersion);
+  if (!appVersion) throw new Error("package.json precisa de uma versão SemVer válida.");
   // O singleton do posthog-js não expõe a versão da biblioteca em runtime.
   // Injeta a versão exata do pacote no bundle para que o diagnóstico e os
   // eventos identifiquem a combinação que realmente foi distribuída.

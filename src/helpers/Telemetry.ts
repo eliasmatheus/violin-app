@@ -17,6 +17,7 @@ import type {
 import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE, type TelemetrySessionPayload } from "@/helpers/BroadcastTypes";
 import Platform from "@/helpers/Platform";
+import { normalizeAppVersion } from "@/helpers/AppVersion.js";
 import $userdata from "@/helpers/UserData";
 import { setNetworkTimingReporter } from "@/helpers/Http";
 import { setDatabaseTimingReporter } from "@/helpers/Database";
@@ -29,8 +30,7 @@ const BUILD_SDK_VERSION = normalizeVersion(import.meta.env.VITE_POSTHOG_SDK_VERS
 
 let _started = false;
 let _ph: PostHog | null = null;
-let _appVersion =
-  typeof packageJson.version === "string" && packageJson.version ? packageJson.version : "unknown";
+let _appVersion = normalizeAppVersion(packageJson.version) || "unknown";
 let _appVersionSource = "package_json_fallback";
 let _sdkVersion = BUILD_SDK_VERSION || "unknown";
 let _installed = false;
@@ -1240,23 +1240,27 @@ function osName(): string {
 }
 
 async function appVersion(): Promise<string> {
-  const fromEnv = normalizeVersion(import.meta.env.VITE_APP_VERSION);
+  // O executável instalado é a fonte de verdade no desktop. Um override do
+  // build (por exemplo, uma execução manual em main) não deve substituí-lo.
+  if (Platform.isDesktop) {
+    try {
+      const status = (await Platform.updater?.status?.()) as { version?: unknown } | undefined;
+      const installedVersion = normalizeAppVersion(status?.version);
+      if (installedVersion) {
+        _appVersionSource = "electron_updater";
+        return installedVersion;
+      }
+    } catch {
+      // IPC indisponível: segue para as fontes empacotadas abaixo.
+    }
+  }
+  const fromEnv = normalizeAppVersion(import.meta.env.VITE_APP_VERSION);
   if (fromEnv) {
     _appVersionSource = "vite_env";
     return fromEnv;
   }
-  try {
-    const status = (await Platform.updater?.status?.()) as { version?: string } | undefined;
-    const installedVersion = normalizeVersion(status?.version);
-    if (installedVersion) {
-      _appVersionSource = "electron_updater";
-      return installedVersion;
-    }
-  } catch {
-    // Web/PWA não tem updater; segue para a versão canônica empacotada abaixo.
-  }
   _appVersionSource = "package_json_fallback";
-  return normalizeVersion(packageJson.version) || "unknown";
+  return normalizeAppVersion(packageJson.version) || "unknown";
 }
 
 /** ID aleatório por instalação. Não deriva de nada da máquina. */
@@ -1308,7 +1312,11 @@ export function setEnabled(enabled: boolean): void {
   }
   if (_ph) {
     _ph.opt_in_capturing({ captureEventName: false });
-    _ph.register({ app_version: _appVersion, sdk_version: _sdkVersion });
+    _ph.register({
+      app_version: _appVersion,
+      app_version_source: _appVersionSource,
+      sdk_version: _sdkVersion,
+    });
     startResponsivenessMonitor();
   } else void init();
 }
@@ -1326,7 +1334,11 @@ export function resetId(): void {
   _ph.reset({ bootstrap: { distinctID: id, isIdentifiedID: false } });
   if (isEnabled()) _ph.opt_in_capturing({ captureEventName: false });
   else _ph.opt_out_capturing();
-  _ph.register({ app_version: _appVersion, sdk_version: _sdkVersion });
+  _ph.register({
+    app_version: _appVersion,
+    app_version_source: _appVersionSource,
+    sdk_version: _sdkVersion,
+  });
 }
 
 /**
@@ -1543,6 +1555,7 @@ async function _init(): Promise<void> {
   posthog.opt_in_capturing({ captureEventName: false });
   posthog.register({
     app_version: version,
+    app_version_source: _appVersionSource,
     sdk_version: sdkVersion,
     window_role: windowRole(),
     window_feature: windowFeature(),
@@ -1619,6 +1632,7 @@ async function _init(): Promise<void> {
       platform: Platform.isDesktop ? "desktop" : "web",
       os: osName(),
       app_version: version,
+      app_version_source: _appVersionSource,
       // Explícito em vez de depender só do `register()` acima: o evento
       // inicial é o mais consultado para saber qual SDK está em campo, e não
       // deve ficar refém de como o SDK aplica super properties.

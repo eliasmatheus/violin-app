@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state: Record<string, unknown> = {};
+const platform = vi.hoisted(() => ({
+  isDesktop: false,
+  isDev: false,
+  updater: undefined as { status: () => Promise<{ version?: unknown }> } | undefined,
+}));
 const posthog = {
   LIB_VERSION: "1.433.7",
   init: vi.fn(),
@@ -67,7 +72,7 @@ vi.mock("@/helpers/UserData", () => ({
   },
 }));
 vi.mock("@/helpers/Platform", () => ({
-  default: { isDesktop: false, isDev: false },
+  default: platform,
 }));
 vi.mock("@/helpers/Http", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/helpers/Http")>();
@@ -77,17 +82,19 @@ vi.mock("@/helpers/Http", async (importOriginal) => {
   };
 });
 
-async function loadTelemetry() {
+async function loadTelemetry(version = "2.0.0-beta.8") {
   vi.resetModules();
   vi.stubEnv("VITE_POSTHOG_KEY", "test-key");
   vi.stubEnv("VITE_URL_API", "https://api.example.test/v1");
-  vi.stubEnv("VITE_APP_VERSION", "2.0.0-beta.8");
+  vi.stubEnv("VITE_APP_VERSION", version);
   vi.stubEnv("VITE_POSTHOG_SDK_VERSION", "1.433.7");
   window.history.replaceState({}, "", "/");
   return import("@/helpers/Telemetry");
 }
 
 beforeEach(() => {
+  platform.isDesktop = false;
+  platform.updater = undefined;
   for (const key of Object.keys(state)) delete state[key];
   bus.listeners.clear();
   vi.clearAllMocks();
@@ -97,10 +104,74 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
 describe("Telemetry", () => {
+  describe("versão do aplicativo", () => {
+    function expectVersion(version: string, source: string) {
+      expect(posthog.register).toHaveBeenCalledWith(
+        expect.objectContaining({ app_version: version, app_version_source: source })
+      );
+      expect(posthog.capture).toHaveBeenCalledWith(
+        "app_opened",
+        expect.objectContaining({ app_version: version, app_version_source: source }),
+        { send_instantly: true, transport: "fetch" }
+      );
+      expect(posthog.init.mock.calls[0][1]).toEqual(
+        expect.objectContaining({
+          logs: expect.objectContaining({ serviceVersion: version }),
+          metrics: expect.objectContaining({ serviceVersion: version }),
+        })
+      );
+    }
+
+    it.each(["main", "vmain", "refs/heads/main", "2.0", "", "2.0.0-beta.01"])(
+      "ignora VITE_APP_VERSION inválida (%j) e usa o pacote no web/PWA",
+      async (value) => {
+        const Telemetry = await loadTelemetry(value);
+        const { version } = await import("@root/package.json");
+        await Telemetry.init();
+        expectVersion(version, "package_json_fallback");
+      }
+    );
+
+    it("normaliza a tag de release no web/PWA", async () => {
+      const Telemetry = await loadTelemetry(" v2.0.0-beta.8 ");
+      await Telemetry.init();
+      expectVersion("2.0.0-beta.8", "vite_env");
+    });
+
+    it.each(["main", "vmain", "2.0.0-beta.8"])(
+      "prioriza a versão instalada no desktop sobre o valor do build (%j)",
+      async (value) => {
+        platform.isDesktop = true;
+        platform.updater = { status: vi.fn().mockResolvedValue({ version: "v2.0.0-beta.13" }) };
+        const Telemetry = await loadTelemetry(value);
+        await Telemetry.init();
+        expectVersion("2.0.0-beta.13", "electron_updater");
+      }
+    );
+
+    it("usa a versão válida do build se o IPC do desktop falhar", async () => {
+      platform.isDesktop = true;
+      platform.updater = { status: vi.fn().mockRejectedValue(new Error("IPC indisponível")) };
+      const Telemetry = await loadTelemetry();
+      await Telemetry.init();
+      expectVersion("2.0.0-beta.8", "vite_env");
+    });
+
+    it("usa o pacote se o IPC e o ambiente retornarem versões inválidas", async () => {
+      platform.isDesktop = true;
+      platform.updater = { status: vi.fn().mockResolvedValue({ version: 13 }) };
+      const Telemetry = await loadTelemetry("main");
+      const { version } = await import("@root/package.json");
+      await Telemetry.init();
+      expectVersion(version, "package_json_fallback");
+    });
+  });
+
   it("não inicializa nem envia dados quando a telemetria já está desativada", async () => {
     state["options.telemetry"] = false;
     const Telemetry = await loadTelemetry();

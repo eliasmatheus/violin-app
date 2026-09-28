@@ -142,7 +142,15 @@ independente do `mode` do Vite.
 > (`layout/shell/AppMenuAtualizacoes.vue`) vem de `app.getVersion()`
 > (package.json via `electron/main/updater.js`), não desta variável.
 > No build web/PWA, quando a variável não é definida, o Vite injeta a versão
-> do `package.json`. Uma versão explícita continua tendo precedência.
+> do `package.json`. Uma versão explícita válida continua tendo precedência no
+> web/PWA; o prefixo `v` de uma tag é removido. Nomes de branch (`main`, `vmain`)
+> e outros valores inválidos são ignorados e usam a versão do pacote.
+> Na telemetria desktop, a versão instalada retornada pelo updater tem prioridade;
+> se o IPC falhar, são usadas as fontes empacotadas. Eventos incluem
+> `app_version_source` para identificar a fonte escolhida.
+
+O workflow de release usa a versão do pacote, inclusive em execuções manuais
+na branch `main`. A tag continua sendo conferida por `validate:release-version`.
 
 Se não definida, o build usa automaticamente a versão do `package.json`.
 
