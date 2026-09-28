@@ -14,6 +14,8 @@ export interface AlbumItem {
   id_album: number | string
   name?: string
   order?: number
+  year?: number | string
+  subtitle?: string
   type?: string
   pivot?: AlbumPivot
 }

@@ -31,6 +31,7 @@
         name: true,
       }"
       :disabled_albums="disabledAlbums"
+      :album-id="dataFile === 'hymnal_1996' ? HYMNAL_ALBUM_IDS.legacy : HYMNAL_ALBUM_IDS.current"
       :scroll="scroll"
       :has_scroll="has_scroll"
       sort_by="track"
@@ -63,6 +64,7 @@
               <l-music-menu-table
                 :id_music="item.id_music"
                 :name="item.name"
+                :music-subtitle="`Hino nº ${item.track} - ${item.name}`"
                 :has_instrumental_music="item.has_instrumental_music"
               />
             </div>
@@ -112,6 +114,7 @@ import $userdata from "@/helpers/UserData";
 import { KEYS } from "@/constants/UserDataKeys";
 import SljaConverter from "@/helpers/SljaConverter";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
+import { HYMNAL_ALBUM_IDS } from "@root/config/musicCatalog.mjs";
 
 const props = defineProps({
   moduleId: { type: String, required: true },

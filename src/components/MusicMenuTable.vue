@@ -152,6 +152,7 @@ const props = withDefaults(
   defineProps<{
     id_music: number;
     name: string;
+    musicSubtitle?: string;
     has_instrumental_music: boolean | number;
     color?: string;
     extraMenu?: ExtraMenuItem[];
@@ -159,7 +160,7 @@ const props = withDefaults(
     /** Monta ações rápidas apenas quando a linha é explorada, reduzindo o custo da tabela. */
     deferQuickActions?: boolean;
   }>(),
-  { deferQuickActions: true }
+  { deferQuickActions: true, musicSubtitle: "" }
 );
 
 // Quantos botões rápidos `buttons` devolve; o espaço reservado antes de montá-los
@@ -272,7 +273,15 @@ const menu = computed<MenuItem[]>(() => [
       {
         title: t("components.music_menu.add_to_liturgy"),
         icon: ICONS.UI.VIEW_LIST,
-        click: () => Liturgy.addMusic(props.id_music, props.name, !!props.has_instrumental_music),
+        click: () =>
+          Liturgy.addMusic(
+            props.id_music,
+            props.name,
+            !!props.has_instrumental_music,
+            undefined,
+            undefined,
+            props.musicSubtitle
+          ),
       },
     ],
   },

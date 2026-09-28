@@ -1,4 +1,5 @@
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
+import type { AlbumItem } from "@/types/Album";
 
 export interface LiturgyItem {
   id: string
@@ -35,6 +36,8 @@ export interface LiturgyMusicItem {
   name: string
   /** UUID de música personalizada (custom_collections). Presente apenas para músicas fora do catálogo principal. */
   custom_song_id?: string
+  albums?: AlbumItem[]
+  albums_names?: string
   [key: string]: unknown
 }
 

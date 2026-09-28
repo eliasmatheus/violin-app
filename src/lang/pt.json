@@ -65,10 +65,11 @@
     },
     "music_search": {
       "title": "Buscar Música",
-      "placeholder": "Digite o nome da música...",
+      "placeholder": "Digite o nome ou o número do hino...",
       "empty": "Digite para localizar uma música.",
       "empty_search": "Nenhuma música encontrada para esta busca.",
       "album": "Coletânea",
+      "custom_album": "Coletânea personalizada",
       "music": "Música",
       "select": "Selecionar",
       "results": "resultados"

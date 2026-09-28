@@ -1,6 +1,7 @@
 "use strict";
 
 const fs = require("fs");
+const catalogRules = import("../../../config/musicCatalog.mjs");
 
 const MAX_CATALOGS = 2;
 
@@ -69,12 +70,21 @@ function createMusicSearchCatalog() {
     }
   }
 
-  async function search(filePath, query) {
+  async function search(filePath, query, disabled = [], categoriesPath = null) {
+    const { prepareMusicCatalog, albumYears, musicAlbumLabel, isHymnalTrack } = await catalogRules;
     const rows = await load(filePath);
-    return rows
-      .filter(({ name, albums }) => name.includes(query) || albums.includes(query))
-      .slice(0, 20)
-      .map(({ music }) => music);
+    let years = new Map();
+    if (categoriesPath) {
+      try {
+        years = albumYears((await load(categoriesPath)).map(({ music }) => music));
+      } catch {
+        // O catálogo de músicas permanece utilizável sem os metadados opcionais.
+      }
+    }
+    return prepareMusicCatalog(rows.map(({ music }) => music), disabled, years)
+      .filter((music) => /^\d+$/.test(query) ? isHymnalTrack(music, query) :
+        normalize(music.name).includes(query) || normalize(musicAlbumLabel(music)).includes(query))
+      .slice(0, 20);
   }
 
   return { search };

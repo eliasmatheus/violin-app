@@ -100,6 +100,7 @@
                   <l-music-menu-table
                     v-else-if="!Platform.isRemote"
                     :id_music="Number(item.id_music)"
+                    :music-subtitle="musicTitle(item, 'Música')"
                     :name="item.name"
                     :has_instrumental_music="item.has_instrumental_music ?? false"
                   />
@@ -136,13 +137,12 @@ import { LjButton, LjDialog, LjEmpty, LjInput, LjSpinner } from "@/components/ui
 import Database from "@/helpers/Database";
 import Strings from "@/helpers/Strings";
 import { isHymnalTrack } from "@/helpers/Hymnal";
+import { useMusicCatalog } from "@/composables/useMusicCatalog";
+import { musicAlbumLabel, musicTitle, compareMusics } from "@root/config/musicCatalog.mjs";
 import Fuse from "fuse.js";
 import Platform from "@/helpers/Platform";
-import $userdata from "@/helpers/UserData";
 import { ICONS } from "@/config/Icons";
-import { KEYS } from "@/constants/UserDataKeys";
 import type { SearchMusicItem } from "@/types/Music";
-import type { AlbumItem } from "@/types/Album";
 import { MusicActionEnum } from "@/enums/MusicActionEnum";
 
 const props = defineProps<{
@@ -179,7 +179,7 @@ provide("close-spotlight", () => {
   open.value = false;
 });
 
-const sourceMusics = computed<SearchMusicItem[]>(() =>
+const { musics: sourceMusics } = useMusicCatalog(() =>
   Array.isArray(props.musicsList) ? props.musicsList : musics.value
 );
 
@@ -189,10 +189,10 @@ const filteredMusics = computed<SearchMusicItem[]>(() => {
 
   const exact = sourceMusics.value
     .filter((music: SearchMusicItem) => {
+      if (/^\d+$/.test(query)) return isHymnalTrack(music, query);
       return (
         Strings.clean(music.name).includes(query) ||
         Strings.clean(albumLabel(music)).includes(query) ||
-        String(music.track || "").includes(query) ||
         isHymnalTrack(music, query)
       );
     })
@@ -223,7 +223,11 @@ function approximateMusics(): SearchMusicItem[] {
     minMatchCharLength: FUZZY_MIN_LENGTH,
   });
 
-  return fuse.search(query, { limit: RESULT_LIMIT }).map((hit) => hit.item.music);
+  return fuse
+    .search(query)
+    .map((hit) => hit.item.music)
+    .sort(compareMusics)
+    .slice(0, RESULT_LIMIT);
 }
 
 function t(key: string): string {
@@ -231,20 +235,7 @@ function t(key: string): string {
 }
 
 function albumLabel(music: SearchMusicItem): string {
-  if ((music as unknown as Record<string, unknown>).custom_song_id)
-    return "Coletânea personalizada";
-  if (music.albums_names) return music.albums_names;
-  if (music.album) return music.album;
-  if (Array.isArray(music.albums)) {
-    return music.albums
-      .map((album: AlbumItem) => {
-        const track = album?.pivot?.track;
-        return [track, album?.name].filter(Boolean).join(" - ");
-      })
-      .filter(Boolean)
-      .join(", ");
-  }
-  return "";
+  return musicAlbumLabel(music, t("custom_album"));
 }
 
 async function loadMusics(): Promise<void> {
@@ -255,13 +246,7 @@ async function loadMusics(): Promise<void> {
   try {
     const data = await Database.get<SearchMusicItem[]>(`${locale.value}_musics`);
     if (Array.isArray(data)) {
-      const disabled = $userdata.get<number[]>(KEYS.OPTIONS.DISABLED_ALBUMS, []) || [];
-      const active = data.filter((music: SearchMusicItem) => {
-        if (!disabled.length) return true;
-        if (!Array.isArray(music.albums) || music.albums.length === 0) return true;
-        return music.albums.some((a) => !disabled.includes(Number(a.id_album)));
-      });
-      musics.value = active.slice().sort((a, b) => Strings.sort(a.name, b.name));
+      musics.value = data;
       loadedLocale.value = locale.value;
     } else {
       musics.value = [];
@@ -289,13 +274,17 @@ function handleMusicAction(music: SearchMusicItem, action: MusicActionEnum): voi
   open.value = false;
 }
 
-watch(open, async (value: boolean) => {
-  if (!value) return;
-  search.value = "";
-  await loadMusics();
-  await nextTick();
-  searchBar.value?.querySelector("input")?.focus();
-});
+watch(
+  open,
+  async (value: boolean) => {
+    if (!value) return;
+    search.value = "";
+    await loadMusics();
+    await nextTick();
+    searchBar.value?.querySelector("input")?.focus();
+  },
+  { immediate: true }
+);
 
 watch(
   () => locale.value,

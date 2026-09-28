@@ -91,6 +91,8 @@ import Media from "@/composables/useMedia";
 import $database from "@/helpers/Database";
 import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import { ICONS } from "@/config/Icons";
+import { useDisabledAlbums } from "@/composables/useMusicCatalog";
+import { isAlbumEnabled } from "@root/config/musicCatalog.mjs";
 
 interface DoxAlbum {
   id_album: number | string;
@@ -120,9 +122,14 @@ const musics = ref<AlbumMusic[]>([]);
 const coverFailed = ref(new Set<string>());
 
 const q = computed(() => search.value.trim().toLowerCase());
+const disabledAlbums = useDisabledAlbums();
 
 const filteredAlbums = computed(() =>
-  !q.value ? albums.value : albums.value.filter((a) => a.name.toLowerCase().includes(q.value))
+  albums.value.filter(
+    (a) =>
+      isAlbumEnabled(a.id_album, disabledAlbums.value) &&
+      (!q.value || a.name.toLowerCase().includes(q.value))
+  )
 );
 
 const filteredMusics = computed(() =>
@@ -130,6 +137,7 @@ const filteredMusics = computed(() =>
 );
 
 function openAlbum(album: DoxAlbum): void {
+  if (!isAlbumEnabled(album.id_album, disabledAlbums.value)) return;
   search.value = "";
   selectedAlbum.value = album;
   void loadMusics(album);
@@ -152,6 +160,11 @@ function goBack(): void {
   selectedAlbum.value = null;
   musics.value = [];
 }
+
+watch(disabledAlbums, () => {
+  if (selectedAlbum.value && !isAlbumEnabled(selectedAlbum.value.id_album, disabledAlbums.value))
+    goBack();
+});
 
 /** Ação rápida da linha: abre a letra/mídia no modo padrão (cantado). */
 function openMusicFor(m: AlbumMusic): void {

@@ -75,12 +75,20 @@ import { useAlbum } from "@/composables/useAlbum";
 import { LjProgress, LjTable } from "@/components/ui";
 import Window from "@/components/Window.vue";
 import MusicMenuTable from "@/components/MusicMenuTable.vue";
+import { watch } from "vue";
+import { useDisabledAlbums } from "@/composables/useMusicCatalog";
+import { isAlbumEnabled } from "@root/config/musicCatalog.mjs";
 
 const { module, t, $path, $datetime } = useModule(manifest);
 // Desestrutura `loading` do useAlbum() pra que vire um Ref top-level —
 // Vue auto-unwrapa refs top-level no template. Acessar via `album.loading`
 // retornaria o objeto Ref (sempre truthy), não o boolean.
 const { loading, close: closeAlbum } = useAlbum();
+const disabledAlbums = useDisabledAlbums();
+watch(disabledAlbums, (disabled) => {
+  if (module.value?.data?.id_album && !isAlbumEnabled(module.value.data.id_album, disabled))
+    closeAlbum();
+});
 </script>
 
 <style scoped>

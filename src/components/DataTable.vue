@@ -23,6 +23,8 @@ import Strings from "@/helpers/Strings";
 import { isHymnalTrack } from "@/helpers/Hymnal";
 import Fuse from "fuse.js";
 import Telemetry from "@/helpers/Telemetry";
+import { useMusicCatalog } from "@/composables/useMusicCatalog";
+import { isAlbumEnabled, prepareMusicCatalog, compareMusics } from "@root/config/musicCatalog.mjs";
 
 /** Campos onde o operador erra a digitação — nome da música e do álbum. */
 const FUZZY_FIELDS = ["name", "albums_names"];
@@ -65,6 +67,7 @@ const props = defineProps({
   letter: String,
   sort_by: String,
   disabled_albums: { type: Array, default: () => [] },
+  albumId: { type: [Number, String], default: null },
   /**
    * Mínimo de caracteres para o filtro textual ser aplicado (scroll infinito
    * em listas grandes). Buscas numéricas exatas (nº do hino/track) escapam
@@ -76,6 +79,15 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue"]);
 
 const { t } = useI18n();
+const { disabledAlbums, years } = useMusicCatalog(
+  () => [],
+  () => /_musics$/.test(props.file || "")
+);
+let sourceData = null;
+
+function disabledAlbumIds() {
+  return [...disabledAlbums.value, ...props.disabled_albums];
+}
 
 const all_data = ref([]);
 const filter_data = ref([]);
@@ -134,20 +146,29 @@ function prepareDataset(source) {
     _preparedDatasets.set(source, viewsBySort);
   }
 
-  const sortKey = props.sort_by || "";
+  const isMusicCatalog = /_musics$/.test(props.file || "");
+  const sortKey = JSON.stringify([
+    props.sort_by || "",
+    isMusicCatalog,
+    disabledAlbumIds(),
+    [...years.value],
+  ]);
   const cached = viewsBySort.get(sortKey);
   if (cached) return cached;
 
   // Nunca reordena o array do Database. Além de preservar a ordem do cache
   // compartilhado, isso permite que outras tabelas escolham outro sort sem
   // invalidar esta visão preparada.
-  const items = [...source];
-  if (props.sort_by) {
+  const items = isMusicCatalog
+    ? prepareMusicCatalog(source, disabledAlbumIds(), years.value)
+    : [...source];
+  if (props.sort_by && !isMusicCatalog) {
     items.sort((a, b) => Strings.sort(a[props.sort_by], b[props.sort_by]));
   }
 
   const prepared = { items, indexed: null };
   viewsBySort.set(sortKey, prepared);
+  if (viewsBySort.size > 8) viewsBySort.delete(viewsBySort.keys().next().value);
   return prepared;
 }
 
@@ -185,9 +206,14 @@ function getBaseEntries(filter, disabled) {
     const albumActive =
       !entry.albumIds ||
       entry.albumIds.length === 0 ||
-      entry.albumIds.some((albumId) => !disabled.includes(albumId));
+      entry.albumIds.some((albumId) => isAlbumEnabled(albumId, disabled));
 
-    return filterCondition && initialLetter && albumActive;
+    return (
+      filterCondition &&
+      initialLetter &&
+      albumActive &&
+      (props.albumId == null || isAlbumEnabled(props.albumId, disabled))
+    );
   });
   return _baseCache;
 }
@@ -236,6 +262,19 @@ watch(
 watch(
   () => props.letter,
   () => compareFilterData()
+);
+watch(
+  [disabledAlbums, () => props.disabled_albums, years],
+  () => {
+    if (!sourceData) return;
+    clearIndexes();
+    const prepared = prepareDataset(sourceData);
+    _preparedDataset = prepared;
+    all_data.value = prepared.items;
+    _indexedData = prepared.indexed || [];
+    filterData();
+  },
+  { deep: true }
 );
 
 watch(data, () => {
@@ -291,6 +330,7 @@ async function loadData() {
   all_data.value = [];
   filter_data.value = [];
   data.value = [];
+  sourceData = null;
   clearIndexes();
   error.value = null;
   loading.value = true;
@@ -311,6 +351,7 @@ async function loadData() {
       return;
     }
 
+    sourceData = loadedData;
     const prepared = prepareDataset(loadedData);
     _preparedDataset = prepared;
     all_data.value = prepared.items;
@@ -391,7 +432,7 @@ function filterData() {
     // precisa normalizar/indexar o catálogo inteiro: basta manter a visão
     // ordenada e renderizar a primeira página. Isso remove trabalho síncrono
     // do primeiro frame em qualquer dispositivo.
-    const disabled = props.disabled_albums || [];
+    const disabled = disabledAlbumIds();
     const needsBaseFilter = filter.length > 0 || disabled.length > 0 || props.letter !== "";
     is_fuzzy.value = false;
 
@@ -417,6 +458,13 @@ function filterData() {
       .filter((entry) =>
         searchable.some((key) => {
           const item = entry.item;
+          if (
+            /_musics$/.test(props.file || "") &&
+            /^\d+$/.test(value) &&
+            searchable.includes("track")
+          ) {
+            return isHymnalTrack(item, value);
+          }
           if (key === "track" && item.albums) {
             return isHymnalTrack(item, value);
           }
@@ -439,6 +487,7 @@ function filterData() {
     }
 
     const approximate = fuzzySearch(baseEntries, searchable);
+    if (/_musics$/.test(props.file || "")) approximate.sort(compareMusics);
     is_fuzzy.value = approximate.length > 0;
     filter_data.value = approximate;
 

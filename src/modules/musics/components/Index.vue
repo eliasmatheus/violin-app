@@ -105,7 +105,7 @@
                 class="musics-album-chip"
                 @click="openAlbum(album.id_album)"
               >
-                {{ album.name }}
+                {{ albumLabel(album) }}
               </LjChip>
             </div>
           </td>
@@ -117,7 +117,7 @@
               class="musics-album-chip"
               @click="openAlbum(album.id_album)"
             >
-              {{ album.name }}
+              {{ albumLabel(album) }}
             </LjChip>
           </td>
           <td class="lj-u-text-end">{{ shortTime(item.duration) }}</td>
@@ -146,6 +146,7 @@
               <MusicMenuTable
                 :id_music="item.id_music"
                 :name="item.name"
+                :music-subtitle="musicTitle(item, 'Música')"
                 :has_instrumental_music="item.has_instrumental_music"
                 :show-playlist-menu="true"
                 defer-quick-actions
@@ -199,6 +200,7 @@ import PlaylistPanel from "./PlaylistPanel.vue";
 import PlaylistSongs from "./PlaylistSongs.vue";
 import { ICONS } from "@/config/Icons";
 import Telemetry from "@/helpers/Telemetry";
+import { albumLabel, musicTitle } from "@root/config/musicCatalog.mjs";
 
 const moduleContainer = ref(null);
 const tm = (key) => {

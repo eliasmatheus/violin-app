@@ -330,13 +330,14 @@ export default {
     name: string,
     has_instrumental_music = false,
     cor = DEFAULT_COLOR,
-    day?: number
+    day?: number,
+    musicSubtitle = ""
   ): LiturgyItem {
     return this.add(
       {
         tipo: LiturgyItemTypeEnum.MUSICA,
         item: name || `Música ${id_music}`,
-        subitem: "Música " + (name || `#${id_music}`),
+        subitem: musicSubtitle || "Música " + (name || `#${id_music}`),
         musica: id_music,
         escolha: false,
         subtipo: has_instrumental_music ? "ja" : "div",

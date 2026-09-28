@@ -35,22 +35,46 @@ const CATALOGO: LiturgyMusicItem[] = [
   { id_music: -1, name: "Minha canção", custom_song_id: "abc" },
 ];
 
-const opcoes = buildMusicOptions(CATALOGO);
+const opcoes = buildMusicOptions(CATALOGO, "Coletânea personalizada");
 
 // O combobox entrega o termo já normalizado; o teste faz o mesmo.
 const achar = (texto: string) =>
   opcoes.filter((o) => musicMatches(o, Strings.clean(texto))).map((o) => o.value);
 
 describe("buildMusicOptions", () => {
-  it("ordena por rótulo e marca a música personalizada com ♪", () => {
-    const rotulos = opcoes.map((o) => o.label);
-    expect(rotulos).toContain("♪ Minha canção");
-    expect(rotulos).toEqual([...rotulos].sort((a, b) => a.localeCompare(b, "pt-BR")));
+  it("mantém o título personalizado no mesmo formato dos demais", () => {
+    expect(opcoes.find((o) => o.value === -1)?.label).toBe("Minha canção");
   });
 
   it("guarda o nome do CD como texto secundário, vazio quando não há", () => {
     expect(opcoes.find((o) => o.value === 5)?.detail).toBe("Adoração Vol. 2");
-    expect(opcoes.find((o) => o.value === -1)?.detail).toBe("");
+    expect(opcoes.find((o) => o.value === -1)?.detail).toBe("Coletânea personalizada");
+  });
+
+  it("mostra o número ao lado do hinário", () => {
+    expect(opcoes.find((o) => o.value === 1)?.detail).toBe("Hino nº 285 - Hinário Adventista 1996");
+  });
+
+  it("prioriza o ano, inclusive em buscas pelo mesmo número com títulos diferentes", () => {
+    const options = buildMusicOptions([
+      hino(1, "Amor antigo", 28),
+      {
+        ...hino(2, "Zelo novo", 28, "Hinário Adventista"),
+        albums: [
+          {
+            id_album: 712,
+            name: "Hinário Adventista",
+            type: "hymnal",
+            pivot: { id_music: 2, id_album: 712, track: 28 },
+          },
+        ],
+      },
+      { id_music: 3, name: "Novíssima", albums: [{ id_album: 3, name: "Louvor", year: 2026 }] },
+    ]);
+    expect(options.map((option) => option.value)).toEqual([3, 2, 1]);
+    expect(
+      options.filter((option) => musicMatches(option, "28")).map((option) => option.value)
+    ).toEqual([2, 1]);
   });
 });
 

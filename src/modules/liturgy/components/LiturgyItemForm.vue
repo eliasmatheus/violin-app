@@ -437,6 +437,8 @@ import type { LiturgyItem, LiturgyMusicItem, ScheduledCategory } from "@/types/L
 import type { OverlaySlot } from "@/types/Overlay";
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
 import { buildMusicOptions, musicMatches, type MusicOption } from "../musicOptions";
+import { useMusicCatalog } from "@/composables/useMusicCatalog";
+import { useI18n } from "vue-i18n";
 
 const props = withDefaults(
   defineProps<{
@@ -549,7 +551,11 @@ const blocoOptions = computed(() => [
 
 // Sem o item "-- selecione --" que o select carregava: no combobox isso é o
 // placeholder do campo, e "sem música" é o checkbox "Escolher na hora do culto".
-const musicOptions = computed(() => buildMusicOptions(props.musicsList));
+const { t: appT } = useI18n();
+const { musics: availableMusics } = useMusicCatalog(() => props.musicsList);
+const musicOptions = computed(() =>
+  buildMusicOptions(availableMusics.value, appT("components.music_search.custom_album"))
+);
 
 const musicOptionById = computed(() => new Map(musicOptions.value.map((o) => [o.value, o])));
 const selectedMusic = computed(() => musicOptionById.value.get(Number(props.form.musica)) ?? null);

@@ -457,17 +457,22 @@ function setupRoutes(
   // ---------------------------------------------------------------
   app.get("/api/music-search", async (req, res) => {
     const q = req.query.q;
-    if (!q || q.length < 2) {
+    if (typeof q !== "string" || !q.trim() || (q.trim().length < 2 && !/^\d+$/.test(q.trim()))) {
       return res.json({ status: "ok", results: [] });
     }
-    const lang = req.query.lang || "pt";
-    const query = normalize(q);
+    const lang = req.query.lang === "es" ? "es" : "pt";
+    const query = normalize(q.trim());
 
     try {
       const filePath = jsonCache.safeLocalPath(`${lang}_musics`);
       let results;
       try {
-        results = await musicSearchCatalog.search(filePath, query);
+        const userData = typeof getUserData === "function" ? getUserData() : {};
+        const disabled = Array.isArray(userData?.options?.disabled_albums)
+          ? [...userData.options.disabled_albums] : [];
+        if (userData?.modules?.hymnal_1996?.show_in_main_menu !== true) disabled.push(629);
+        results = await musicSearchCatalog.search(filePath, query, disabled,
+          jsonCache.safeLocalPath(`${lang}_categories`));
       } catch (error) {
         if (error.code !== "ENOENT") throw error;
         return res.status(404).json({

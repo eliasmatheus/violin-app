@@ -18,6 +18,8 @@ import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import type { LiturgyItem, ScheduledCategory, LiturgyMusicItem } from "@/types/Liturgy";
 import { listSongs as listCustomSongs } from "@/helpers/CustomSongs";
 import { AUDIO_EXT, VIDEO_EXT } from "@constants/FileTypes";
+import { useMusicCatalog } from "@/composables/useMusicCatalog";
+import { musicTitle } from "@root/config/musicCatalog.mjs";
 
 interface VideoItem {
   id: string;
@@ -130,7 +132,7 @@ export function useLiturgyItems(
     items.value.reduce((s, i) => s + (Number(i.duration) || 0), 0)
   );
 
-  const musicsList = computed<LiturgyMusicItem[]>(() => musicsCache.value || []);
+  const { musics: musicsList } = useMusicCatalog(() => musicsCache.value || []);
 
   /* ============== Listing ============== */
   function isChecked(item: LiturgyItem): boolean {
@@ -230,6 +232,10 @@ export function useLiturgyItems(
   function subtitleFor(item: LiturgyItem): string {
     if (item.tipo === LiturgyItemTypeEnum.MUSICA && item.escolha)
       return t("placeholders.music_choose");
+    if (item.tipo === LiturgyItemTypeEnum.MUSICA) {
+      const music = musicsList.value.find((m) => Number(m.id_music) === Number(item.id_music || item.musica));
+      if (music) return musicTitle(music, t("data.music_prefix"));
+    }
     // ITENS_AGENDADOS: re-resolve dinamicamente contra a data ativa (não snapshot).
     if (item.tipo === LiturgyItemTypeEnum.ITENS_AGENDADOS) {
       const activeDate = $liturgy.getActiveDate();
@@ -402,7 +408,9 @@ export function useLiturgyItems(
           const m = musicsList.value.find((x) => x.id_music === Number(f.musica));
           built.escolha = false;
           built.subtipo = f.subtipo || MusicActionEnum.SUNG;
-          built.subitem = t("data.music_prefix") + " " + (m?.name || `#${f.musica}`);
+          built.subitem = m
+            ? musicTitle(m, t("data.music_prefix"))
+            : `${t("data.music_prefix")} #${f.musica}`;
           built.id_music = Number(f.musica);
           // Música personalizada → salva UUID em ref_id
           if (m?.custom_song_id) {

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -10,6 +10,8 @@ const { setupRoutes } = require("../routes.js");
 const handlers = new Map();
 let root;
 let fetchJson;
+let userData = { storage: {} };
+afterEach(() => { userData = { storage: {} }; });
 
 function response() {
   return {
@@ -35,7 +37,7 @@ beforeAll(async () => {
     },
     {
       getMainWindow: () => null,
-      getUserData: () => ({ storage: {} }),
+      getUserData: () => userData,
       jsonCache: null,
       getDatabaseUrl: () => "https://example.invalid/db",
       getApiToken: () => "",
@@ -55,6 +57,23 @@ afterAll(async () => {
 });
 
 describe("HTTP routes with asynchronous local reads", () => {
+  it("aceita hinos de um dígito e usa as preferências atuais de álbuns em cada busca", async () => {
+    await fs.writeFile(path.join(root, "pt_musics.json"), JSON.stringify([
+      { id_music: 1, name: "Amor antigo", albums: [{ id_album: 629, name: "Hinário Adventista 1996", type: "hymnal", pivot: { track: 1 } }] },
+      { id_music: 2, name: "Zelo novo", albums: [{ id_album: 712, name: "Hinário Adventista", type: "hymnal", pivot: { track: 1 } }] },
+    ]));
+    userData = { modules: { hymnal_1996: { show_in_main_menu: true } }, options: { disabled_albums: [] } };
+    expect((await call("/api/music-search", { q: "1" })).body.results.map((music) => music.id_music)).toEqual([2, 1]);
+    userData.options.disabled_albums = ["629"];
+    expect((await call("/api/music-search", { q: "1" })).body.results.map((music) => music.id_music)).toEqual([2]);
+    userData.options.disabled_albums = [629, 712];
+    expect((await call("/api/music-search", { q: "1" })).body.results).toEqual([]);
+    userData.options.disabled_albums = [];
+    userData.modules.hymnal_1996.show_in_main_menu = false;
+    expect((await call("/api/music-search", { q: "1" })).body.results.map((music) => music.id_music)).toEqual([2]);
+    await fs.unlink(path.join(root, "pt_musics.json"));
+  });
+
   it("keeps music search results and the missing-catalog 404", async () => {
     const missing = await call("/api/music-search", { q: "graca", lang: "es" });
     expect(missing.code).toBe(404);

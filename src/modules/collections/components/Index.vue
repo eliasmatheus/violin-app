@@ -114,9 +114,9 @@ import Database from "@/helpers/Database";
 import Modules from "@/helpers/Modules";
 import Media from "@/composables/useMedia";
 import Path from "@/helpers/Path";
-import $userdata from "@/helpers/UserData";
-import { KEYS } from "@/constants/UserDataKeys";
 import { useShell } from "@/composables/useShell";
+import { useDisabledAlbums } from "@/composables/useMusicCatalog";
+import { isAlbumEnabled, albumYear } from "@root/config/musicCatalog.mjs";
 
 const { locale } = useI18n();
 const { width } = useViewport();
@@ -128,11 +128,12 @@ const lang = ref(null);
 const id_category = ref(null);
 const loading = ref(false);
 const error = ref(null);
+const disabledAlbums = useDisabledAlbums();
 
 const albums = computed(() => {
-  const disabled = $userdata.get(KEYS.OPTIONS.DISABLED_ALBUMS, []) || [];
+  const disabled = disabledAlbums.value;
   const activeOnly = (list) =>
-    (list || []).filter((album) => !disabled.includes(Number(album.id_album)));
+    (list || []).filter((album) => isAlbumEnabled(album.id_album, disabled));
 
   if (!categories.value) return [];
   if (!id_category.value) {
@@ -142,11 +143,11 @@ const albums = computed(() => {
           .reduce((acc, category) => acc.concat(activeOnly(category.albums)), [])
           .map((album) => [album.id_album, { ...album, subtitle: null }])
       ).values(),
-    ].sort((a, b) => Strings.sort(a.name, b.name));
+    ].sort((a, b) => albumYear(b) - albumYear(a) || Strings.sort(a.name, b.name));
   }
   return activeOnly(
     categories.value.filter((item) => item.id_category === id_category.value)[0]?.albums
-  ).sort((a, b) => a.order - b.order);
+  ).sort((a, b) => albumYear(b) - albumYear(a) || a.order - b.order);
 });
 
 const compact = computed(() => width.value <= 600);

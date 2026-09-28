@@ -1,6 +1,6 @@
 import { hymnalTracks } from "@/helpers/Hymnal";
 import Strings from "@/helpers/Strings";
-import type { AlbumItem } from "@/types/Album";
+import { musicAlbumLabel, prepareMusicCatalog } from "@root/config/musicCatalog.mjs";
 import type { LiturgyMusicItem } from "@/types/Liturgy";
 
 // `type`, não `interface`: só o alias tem a assinatura de índice implícita que o
@@ -16,27 +16,22 @@ export type MusicOption = {
   tracks: number[];
 };
 
-export function buildMusicOptions(musics: LiturgyMusicItem[]): MusicOption[] {
-  return musics
-    .map((m) => {
-      const detail = String(m.albums_names ?? "");
-      return {
-        value: Number(m.id_music),
-        label: m.custom_song_id ? `♪ ${m.name}` : m.name,
-        detail,
-        nameKey: Strings.clean(m.name),
-        albumKey: Strings.clean(detail),
-        tracks: hymnalTracks(m as unknown as { albums?: AlbumItem[] }),
-      };
-    })
-    .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+export function buildMusicOptions(musics: LiturgyMusicItem[], customLabel = ""): MusicOption[] {
+  return prepareMusicCatalog(musics).map((m) => {
+    const detail = musicAlbumLabel(m, customLabel);
+    return {
+      value: Number(m.id_music),
+      label: m.name,
+      detail,
+      nameKey: Strings.clean(m.name),
+      albumKey: Strings.clean(detail),
+      tracks: hymnalTracks(m),
+    };
+  });
 }
 
 /** Mesma regra da busca de músicas: trecho do nome ou do CD, ou o número do hino. */
 export function musicMatches(option: MusicOption, term: string): boolean {
-  return (
-    option.nameKey.includes(term) ||
-    option.albumKey.includes(term) ||
-    option.tracks.includes(Number(term))
-  );
+  if (/^\d+$/.test(term)) return option.tracks.includes(Number(term));
+  return option.nameKey.includes(term) || option.albumKey.includes(term);
 }

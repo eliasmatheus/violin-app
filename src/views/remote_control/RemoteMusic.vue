@@ -14,8 +14,8 @@
       <li v-for="m in musicResults" :key="m.id_music" class="rm-item" @click="openVersionPicker(m)">
         <div class="rm-item__text">
           <span class="rm-item__title lj-u-truncate">{{ m.name }}</span>
-          <span v-if="m.albums_names" class="rm-item__subtitle lj-u-truncate">
-            {{ m.albums_names }}
+          <span v-if="musicAlbumLabel(m)" class="rm-item__subtitle lj-u-truncate">
+            {{ musicAlbumLabel(m) }}
           </span>
         </div>
         <div class="rm-item__actions">
@@ -70,6 +70,7 @@ import { MusicAlbum, MusicItem } from "@/types/Music";
 import type { ChooseLaterItem } from "@/types/Liturgy";
 import { apiFetch, postApi } from "@/helpers/ApiClient";
 import { MusicActionEnum } from "@/enums/MusicActionEnum";
+import { musicAlbumLabel } from "@root/config/musicCatalog.mjs";
 
 const props = defineProps<{
   token?: string;
@@ -146,7 +147,10 @@ const MUSIC_VERSIONS: {
 ];
 
 async function onMusicSearch(): Promise<void> {
-  if (!musicSearch.value || musicSearch.value.length < 2) {
+  if (
+    !musicSearch.value.trim() ||
+    (musicSearch.value.trim().length < 2 && !/^\d+$/.test(musicSearch.value.trim()))
+  ) {
     musicResults.value = [];
     return;
   }

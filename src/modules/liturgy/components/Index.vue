@@ -153,6 +153,7 @@ import type { LiturgyItem } from "@/types/Liturgy";
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
 import MusicSpotlight from "@/components/MusicSpotlight.vue";
 import { SearchMusicItem } from "@/types/Music";
+import { musicTitle } from "@root/config/musicCatalog.mjs";
 import LiturgySaveDialog from "./LiturgySaveDialog.vue";
 import LiturgyLoadDialog from "./LiturgyLoadDialog.vue";
 import LiturgyManageDialog from "./LiturgyManageDialog.vue";
@@ -267,7 +268,7 @@ function onChooseLaterMusicPicked(music: SearchMusicItem) {
   const hasInstrumental = !!music.has_instrumental_music;
   const musica = {
     item: music.name,
-    subitem: t("data.music_prefix") + " " + music.name,
+    subitem: musicTitle(music, t("data.music_prefix")),
     musica: id,
     id_music: id,
     escolha: false,

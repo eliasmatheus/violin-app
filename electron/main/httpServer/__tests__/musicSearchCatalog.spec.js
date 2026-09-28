@@ -21,6 +21,25 @@ async function catalog(name = "pt_musics.json") {
 }
 
 describe("HTTP music search catalog", () => {
+  it("prioriza a edição nova, usa número exato e reaplica álbuns desativados ao cache", async () => {
+    const file = await catalog();
+    const old = { id_album: 629, name: "Hinário Adventista 1996", type: "hymnal" };
+    const current = { id_album: 712, name: "Hinário Adventista", type: "hymnal" };
+    await fs.writeFile(file, JSON.stringify([
+      { id_music: 1, name: "Amor antigo", albums: [{ ...old, pivot: { track: 1 } }] },
+      { id_music: 2, name: "Zelo novo", albums: [{ ...current, pivot: { track: 1 } }] },
+      { id_music: 3, name: "Amor de sempre", albums: [{ ...old, pivot: { track: 128 } }, { ...current, pivot: { track: 28 } }] },
+    ]));
+    const search = createMusicSearchCatalog();
+    expect((await search.search(file, "1")).map((m) => m.id_music)).toEqual([2, 1]);
+    expect((await search.search(file, "1", ["629"])).map((m) => m.id_music)).toEqual([2]);
+    expect((await search.search(file, "amor", [629]))[0].albums_names).toBe("Hinário Adventista");
+    expect(await search.search(file, "128", [629])).toEqual([]);
+    expect((await search.search(file, "28", [629])).map((m) => m.id_music)).toEqual([3]);
+    expect(await search.search(file, "1996", [629])).toEqual([]);
+    expect(await search.search(file, "1", [629, 712])).toEqual([]);
+  });
+
   it("reuses parsed rows for concurrent and repeated searches", async () => {
     const file = await catalog();
     await fs.writeFile(file, JSON.stringify([

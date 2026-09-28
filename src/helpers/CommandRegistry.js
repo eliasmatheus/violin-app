@@ -21,15 +21,24 @@ import Media from "@/composables/useMedia";
 import { currentMediaKind, openMediaWindow } from "@/helpers/ProjectionWindows";
 import { ICONS } from "@/config/Icons";
 import { hymnalTracks } from "@/helpers/Hymnal";
-import { KEYS } from "@/constants/UserDataKeys";
+import { KEYS, moduleShowInMainMenu } from "@/constants/UserDataKeys";
+import {
+  albumYears,
+  prepareMusicCatalog,
+  visibleMusic,
+  musicTitle,
+  musicAlbumLabel,
+  compareMusics,
+} from "@root/config/musicCatalog.mjs";
 
 let _loaded = false;
 let _commands = [];
 let _fuse = null;
 let _externalCommands = [];
+let _visibleCommands = [];
 
 function _buildIndex() {
-  _fuse = new Fuse(_commands, {
+  _fuse = new Fuse(_visibleCommands, {
     keys: [
       { name: "title", weight: 2 },
       { name: "keywords", weight: 1 },
@@ -46,6 +55,7 @@ export function register(command) {
   _externalCommands.push(command);
   if (_loaded) {
     _commands.push(command);
+    _visibleCommands.push(command);
     _buildIndex();
   }
 }
@@ -53,6 +63,27 @@ export function register(command) {
 /** Retorna true se os comandos já foram carregados */
 export function isLoaded() {
   return _loaded;
+}
+
+/** Reaplica preferências ao cache, inclusive enquanto a paleta está aberta. */
+export function visibleCommands(disabled = []) {
+  _visibleCommands = _commands.flatMap((command) => {
+    if (!command.music) return [command];
+    const music = visibleMusic(command.music, disabled);
+    return music
+      ? [
+          {
+            ...command,
+            music,
+            title: musicTitle(music),
+            tracks: hymnalTracks(music),
+            subtitle: musicAlbumLabel(music),
+          },
+        ]
+      : [];
+  });
+  _buildIndex();
+  return _visibleCommands;
 }
 
 /**
@@ -66,11 +97,19 @@ export function search(query, { limit = 50, offset = 0, signal } = {}) {
   if (signal?.aborted) return { results: [], hasMore: false };
 
   const raw = _fuse.search(query).map((r) => r.item);
+  // Preserva os lugares das ações; ordena as músicas pelos álbuns mais recentes.
+  const musics = raw
+    .filter((command) => command.category === "music")
+    .sort((a, b) => compareMusics(a.music, b.music));
+  let musicIndex = 0;
+  const ordered = raw.map((command) =>
+    command.category === "music" ? musics[musicIndex++] : command
+  );
 
   if (signal?.aborted) return { results: [], hasMore: false };
 
   return {
-    results: raw.slice(offset, offset + limit),
+    results: ordered.slice(offset, offset + limit),
     hasMore: raw.length > offset + limit,
   };
 }
@@ -239,9 +278,18 @@ async function dynamicCommands($database, $userdata) {
 
   // Músicas (lista do banco) — pode ser grande, carrega lazy só se solicitado
   try {
-    const musics = await $database.get(`${lang}_musics`);
+    const [musics, categories] = await Promise.all([
+      $database.get(`${lang}_musics`),
+      $database.get(`${lang}_categories`, { silent: true }).catch(() => []),
+    ]);
     if (Array.isArray(musics)) {
-      const limited = musics.slice(0, 5000);
+      const catalog = prepareMusicCatalog(musics, [], albumYears(categories));
+      const byId = new Map(catalog.map((music) => [Number(music.id_music), music]));
+      dynamic.forEach((command) => {
+        const id = Number(command.id.split(":")[1]);
+        command.music = byId.get(id);
+      });
+      const limited = catalog.slice(0, 5000);
       limited.forEach((m) => {
         if (!m || !m.id_music) return;
         const tracks = hymnalTracks(m);
@@ -250,6 +298,7 @@ async function dynamicCommands($database, $userdata) {
           title: m.name || String(m.id_music),
           keywords: ["musica"],
           tracks,
+          music: m,
           icon: ICONS.MUSIC.NOTE,
           category: "music",
           subtitle: m.albums_names || "",
@@ -270,13 +319,15 @@ async function dynamicCommands($database, $userdata) {
 
 /** Retorna lista completa para uso no Command Palette. Cacheia após primeira carga. */
 export async function getAll($database, $userdata, t) {
-  if (_loaded) return _commands;
+  const saved = $userdata.get(KEYS.OPTIONS.DISABLED_ALBUMS, []);
+  const disabled = Array.isArray(saved) ? [...saved] : [];
+  if (!$userdata.get(moduleShowInMainMenu("hymnal_1996"), false)) disabled.push(629);
+  if (_loaded) return visibleCommands(disabled);
   const stat = staticCommands(t);
   const dyn = await dynamicCommands($database, $userdata);
   _commands = [...stat, ...dyn, ..._externalCommands];
-  _buildIndex();
   _loaded = true;
-  return _commands;
+  return visibleCommands(disabled);
 }
 
-export default { register, getAll, search, isLoaded };
+export default { register, getAll, search, isLoaded, visibleCommands };

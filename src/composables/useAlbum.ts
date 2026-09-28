@@ -2,6 +2,8 @@ import { ref, type Ref } from "vue";
 import $appdata from "@/helpers/AppData";
 import $database from "@/helpers/Database";
 import $dev from "@/helpers/Dev";
+import { getDisabledAlbums } from "@/composables/useMusicCatalog";
+import { isAlbumEnabled, albumYear } from "@root/config/musicCatalog.mjs";
 
 export interface AlbumItem {
   id_album: number | string;
@@ -35,18 +37,21 @@ interface AlbumInstance {
 let _shared: AlbumInstance | null = null;
 
 function _create(): AlbumInstance {
-  const data     = ref<AlbumData>({});
-  const loading  = ref(false);
+  const data = ref<AlbumData>({});
+  const loading = ref(false);
   const id_album = ref<string | number | null>(null);
 
   async function open(albumId: string | number): Promise<OpenResult> {
+    if (!isAlbumEnabled(albumId, getDisabledAlbums())) {
+      return { redirect: null };
+    }
     $dev.write("open album", albumId);
 
     loading.value = true;
     $appdata.set("modules.album.loading", true);
 
     const albumData = await $database.get<AlbumData>(`album_${albumId}`);
-    if (albumData == null) {
+    if (albumData == null || !isAlbumEnabled(albumId, getDisabledAlbums())) {
       close();
       return { redirect: null };
     }
@@ -72,9 +77,9 @@ function _create(): AlbumInstance {
 
   function close(): void {
     $dev.write("close album");
-    data.value     = {};
+    data.value = {};
     id_album.value = null;
-    loading.value  = false;
+    loading.value = false;
     $appdata.set("modules.album.show", false);
     $appdata.set("modules.album.data", {});
     $appdata.set("modules.album.id_album", null);
@@ -83,7 +88,10 @@ function _create(): AlbumInstance {
 
   function setAlbumInfo(albumId: string | number | null, module = "media"): void {
     const moduleData = $appdata.get<AlbumData>(`modules.${module}.data`);
-    if (!moduleData?.albums?.length) {
+    const activeAlbums = (moduleData?.albums || []).filter((album) =>
+      isAlbumEnabled(album.id_album, getDisabledAlbums())
+    );
+    if (!activeAlbums.length) {
       $appdata.set(`modules.${module}.config.subtitle`, "");
       $appdata.set(`modules.${module}.config.track`, 0);
       $appdata.set(`modules.${module}.config.image`, "");
@@ -92,11 +100,13 @@ function _create(): AlbumInstance {
 
     let album: AlbumItem | null = null;
     if (albumId) {
-      album = moduleData.albums.find((item) => item.id_album == albumId) ?? null;
-    } else if (moduleData.albums.length === 1) {
-      album = moduleData.albums[0];
+      album = activeAlbums.find((item) => item.id_album == albumId) ?? null;
+    } else if (activeAlbums.length === 1) {
+      album = activeAlbums[0];
     } else {
-      album = [...moduleData.albums].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
+      album = [...activeAlbums].sort(
+        (a, b) => albumYear(b) - albumYear(a) || (a.order ?? 0) - (b.order ?? 0)
+      )[0];
     }
 
     if (!album) {

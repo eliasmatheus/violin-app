@@ -109,6 +109,8 @@ import { useAppTheme } from "@/composables/useAppTheme";
 import CommandRegistry from "@/helpers/CommandRegistry";
 import Database from "@/helpers/Database";
 import UserData from "@/helpers/UserData";
+import { useDisabledAlbums } from "@/composables/useMusicCatalog";
+import { compareMusics } from "@root/config/musicCatalog.mjs";
 
 const PAGE_SIZE = 50;
 
@@ -126,6 +128,14 @@ const resultsContainer = ref(null);
 const query = ref("");
 const selectedIndex = ref(0);
 const allCommands = ref([]);
+const disabledAlbums = useDisabledAlbums();
+watch(
+  disabledAlbums,
+  (disabled) => {
+    if (CommandRegistry.isLoaded()) allCommands.value = CommandRegistry.visibleCommands(disabled);
+  },
+  { deep: true }
+);
 const loading = ref(false);
 const visibleCount = ref(PAGE_SIZE);
 
@@ -153,14 +163,10 @@ const _rawResults = computed(() => {
   const numMatch = query.value.trim().match(/^\d+$/);
   if (numMatch) {
     const num = parseInt(numMatch[0], 10);
-    const exactHits = allCommands.value.filter(
-      (c) => c.category === "music" && c.tracks?.includes(num)
-    );
-    if (exactHits.length > 0) {
-      const { results: fuseHits } = CommandRegistry.search(query.value, { limit: 500 });
-      const filtered = fuseHits.filter((i) => !exactHits.includes(i));
-      return [...exactHits, ...filtered];
-    }
+    const exactHits = allCommands.value
+      .filter((c) => c.category === "music" && c.tracks?.includes(num))
+      .sort((a, b) => compareMusics(a.music, b.music));
+    return exactHits;
   }
 
   const { results: r } = CommandRegistry.search(query.value, { limit: 500 });

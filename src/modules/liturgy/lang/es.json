@@ -79,7 +79,7 @@
     "path_internal": "Ruta relativa al programa",
     "music_choose_later": "Elegir durante el culto",
     "music_select": "Música",
-    "music_placeholder": "Escriba el título para buscar...",
+    "music_placeholder": "Escriba el título o el número del himno...",
     "scheduled_category": "Categoría del ítem programado",
     "scheduled_pick": "-- seleccione una categoría --",
     "scheduled_empty": "Ninguna categoría creada. Use el botón de configuración para crear.",
