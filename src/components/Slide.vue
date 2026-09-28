@@ -36,9 +36,12 @@
       <div class="lj-slide__text lj-slide__text--aux" :style="auxTextStyle" v-html="auxText" />
     </div>
 
-    <!-- Barra de progresso inferior (espelha Projection) -->
+    <!-- Linha de progresso com opções independentes para projeção e retorno -->
     <div
-      v-if="showProgress && cfg.show_progress_bar"
+      v-if="
+        showProgress &&
+        (progressTarget === 'return' ? cfg.show_progress_bar : cfg.show_projection_progress_bar)
+      "
       class="lj-slide__progress"
       :style="{ width: progress + '%', background: cfg.progress_color }"
     />
@@ -98,8 +101,10 @@ const props = defineProps({
   title: { type: String, default: "" },
   /** Progresso 0-100 da barra inferior. Ignorado se showProgress=false. */
   progress: { type: Number, default: 0 },
-  /** Mostra a barra de progresso (default: false; Projection ativa). */
+  /** Permite a linha de progresso quando ativada nas opções do alvo. */
   showProgress: { type: Boolean, default: false },
+  /** Separa o progresso da projeção do progresso no retorno de fundo. */
+  progressTarget: { type: String, default: "projection" },
   // ---- API legada por props (compatibilidade com chamadores antigos) ----
   text: { type: String, default: null },
   aux_text: { type: String, default: null },

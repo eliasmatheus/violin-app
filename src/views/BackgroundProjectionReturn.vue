@@ -70,6 +70,7 @@
         :title="title"
         :progress="progress"
         show-progress
+        progress-target="return"
         class="return-slide"
       />
     </div>

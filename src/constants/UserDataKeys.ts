@@ -222,6 +222,7 @@ export const KEYS = {
       CUSTOM_BACKGROUND: `${OPTIONS_SLIDE}.custom_background`,
       TEXT_ALIGN: `${OPTIONS_SLIDE}.text_align`,
       SHOW_TITLE_FIRST_SLIDE: `${OPTIONS_SLIDE}.show_title_first_slide`,
+      SHOW_PROJECTION_PROGRESS_BAR: `${OPTIONS_SLIDE}.show_projection_progress_bar`,
       CUSTOM_TEXT_FORMAT: `${OPTIONS_SLIDE}.custom_text_format`,
       TITLE_COLOR: `${OPTIONS_SLIDE}.title_color`,
       TEXT_COLOR: `${OPTIONS_SLIDE}.text_color`,

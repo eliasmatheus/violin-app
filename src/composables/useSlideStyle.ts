@@ -146,6 +146,7 @@ interface SlideCfg {
   background_position: string;
   progress_color: string;
   show_progress_bar: boolean;
+  show_projection_progress_bar: boolean;
   show_title_first_slide: boolean;
   text_align: "top" | "center" | "bottom";
   transition_speed_ms: number;
@@ -204,6 +205,10 @@ const _readSlideOpts = (): SlideCfg => {
   }
   const showTitle = $userdata.get<boolean>(KEYS.OPTIONS.SLIDE.SHOW_TITLE_FIRST_SLIDE, null);
   if (typeof showTitle === "boolean") merged.show_title_first_slide = showTitle;
+
+  // A linha da projeção tem opção própria; o progresso do retorno continua independente.
+  merged.show_projection_progress_bar =
+    $userdata.get<boolean>(KEYS.OPTIONS.SLIDE.SHOW_PROJECTION_PROGRESS_BAR, false) === true;
 
   // Fonte (chave plana salva pelo select de fonte nas Opções)
   const slideFont = $userdata.get<string>(KEYS.OPTIONS.SLIDE.FONT, null);

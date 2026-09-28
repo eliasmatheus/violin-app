@@ -272,6 +272,7 @@
       "shadow_offset_x": "Desloc. X:",
       "shadow_offset_y": "Desloc. Y:",
       "show_title": "Exibir título da música no primeiro slide",
+      "show_projection_progress": "Mostrar linha de progresso da música na projeção",
       "text_bg_blur": "Intensidade do desfoque:",
       "text_bg_blur_enabled": "Fundo borrado",
       "text_bg_opacity": "Opacidade do Fundo do Texto",

@@ -416,6 +416,19 @@
         <label class="opt-checkbox">
           <input
             type="checkbox"
+            :checked="
+              getUserData<boolean>(KEYS.OPTIONS.SLIDE.SHOW_PROJECTION_PROGRESS_BAR, false) === true
+            "
+            @change="saveUserData(KEYS.OPTIONS.SLIDE.SHOW_PROJECTION_PROGRESS_BAR, $c($event))"
+          />
+          <span>{{ $t("options.slides.show_projection_progress") }}</span>
+        </label>
+      </div>
+
+      <div class="opt-row">
+        <label class="opt-checkbox">
+          <input
+            type="checkbox"
             :checked="getUserData(KEYS.OPTIONS.MINIMIZE_ON_START, false)"
             @change="saveUserData(KEYS.OPTIONS.MINIMIZE_ON_START, $c($event))"
           />

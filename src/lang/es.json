@@ -272,6 +272,7 @@
       "shadow_offset_x": "Desplaz. X:",
       "shadow_offset_y": "Desplaz. Y:",
       "show_title": "Mostrar título de la música en la primera diapositiva",
+      "show_projection_progress": "Mostrar línea de progreso de la música en la proyección",
       "text_bg_blur": "Intensidad del desenfoque:",
       "text_bg_blur_enabled": "Fondo desenfocado",
       "text_bg_opacity": "Opacidad del Fondo del Texto",

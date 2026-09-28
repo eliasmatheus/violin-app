@@ -1193,6 +1193,10 @@ Além das cores e tamanhos de fonte (formatação personalizada), os slides de
 música suportam **sombra personalizada**, **fundo borrado** e **borda** na
 caixa de texto.
 
+Em **Opções → Slides**, `SHOW_PROJECTION_PROGRESS_BAR` ativa a linha de progresso
+da música na projeção. O padrão é `false`; a preferência é persistida e
+sincronizada entre janelas por UserData, sem alterar o progresso da tela de retorno.
+
 ### Configurações (Opções → Slides → Formatação de texto)
 
 | Opção           | Chave (`KEYS.OPTIONS.SLIDE`)    | Default   | Descrição                             |

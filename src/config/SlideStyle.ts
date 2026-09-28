@@ -19,7 +19,8 @@ export const SLIDE_STYLE_DEFAULT = Object.freeze({
   background_image: "",
   background_position: "cover", // modo cru: cover|contain|center|stretch|tile (estiloDeFundo converte)
   progress_color: "#EFB400",
-  show_progress_bar: true,
+  show_progress_bar: true, // progresso do retorno
+  show_projection_progress_bar: false,
   show_title_first_slide: true,
   text_align: "center" as "top" | "center" | "bottom",
   transition_speed_ms: 120, // fade-in da tela inteira (rápido — antes 256ms)
