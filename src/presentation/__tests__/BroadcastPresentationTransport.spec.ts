@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { createBroadcastPresentationTransport, type PresentationBroadcastBus } from "../BroadcastPresentationTransport";
 import { readMusicPresentationPacket, type MusicPresentationPacket } from "../MusicPresentationPacket";
@@ -43,6 +43,44 @@ function hub() {
 }
 
 describe("broadcast music presentation transport", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("dates the actual snapshot reply without changing state age or selection identity", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(30_000);
+    const bus = hub();
+    const current = packet("old-state", 4);
+    const producer = createBroadcastPresentationTransport(bus.windowBus(), { currentSnapshot: () => current });
+    const consumer = createBroadcastPresentationTransport(bus.windowBus());
+    const received = vi.fn();
+    consumer.subscribe(received);
+    consumer.requestSnapshot();
+    const [reply, delivery] = received.mock.calls[0];
+    expect(reply).toMatchObject({ emittedAt: 1_000, selectionRevision: 4,
+      delivery: { sentAt: 30_000, kind: "snapshot" }, snapshot: current.snapshot });
+    expect(delivery).toEqual({ kind: "snapshot", sentAt: 30_000 });
+    const replayed = vi.fn();
+    consumer.subscribe(replayed);
+    expect(replayed.mock.calls[0][1]).toEqual({ kind: "replay" });
+    producer.dispose();
+    consumer.dispose();
+  });
+
+  it("marks the synchronous bus cache replay without inventing a fresh send", () => {
+    const current = packet();
+    const bus = {
+      send: vi.fn(),
+      listen(listener: (_message: { type: string; payload?: unknown }) => void) {
+        listener({ type: BROADCAST_TYPE.MUSIC_PRESENTATION_SNAPSHOT, payload: current });
+        return () => {};
+      },
+    };
+    const consumer = createBroadcastPresentationTransport(bus);
+    const received = vi.fn();
+    consumer.subscribe(received);
+    expect(received.mock.calls[0]).toEqual([current, { kind: "replay" }]);
+    consumer.dispose();
+  });
   it("returns exact transport failure reasons without claiming publication", () => {
     const local = hub();
     const channelFailure = createBroadcastPresentationTransport({
@@ -81,7 +119,9 @@ describe("broadcast music presentation transport", () => {
     consumer.requestSnapshot();
     expect(bus.sent.at(-2)?.type).toBe(BROADCAST_TYPE.REQUEST_MUSIC_PRESENTATION_SNAPSHOT);
     expect(bus.sent.at(-1)?.type).toBe(BROADCAST_TYPE.MUSIC_PRESENTATION_SNAPSHOT);
-    expect(received).toHaveBeenCalledExactlyOnceWith(current);
+    expect(received).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining(current), expect.objectContaining({ kind: "snapshot" })
+    );
     consumer.subscribe(received);
     expect(received).toHaveBeenCalledTimes(2);
     producer.dispose();
@@ -116,6 +156,25 @@ describe("broadcast music presentation transport", () => {
     sender.send(BROADCAST_TYPE.MUSIC_PRESENTATION_SNAPSHOT, first);
     expect(received).toHaveBeenCalledTimes(2);
     expect(received.mock.calls.at(-1)?.[0]).toMatchObject({ selectionRevision: 5, slideProgress: 60 });
+    consumer.dispose();
+  });
+
+  it("does not let a newer delivery timestamp bypass stale selection or retired-session guards", () => {
+    const bus = hub();
+    const consumer = createBroadcastPresentationTransport(bus.windowBus());
+    const received = vi.fn();
+    consumer.subscribe(received);
+    const sender = bus.windowBus();
+    const send = (session: string, revision: number, sentAt: number) => sender.send(
+      BROADCAST_TYPE.MUSIC_PRESENTATION_SNAPSHOT,
+      { ...packet(session, revision), delivery: { kind: "snapshot", sentAt } }
+    );
+    send("first", 4, 30_000);
+    send("first", 3, 40_000);
+    send("first", 4, 50_000);
+    send("second", 1, 60_000);
+    send("first", 5, 70_000);
+    expect(received.mock.calls.map(([value]) => value.snapshot.sessionId)).toEqual(["first", "second"]);
     consumer.dispose();
   });
 

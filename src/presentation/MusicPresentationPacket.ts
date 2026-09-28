@@ -32,6 +32,8 @@ export interface MusicPresentationPacket {
   readonly progress: number;
   readonly slideProgress: number;
   readonly emittedAt: number;
+  /** Actual transport send, distinct from the original state emission. */
+  readonly delivery?: Readonly<{ sentAt: number; kind: "update" | "snapshot" } | { kind: "replay" }>;
   readonly commandAt?: number;
   readonly commitAt?: number;
   readonly snapshot: MusicPresentationSnapshot;
@@ -126,6 +128,11 @@ export function readMusicPresentationPacket(value: unknown): MusicPresentationPa
       (value.playbackId !== undefined && (typeof value.playbackId !== "string" || value.playbackId.length > 128)) ||
       (value.commandAt !== undefined && (!counter(value.commandAt) || value.commandAt > value.emittedAt)) ||
       (value.commitAt !== undefined && (!counter(value.commitAt) || value.commitAt > value.emittedAt))) return null;
+  if (value.delivery !== undefined && (!object(value.delivery) ||
+      (value.delivery.kind === "replay"
+        ? value.delivery.sentAt !== undefined
+        : !counter(value.delivery.sentAt) ||
+          (value.delivery.kind !== "update" && value.delivery.kind !== "snapshot")))) return null;
   const s = value.snapshot;
   if (typeof s.sessionId !== "string" || !s.sessionId.length || s.sessionId.length > 128 ||
       !counter(s.revision) || typeof s.active !== "boolean" ||
@@ -146,6 +153,10 @@ export function readMusicPresentationPacket(value: unknown): MusicPresentationPa
     progress: value.progress,
     slideProgress: value.slideProgress,
     emittedAt: value.emittedAt,
+    ...(value.delivery === undefined ? {} : { delivery: value.delivery.kind === "replay"
+      ? Object.freeze({ kind: "replay" as const })
+      : Object.freeze({ sentAt: value.delivery.sentAt as number,
+        kind: value.delivery.kind as "update" | "snapshot" }) }),
     ...(value.commandAt === undefined ? {} : { commandAt: value.commandAt }),
     ...(value.commitAt === undefined ? {} : { commitAt: value.commitAt }),
     snapshot: Object.freeze({

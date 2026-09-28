@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ErrorTracking } from "@posthog/core";
 
 const state: Record<string, unknown> = {};
 const platform = vi.hoisted(() => ({
@@ -109,6 +110,21 @@ afterEach(() => {
 });
 
 describe("Telemetry", () => {
+  it("discards cancelled measurements without emitting success and preserves other pending measurements", async () => {
+    const Telemetry = await loadTelemetry();
+    await Telemetry.init();
+    Telemetry.markStart("module.open", "closed");
+    Telemetry.markStart("module.open", "mounted");
+    Telemetry.markCancel("module.open", "closed");
+    expect(Telemetry.markEnd("module.open", "closed")).toBeNull();
+    expect(posthog.capture).not.toHaveBeenCalledWith("performance_measurement", expect.anything());
+    expect(Telemetry.markEnd("module.open", "mounted")).toEqual(expect.any(Number));
+    expect(posthog.capture).toHaveBeenCalledWith(
+      "performance_measurement",
+      expect.objectContaining({ measurement: "module.open" })
+    );
+  });
+
   describe("versão do aplicativo", () => {
     function expectVersion(version: string, source: string) {
       expect(posthog.register).toHaveBeenCalledWith(
@@ -638,6 +654,67 @@ describe("Telemetry", () => {
       )
     ).not.toBeNull();
     expect(Telemetry.isBenignException(undefined)).toBe(false);
+  });
+
+  it("reconhece assets do protocolo desktop após o parser real do SDK sem alterar frames externos", async () => {
+    const Telemetry = await loadTelemetry();
+    await Telemetry.init();
+    const config = posthog.init.mock.calls[0][1] as {
+      before_send: (_capture: { event: string; properties: Record<string, unknown> }) => {
+        properties: Record<string, unknown>;
+      };
+    };
+    const filenames = [
+      "louvorja://app/assets/Index-CG3Qta43.js",
+      "louvorja://app/assets/vendor-vue-B9CPGn0a.js",
+      "louvorja://app/assets/module-example.mjs",
+      "https://cdn.example.test/vendor-vue.js",
+      "file:///app/assets/vendor-vue.js",
+      "iabjs://navigation_performance_logger_android",
+      "chrome-extension://extension-id/injected.js",
+      "louvorja://media/assets/external.js",
+      "louvorja://other/assets/external.js",
+      "louvorja://app:9000/assets/external.js",
+      "louvorja://user@app/assets/external.js",
+      "louvorja://app/media/external.js",
+    ];
+    const error = new Error("Path.file: caminho inválido");
+    error.stack =
+      "Error: Path.file: caminho inválido\n" +
+      filenames.map((filename, index) => `    at frame${index} (${filename}:2:45)`).join("\n");
+    const builder = new ErrorTracking.ErrorPropertiesBuilder(
+      [new ErrorTracking.ErrorCoercer()],
+      ErrorTracking.createDefaultStackParser()
+    );
+    const properties = builder.buildFromUnknown(error);
+    const original = structuredClone(properties);
+    const originalFrames = original.$exception_list[0].stacktrace!.frames!;
+    expect(originalFrames.map((frame) => frame.filename)).toEqual([...filenames].reverse());
+    expect(
+      originalFrames
+        .filter((frame) => filenames.slice(0, 3).includes(frame.filename!))
+        .every((frame) => frame.in_app === false)
+    ).toBe(true);
+    expect(
+      originalFrames
+        .filter((frame) => filenames.slice(3, 5).includes(frame.filename!))
+        .every((frame) => frame.in_app === true)
+    ).toBe(true);
+
+    const result = config.before_send({ event: "$exception", properties: { ...properties } });
+    const list = result.properties.$exception_list as typeof properties.$exception_list;
+    expect(list).toEqual(
+      original.$exception_list.map((exception) => ({
+        ...exception,
+        stacktrace: {
+          ...exception.stacktrace,
+          frames: exception.stacktrace!.frames!.map((frame) =>
+            filenames.slice(0, 3).includes(frame.filename!) ? { ...frame, in_app: true } : frame
+          ),
+        },
+      }))
+    );
+    Telemetry.setEnabled(false);
   });
 
   it("não repete em performance_slow o que ui_thread_stall e ui_long_task já registram", async () => {

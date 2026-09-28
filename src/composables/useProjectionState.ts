@@ -4,7 +4,7 @@ import $broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import Telemetry, { isProjectionMilestone } from "@/helpers/Telemetry";
 import Path from "@/helpers/Path";
-import { createBroadcastPresentationTransport } from "@/presentation/BroadcastPresentationTransport";
+import { createBroadcastPresentationTransport, type PresentationDelivery } from "@/presentation/BroadcastPresentationTransport";
 import type { MusicPresentationPacket } from "@/presentation/MusicPresentationPacket";
 
 export type Slide = Record<string, unknown> | null;
@@ -153,22 +153,37 @@ export function useProjectionState(): ProjectionStateReturn {
     totalSlides.value = (p.total_slides as number) ?? (p.last_slide as number) ?? 0;
     const stateAppliedAt = Date.now();
 
-    if (typeof p._ts === "number" && Number.isFinite(p._ts) &&
-        p._ts >= receivedAt - 300_000 && p._ts <= receivedAt + 1_000) {
-      const sentAt = p._ts;
-      const latencyMs = Math.max(0, receivedAt - sentAt);
+    // The HTTP bridge sets this before Vue loads. Sender and receiver can be
+    // different devices: their wall clocks cannot measure transit or state age.
+    const remoteSseClient = (window as { LJ_REMOTE_CLIENT?: boolean }).LJ_REMOTE_CLIENT === true;
+    const clockComparable = !remoteSseClient;
+    const clockContext = remoteSseClient
+      ? { clock_basis: "receiver", received_via: "sse" } : { clock_basis: "shared" };
+    const deliveryKind = source === "canonical" ? p._delivery_kind : "update";
+    const sentAt = clockComparable && typeof p._ts === "number" && Number.isFinite(p._ts) &&
+      p._ts >= receivedAt - 300_000 && p._ts <= receivedAt ? p._ts : null;
+    const latencyMs = sentAt === null ? null : receivedAt - sentAt;
+    const stateAgeMs = clockComparable && source === "canonical" && typeof p._state_ts === "number" &&
+      Number.isFinite(p._state_ts) && p._state_ts <= receivedAt
+      ? receivedAt - p._state_ts : null;
+    if (source === "canonical" || sentAt !== null || remoteSseClient) {
       if (isProjectionMilestone(slideIndex.value, totalSlides.value, !!slide.value)) {
         Telemetry.track("projection_broadcast_received", {
           broadcast_type: source === "canonical"
             ? BROADCAST_TYPE.MUSIC_PRESENTATION_SNAPSHOT : BROADCAST_TYPE.SLIDE_CHANGE,
           slide_index: p.slide_index,
           playback_id: p.playback_id,
-          latency_ms: latencyMs,
+          delivery_kind: deliveryKind,
+          ...clockContext,
+          ...(stateAgeMs === null ? {} : { state_age_ms: stateAgeMs }),
+          ...(latencyMs === null ? {} : { latency_ms: latencyMs }),
         });
       }
-      Telemetry.histogram("louvorja.projection.broadcast.latency", latencyMs, {
-        window_role: "auxiliary",
-      });
+      if (latencyMs !== null) {
+        Telemetry.histogram("louvorja.projection.broadcast.latency", latencyMs, {
+          window_role: "auxiliary",
+        });
+      }
 
       // nextTick confirma que o Vue aplicou a mudança no DOM. Dois rAFs
       // observam a primeira oportunidade de pintura após esse patch; não
@@ -183,44 +198,52 @@ export function useProjectionState(): ProjectionStateReturn {
             requestAnimationFrame(() => {
               if (probeGeneration !== frameProbeGeneration || document.visibilityState === "hidden") return;
               const frameAt = Date.now();
-              const broadcastToFrameMs = Math.max(0, frameAt - sentAt);
+              const broadcastToFrameMs = sentAt === null ? null : Math.max(0, frameAt - sentAt);
+              const receiveToFrameMs = Math.max(0, frameAt - receivedAt);
               const receiveToStateApplyMs = Math.max(0, stateAppliedAt - receivedAt);
               const stateApplyToDomMs = Math.max(0, domUpdatedAt - stateAppliedAt);
               const domToFrameMs = Math.max(0, frameAt - domUpdatedAt);
-              const commandAt = typeof p._command_ts === "number" &&
+              const commandAt = deliveryKind === "update" && sentAt !== null && typeof p._command_ts === "number" &&
                 Number.isFinite(p._command_ts) && p._command_ts <= sentAt &&
                 p._command_ts >= sentAt - 30_000
                 ? p._command_ts
                 : null;
               const commandToFrameMs = commandAt === null ? null : Math.max(0, frameAt - commandAt);
-              const commitAt = typeof p._commit_ts === "number" &&
+              const commitAt = deliveryKind === "update" && sentAt !== null && typeof p._commit_ts === "number" &&
                 Number.isFinite(p._commit_ts) && p._commit_ts <= sentAt &&
                 p._commit_ts >= sentAt - 30_000
                 ? p._commit_ts
                 : null;
-              Telemetry.histogram("louvorja.projection.slide.frame_opportunity", broadcastToFrameMs, {
-                window_role: "auxiliary",
-              });
+              if (broadcastToFrameMs !== null) {
+                Telemetry.histogram("louvorja.projection.slide.frame_opportunity", broadcastToFrameMs, {
+                  window_role: "auxiliary",
+                });
+              }
               if (commandToFrameMs !== null) {
                 Telemetry.histogram("louvorja.projection.slide.command_to_frame", commandToFrameMs, {
                   window_role: "auxiliary",
                 });
               }
-              if (isProjectionMilestone(slideIndex.value, totalSlides.value, !!slide.value) || broadcastToFrameMs >= 500) {
+              if (isProjectionMilestone(slideIndex.value, totalSlides.value, !!slide.value) ||
+                  (broadcastToFrameMs ?? receiveToFrameMs) >= 500) {
                 Telemetry.track("projection_slide_frame_opportunity", {
                   slide_index: slideIndex.value,
                   playback_id: p.playback_id,
                   presentation_revision: typeof p.presentation_revision === "number" &&
                     Number.isSafeInteger(p.presentation_revision) && p.presentation_revision >= 0
                     ? p.presentation_revision : undefined,
-                  broadcast_to_receive_ms: latencyMs,
+                  delivery_kind: deliveryKind,
+                  ...clockContext,
+                  ...(stateAgeMs === null ? {} : { state_age_ms: stateAgeMs }),
+                  ...(latencyMs === null ? {} : { broadcast_to_receive_ms: latencyMs }),
                   // Alias legado: este campo historicamente mediu ate nextTick.
                   receive_to_apply_ms: Math.max(0, domUpdatedAt - receivedAt),
                   receive_to_state_apply_ms: receiveToStateApplyMs,
                   state_apply_to_dom_ms: stateApplyToDomMs,
                   dom_to_frame_ms: domToFrameMs,
-                  broadcast_to_frame_ms: broadcastToFrameMs,
-                  ...(commitAt === null ? {} : {
+                  receive_to_frame_ms: receiveToFrameMs,
+                  ...(broadcastToFrameMs === null ? {} : { broadcast_to_frame_ms: broadcastToFrameMs }),
+                  ...(commitAt === null || sentAt === null ? {} : {
                     commit_to_emit_ms: Math.max(0, sentAt - commitAt),
                   }),
                   ...(commandAt === null || commitAt === null || commandAt > commitAt ? {} : {
@@ -234,7 +257,7 @@ export function useProjectionState(): ProjectionStateReturn {
         });
       }
     }
-    if (import.meta.env.DEV && typeof p._ts === "number") {
+    if (import.meta.env.DEV && sentAt !== null) {
       const log = (window as { __ljLatencyLog?: number[] }).__ljLatencyLog;
       if (Array.isArray(log)) log.push(Date.now() - (p._ts as number));
     }
@@ -269,7 +292,7 @@ export function useProjectionState(): ProjectionStateReturn {
     }, 2_000);
   });
 
-  const stopVisualTransport = visualTransport?.subscribe((packet: MusicPresentationPacket) => {
+  const stopVisualTransport = visualTransport?.subscribe((packet: MusicPresentationPacket, delivery: PresentationDelivery) => {
     const snapshot = packet.snapshot;
     if (!snapshot.active) {
       // MEDIA_CLOSE is shared with other projection sources. A music close may
@@ -308,7 +331,9 @@ export function useProjectionState(): ProjectionStateReturn {
       total_slides: snapshot.totalSlides,
       progress: packet.progress,
       slide_progress: packet.slideProgress,
-      _ts: packet.emittedAt,
+      _ts: delivery.sentAt,
+      _state_ts: packet.emittedAt,
+      _delivery_kind: delivery.kind,
       _command_ts: packet.commandAt,
       _commit_ts: packet.commitAt,
     }, "canonical");

@@ -18,6 +18,7 @@ import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE, type TelemetrySessionPayload } from "@/helpers/BroadcastTypes";
 import Platform from "@/helpers/Platform";
 import { normalizeAppVersion } from "@/helpers/AppVersion.js";
+import { normalizeOwnProtocolExceptionFrames } from "@/helpers/ExceptionFrames";
 import $userdata from "@/helpers/UserData";
 import { setNetworkTimingReporter } from "@/helpers/Http";
 import { setDatabaseTimingReporter } from "@/helpers/Database";
@@ -636,6 +637,11 @@ export function markEnd(
   if (!span) return null;
   _pendingSpans.delete(`${name}:${key}`);
   return finishPerformance(span, properties);
+}
+
+/** Discards an interrupted operation without reporting a completed duration. */
+export function markCancel(name: string, key: string): void {
+  _pendingSpans.delete(`${name}:${key}`);
 }
 
 /** Registra uma medição agregável no PostHog e devolve a duração em milissegundos. */
@@ -1518,6 +1524,7 @@ async function _init(): Promise<void> {
       if (!capture) return null;
       if (capture.event === "$exception") {
         if (isBenignException(capture.properties)) return null;
+        normalizeOwnProtocolExceptionFrames(capture.properties);
         onRealException(isMainWindow, capture);
       }
       // `token` is injected by PostHog and is required by `/e/`. It matches
@@ -1773,6 +1780,7 @@ export default {
   finishPerformance,
   markStart,
   markEnd,
+  markCancel,
   setRuntimeContext,
   reportRuntimeIncident,
   histogram,

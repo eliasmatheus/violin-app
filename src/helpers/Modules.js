@@ -67,6 +67,7 @@ export default {
   close(id) {
     if (!this.check(id)) return;
     $dev.write("close", id);
+    Telemetry.markCancel("module.open", id);
 
     $appdata.set(`modules.${id}.show`, false);
 

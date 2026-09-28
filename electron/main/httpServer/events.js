@@ -106,6 +106,10 @@ function isValidMusicSnapshot(packet) {
         (typeof packet.playbackId !== "string" || packet.playbackId.length > 128)) ||
       (packet.commandAt !== undefined && (!isCounter(packet.commandAt) || packet.commandAt > packet.emittedAt)) ||
       (packet.commitAt !== undefined && (!isCounter(packet.commitAt) || packet.commitAt > packet.emittedAt))) return false;
+  const delivery = packet.delivery;
+  if (delivery !== undefined && (!delivery || typeof delivery !== "object" || Array.isArray(delivery) ||
+      (delivery.kind === "replay" ? delivery.sentAt !== undefined :
+        !isCounter(delivery.sentAt) || (delivery.kind !== "update" && delivery.kind !== "snapshot")))) return false;
   const snapshot = packet.snapshot;
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot) ||
       typeof snapshot.sessionId !== "string" || !snapshot.sessionId.length || snapshot.sessionId.length > 128 ||
@@ -263,7 +267,11 @@ function handler(req, res) {
   // Replay do último estado conhecido para que clients que conectarem
   // depois do início da música/versículo já apareçam com o conteúdo certo.
   for (const { type, payload } of _lastByType.values()) {
-    _writeEvent(client, { type, payload: _rewriteCustomProtocol(payload) });
+    // A cache replay is state recovery, not a new renderer publication. Its
+    // old delivery timestamp cannot measure latency on this connection.
+    const replayPayload = type === "music_presentation_snapshot"
+      ? { ...payload, delivery: { kind: "replay" } } : payload;
+    _writeEvent(client, { type, payload: _rewriteCustomProtocol(replayPayload) });
   }
   if (client.closed) return;
 

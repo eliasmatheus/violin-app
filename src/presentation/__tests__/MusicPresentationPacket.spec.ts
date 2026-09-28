@@ -55,4 +55,16 @@ describe("production music presentation packet boundary", () => {
       .toBe("stale_or_missing_session");
     expect(musicCommandSessionRejectionReason(null, undefined)).toBeNull();
   });
+
+  it("validates send metadata without changing or exposing the underlying state", () => {
+    expect(readMusicPresentationPacket({ ...envelope, snapshot,
+      delivery: { kind: "snapshot", sentAt: 30_000, secret: "discard" } })?.delivery)
+      .toEqual({ kind: "snapshot", sentAt: 30_000 });
+    expect(readMusicPresentationPacket({ ...envelope, snapshot, delivery: { kind: "replay" } })?.delivery)
+      .toEqual({ kind: "replay" });
+    for (const delivery of [null, [], { kind: "unknown", sentAt: 1 }, { kind: "update", sentAt: -1 },
+      { kind: "snapshot", sentAt: "now" }, { kind: "replay", sentAt: 1 }]) {
+      expect(readMusicPresentationPacket({ ...envelope, snapshot, delivery })).toBeNull();
+    }
+  });
 });

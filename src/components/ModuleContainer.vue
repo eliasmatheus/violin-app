@@ -245,6 +245,7 @@ onMounted(() => {
     Telemetry.markEnd("module.open", moduleId.value, {
       module_id: moduleId.value,
       popup: props.popup,
+      completion: "mounted",
     });
   }
   solicitarRestauracao();
@@ -293,6 +294,16 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  if (moduleId.value) {
+    // A closed embedded tab stays in KeepAlive. Reopening activates the same
+    // instance and never runs onMounted again. markEnd is a no-op on its first
+    // activation, since onMounted already completed that opening.
+    Telemetry.markEnd("module.open", moduleId.value, {
+      module_id: moduleId.value,
+      popup: props.popup,
+      completion: "activated",
+    });
+  }
   solicitarRestauracao();
   if (!props.popup) observeEmbeddedContent();
   Telemetry.track("module_view_activated", { module_id: moduleId.value, popup: props.popup });

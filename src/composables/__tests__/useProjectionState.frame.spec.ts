@@ -47,6 +47,10 @@ describe("useProjectionState frame opportunity", () => {
         schema: 1, selectionRevision: revision, playbackId: payload.playback_id,
         progress: 0, slideProgress: 0, emittedAt: payload._ts,
         commandAt: payload._command_ts, commitAt: payload._commit_ts,
+        delivery: payload._delivery_kind === "replay" ? { kind: "replay" } : {
+          sentAt: payload._sent_ts ?? payload._ts,
+          kind: payload._delivery_kind ?? "update",
+        },
         snapshot: {
           sessionId: "frame", revision, active: true, title: "Song",
           slideIndex: index, totalSlides: total, slide: payload.slide,
@@ -87,6 +91,60 @@ describe("useProjectionState frame opportunity", () => {
     wrapper?.unmount();
     wrapper = null;
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("measures snapshot reply delivery separately from the old state and its command", async () => {
+    await nextTick();
+    vi.spyOn(Date, "now").mockReturnValue(30_000);
+    emit({ slide: { lyric: "recovered" }, slide_index: 0, total_slides: 1,
+      presentation_revision: 4, _ts: 1_000, _sent_ts: 29_975,
+      _delivery_kind: "snapshot", _command_ts: 980, _commit_ts: 990 });
+    await nextTick();
+    nextFrame();
+    nextFrame();
+    expect(wrapper?.text()).toBe("recovered");
+    expect(fake.track).toHaveBeenCalledWith("projection_broadcast_received",
+      expect.objectContaining({ latency_ms: 25, state_age_ms: 29_000, delivery_kind: "snapshot" }));
+    const frame = fake.track.mock.calls.find(([name]) => name === "projection_slide_frame_opportunity")?.[1];
+    expect(frame).toMatchObject({ broadcast_to_receive_ms: 25, broadcast_to_frame_ms: 25,
+      receive_to_frame_ms: 0, delivery_kind: "snapshot" });
+    expect(frame).not.toHaveProperty("command_to_frame_ms");
+    expect(frame).not.toHaveProperty("commit_to_emit_ms");
+  });
+
+  it("applies cached recovery and measures local frame work without creating network or command latency", async () => {
+    await nextTick();
+    vi.spyOn(Date, "now").mockReturnValue(30_000);
+    emit({ slide: { lyric: "cached" }, slide_index: 0, total_slides: 1,
+      presentation_revision: 4, _ts: 1_000, _delivery_kind: "replay", _command_ts: 980 });
+    await nextTick();
+    nextFrame();
+    nextFrame();
+    expect(wrapper?.text()).toBe("cached");
+    const received = fake.track.mock.calls.find(([name]) => name === "projection_broadcast_received")?.[1];
+    expect(received).toMatchObject({ delivery_kind: "replay", state_age_ms: 29_000 });
+    expect(received).not.toHaveProperty("latency_ms");
+    const frame = fake.track.mock.calls.find(([name]) => name === "projection_slide_frame_opportunity")?.[1];
+    expect(frame).toMatchObject({ delivery_kind: "replay", receive_to_frame_ms: 0,
+      receive_to_state_apply_ms: 0, state_apply_to_dom_ms: 0, dom_to_frame_ms: 0 });
+    expect(frame).not.toHaveProperty("broadcast_to_frame_ms");
+    expect(frame).not.toHaveProperty("command_to_frame_ms");
+    expect(fake.histogram).not.toHaveBeenCalled();
+  });
+
+  it("does not turn a future sender clock into a false zero latency", async () => {
+    await nextTick();
+    vi.spyOn(Date, "now").mockReturnValue(30_000);
+    emit({ slide: { lyric: "visible" }, slide_index: 0, total_slides: 1,
+      presentation_revision: 4, _ts: 30_000, _sent_ts: 30_001 });
+    await nextTick();
+    nextFrame();
+    nextFrame();
+    expect(wrapper?.text()).toBe("visible");
+    const received = fake.track.mock.calls.find(([name]) => name === "projection_broadcast_received")?.[1];
+    expect(received).not.toHaveProperty("latency_ms");
+    expect(fake.histogram).not.toHaveBeenCalled();
   });
 
   it("mede comando, recebimento, patch Vue e primeira oportunidade de pintura", async () => {

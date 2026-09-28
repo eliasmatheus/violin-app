@@ -62,7 +62,7 @@ describe("HTTP SSE — backpressure", () => {
     expect(messages(lateClient.writes)).toEqual([
       {
       type: "music_presentation_snapshot",
-      payload: canonicalSnapshot(3, "Atual"),
+      payload: { ...canonicalSnapshot(3, "Atual"), delivery: { kind: "replay" } },
       },
       { type: "slides_data", payload: { title: "Current song", slides: ["metadata"] } },
     ]);
@@ -93,7 +93,7 @@ describe("HTTP SSE — backpressure", () => {
     events.publish({ type: "music_presentation_snapshot", payload: closed });
     const lateClient = openClient();
     expect(messages(lateClient.writes)).toEqual([
-      { type: "music_presentation_snapshot", payload: closed },
+      { type: "music_presentation_snapshot", payload: { ...closed, delivery: { kind: "replay" } } },
     ]);
   });
 
@@ -122,7 +122,7 @@ describe("HTTP SSE — backpressure", () => {
         received += decoder.decode(chunk.value, { stream: true });
         if (received.startsWith(":ok\n\n")) received = received.slice(5);
       }
-      expect(received).toContain(`data: ${JSON.stringify({ type: "music_presentation_snapshot", payload: packet })}\n\n`);
+      expect(received).toContain(`data: ${JSON.stringify({ type: "music_presentation_snapshot", payload: { ...packet, delivery: { kind: "replay" } } })}\n\n`);
       await reader.cancel();
     } finally {
       clearTimeout(timeout);
@@ -130,6 +130,21 @@ describe("HTTP SSE — backpressure", () => {
       events.closeAll();
       await new Promise((resolve) => server.close(resolve));
     }
+  });
+
+  it("preserves a live send, marks reconnect cache recovery and rejects invalid delivery metadata", () => {
+    const client = openClient();
+    const packet = { ...canonicalSnapshot(4, "Live"), delivery: { sentAt: 1_800_000_000_005, kind: "update" } };
+    events.publish({ type: "music_presentation_snapshot", payload: packet });
+    expect(messages(client.writes)).toEqual([{ type: "music_presentation_snapshot", payload: packet }]);
+    const reconnect = openClient();
+    expect(messages(reconnect.writes)).toEqual([{ type: "music_presentation_snapshot",
+      payload: { ...packet, delivery: { kind: "replay" } } }]);
+    for (const delivery of [null, [], { kind: "unknown", sentAt: 1 }, { kind: "update", sentAt: -1 },
+      { kind: "snapshot", sentAt: "now" }, { kind: "replay", sentAt: 1 }]) {
+      events.publish({ type: "music_presentation_snapshot", payload: { ...packet, delivery } });
+    }
+    expect(messages(client.writes)).toHaveLength(1);
   });
 
   it("coalesces canonical snapshots under backpressure and keeps MEDIA_CLOSE as a queue barrier", () => {
