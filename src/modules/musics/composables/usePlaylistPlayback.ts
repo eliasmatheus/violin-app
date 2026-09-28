@@ -1,4 +1,4 @@
-import { ref, computed, onUnmounted } from "vue";
+import { ref, shallowRef, computed, onUnmounted } from "vue";
 import $userdata from "@/helpers/UserData";
 import $dev from "@/helpers/Dev";
 import DateTime from "@/helpers/DateTime";
@@ -20,16 +20,20 @@ const _shuffleOrder = ref<number[]>([]);
 const { playlists } = usePlaylists();
 
 const _advanceLock = ref(false);
+const _songAvailable = shallowRef<(_song: PlaylistSong) => boolean>(() => true);
 
 const currentPlaylist = computed<Playlist | null>(() => {
   if (!_currentPlaylistId.value) return null;
   return playlists.value.find((p) => p.id === _currentPlaylistId.value) || null;
 });
 
-const totalSongs = computed(() => currentPlaylist.value?.songs.length || 0);
+const availableSongs = computed(() =>
+  (currentPlaylist.value?.songs || []).filter(_songAvailable.value)
+);
+const totalSongs = computed(() => availableSongs.value.length);
 const playedCount = computed(() => {
   if (!currentPlaylist.value) return 0;
-  return currentPlaylist.value.songs.filter((s) => _playedSongs.value.has(s.id_music)).length;
+  return availableSongs.value.filter((s) => _playedSongs.value.has(s.id_music)).length;
 });
 const remainingCount = computed(() => totalSongs.value - playedCount.value);
 
@@ -38,10 +42,10 @@ function _durationToSec(d: number | string): number {
 }
 
 const totalDuration = computed(() =>
-  (currentPlaylist.value?.songs || []).reduce((sum, s) => sum + _durationToSec(s.duration), 0)
+  availableSongs.value.reduce((sum, s) => sum + _durationToSec(s.duration), 0)
 );
 const playedDuration = computed(() =>
-  (currentPlaylist.value?.songs || [])
+  availableSongs.value
     .filter((s) => _playedSongs.value.has(s.id_music))
     .reduce((sum, s) => sum + _durationToSec(s.duration), 0)
 );
@@ -90,44 +94,64 @@ function _playSongAt(index: number): void {
   });
 
   _playedSongs.value = new Set([..._playedSongs.value, song.id_music]);
-  setTimeout(() => { _advanceLock.value = false; }, 800);
+  setTimeout(() => {
+    _advanceLock.value = false;
+  }, 800);
 }
 
 function _stopInternal(): void {
-  if (_isActive.value) Telemetry.track("music_playlist_stopped", { playlist_id: _currentPlaylistId.value, index: _currentIndex.value, played_count: _playedSongs.value.size });
+  if (_isActive.value)
+    Telemetry.track("music_playlist_stopped", {
+      playlist_id: _currentPlaylistId.value,
+      index: _currentIndex.value,
+      played_count: _playedSongs.value.size,
+    });
   _isActive.value = false;
   _currentPlaylistId.value = null;
   _currentIndex.value = 0;
   _playedSongs.value = new Set();
   _shuffleOrder.value = [];
+  _songAvailable.value = () => true;
 }
 
 function _nextIndex(): number | null {
   const playlist = currentPlaylist.value;
   if (!playlist) return null;
   const len = playlist.songs.length;
+  const eligible = playlist.songs
+    .map((song, index) => (_songAvailable.value(song) ? index : -1))
+    .filter((index) => index >= 0);
+  if (!eligible.length) return null;
 
   if (_getShuffleEnabled()) {
-    const playedAll = _playedSongs.value.size >= len;
+    const playedAll = eligible.every((index) =>
+      _playedSongs.value.has(playlist.songs[index].id_music)
+    );
     if (playedAll) {
       if (_getRepeatEnabled()) {
         _playedSongs.value = new Set();
         _shuffleOrder.value = _generateShuffleOrder(len);
-        return _shuffleOrder.value[0];
+        return _shuffleOrder.value.find((index) => eligible.includes(index)) ?? null;
       }
       return null;
     }
-    const remaining = _shuffleOrder.value.filter((i) => !_playedSongs.value.has(playlist.songs[i].id_music));
+    const remaining = _shuffleOrder.value.filter(
+      (i) => eligible.includes(i) && !_playedSongs.value.has(playlist.songs[i].id_music)
+    );
     if (remaining.length > 0) return remaining[0];
     _shuffleOrder.value = _generateShuffleOrder(len);
-    return _shuffleOrder.value.find((i) => !_playedSongs.value.has(playlist.songs[i].id_music)) ?? null;
+    return (
+      _shuffleOrder.value.find(
+        (i) => eligible.includes(i) && !_playedSongs.value.has(playlist.songs[i].id_music)
+      ) ?? null
+    );
   }
 
-  const nextIdx = _currentIndex.value + 1;
-  if (nextIdx >= len) {
+  const nextIdx = eligible.find((index) => index > _currentIndex.value);
+  if (nextIdx == null) {
     if (_getRepeatEnabled()) {
       _playedSongs.value = new Set();
-      return 0;
+      return eligible[0];
     }
     return null;
   }
@@ -144,7 +168,10 @@ function _onSongEnded(): boolean {
     id_music: playlist?.songs[_currentIndex.value]?.id_music,
     playback_id: Media.getActivePlaybackId(),
   });
-  if (!playlist) { _stopInternal(); return true; }
+  if (!playlist) {
+    _stopInternal();
+    return true;
+  }
 
   const nextIdx = _nextIndex();
   if (nextIdx === null) {
@@ -160,7 +187,10 @@ function _onSongEnded(): boolean {
 
 function playNext(): void {
   const playlist = currentPlaylist.value;
-  if (!playlist) { _stopInternal(); return; }
+  if (!playlist) {
+    _stopInternal();
+    return;
+  }
 
   const nextIdx = _nextIndex();
   if (nextIdx === null) {
@@ -173,17 +203,25 @@ function playNext(): void {
 
 function playPrev(): void {
   if (_getShuffleEnabled()) {
-    const played = [..._playedSongs.value];
-    if (played.length <= 1) return;
-    const prevId = played[played.length - 2];
     const playlist = currentPlaylist.value;
     if (!playlist) return;
-    const idx = playlist.songs.findIndex((s) => s.id_music === prevId);
+    const played = [..._playedSongs.value].filter(
+      (id) =>
+        id !== currentSong.value?.id_music &&
+        playlist.songs.some((song) => song.id_music === id && _songAvailable.value(song))
+    );
+    const prevId = played.at(-1);
+    const idx = playlist.songs.findIndex((s) => s.id_music === prevId && _songAvailable.value(s));
     if (idx >= 0) _playSongAt(idx);
     return;
   }
-  if (_currentIndex.value <= 0) return;
-  _playSongAt(_currentIndex.value - 1);
+  const songs = currentPlaylist.value?.songs || [];
+  for (let index = _currentIndex.value - 1; index >= 0; index--) {
+    if (_songAvailable.value(songs[index])) {
+      _playSongAt(index);
+      return;
+    }
+  }
 }
 
 Media.registerPlaylistEndHandler(_onSongEnded);
@@ -212,7 +250,19 @@ export function usePlaylistPlayback() {
     currentSong,
     playedSongs: _playedSongs,
 
-    playPlaylist(playlist: Playlist, startIndex = 0): void {
+    playPlaylist(
+      playlist: Playlist,
+      startIndex = 0,
+      isAvailable: (_song: PlaylistSong) => boolean = () => true
+    ): void {
+      _songAvailable.value = isAvailable;
+      const eligible = playlist.songs
+        .map((song, index) => (isAvailable(song) ? index : -1))
+        .filter((index) => index >= 0);
+      if (!eligible.length) {
+        _stopInternal();
+        return;
+      }
       _isActive.value = true;
       _currentPlaylistId.value = playlist.id;
       _currentIndex.value = startIndex;
@@ -220,13 +270,13 @@ export function usePlaylistPlayback() {
 
       if (_getShuffleEnabled()) {
         _shuffleOrder.value = _generateShuffleOrder(playlist.songs.length);
-        const firstIdx = _shuffleOrder.value[0];
+        const firstIdx = _shuffleOrder.value.find((index) => eligible.includes(index))!;
         $dev.write("playlist:start", { name: playlist.name, shuffle: true, startIndex: firstIdx });
         _playSongAt(firstIdx);
       } else {
         _shuffleOrder.value = [];
         $dev.write("playlist:start", { name: playlist.name, startIndex });
-        _playSongAt(startIndex);
+        _playSongAt(eligible.find((index) => index >= startIndex) ?? eligible[0]);
       }
     },
 

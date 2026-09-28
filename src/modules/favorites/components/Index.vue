@@ -20,12 +20,13 @@
         <div class="music-list-item" role="listitem">
           <LjIcon class="drag-handle" :icon="ICONS.ACTIONS.DRAG" size="small" color="grey" />
           <div class="music-list-item-info">
-            <span class="music-list-item-name">{{ element.name }}</span>
+            <span class="music-list-item-name">{{ musicTitle(element) }}</span>
           </div>
           <div class="music-list-item-actions">
             <MusicMenuTable
               :id_music="element.id_music"
               :name="element.name"
+              :music-subtitle="musicTitle(element, 'Música')"
               :has_instrumental_music="element.has_instrumental_music"
               :extra-menu="extraMenu(element)"
             />
@@ -46,12 +47,16 @@ import ModuleContainer from "@/components/ModuleContainer.vue";
 import MusicMenuTable from "@/components/MusicMenuTable.vue";
 import AppData from "@/helpers/AppData";
 import Favorites from "@/helpers/Favorites";
+import { useMusicReferences } from "@/composables/useMusicReferences";
+import { musicTitle } from "@root/config/musicCatalog.mjs";
 
 const moduleContainer = ref(null);
 
+const savedFavorites = computed(() => AppData.get("user_data.favorites", []));
+const { items: visibleFavorites, reorder } = useMusicReferences(savedFavorites);
 const favorites = computed({
-  get: () => AppData.get("user_data.favorites", []),
-  set: (val) => Favorites.reorder(val),
+  get: () => visibleFavorites.value,
+  set: (val) => Favorites.reorder(reorder(val)),
 });
 
 const tm = (key) => moduleContainer.value?.tm(key) || key;

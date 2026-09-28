@@ -14,7 +14,7 @@
 
     <div ref="scroller" class="playlist-songs-list" @scroll.passive="rememberScroll">
       <div
-        v-for="(song, index) in playlist.songs"
+        v-for="(song, index) in visibleSongs"
         :key="song.id_music"
         class="playlist-songs-item"
         :class="{
@@ -32,7 +32,7 @@
           <template v-else>{{ index + 1 }}</template>
         </span>
         <div class="playlist-songs-item-info">
-          <span class="playlist-songs-item-name">{{ song.name }}</span>
+          <span class="playlist-songs-item-name">{{ musicTitle(song) }}</span>
           <span class="playlist-songs-item-duration">{{ formatDuration(song.duration) }}</span>
         </div>
         <div class="playlist-songs-item-actions">
@@ -51,27 +51,32 @@
             type="button"
             class="playlist-songs-btn playlist-songs-btn--danger"
             :title="tm('playlists.remove_song')"
-            @click="removeSong(playlist.id, index)"
+            @click="
+              removeSong(
+                playlist.id,
+                playlist.songs.findIndex((item) => item.id_music === song.id_music)
+              )
+            "
           >
             <LjIcon :icon="ICONS.ACTIONS.CLOSE" size="14" />
           </button>
         </div>
       </div>
 
-      <div v-if="playlist.songs.length === 0" class="playlist-songs-empty">
+      <div v-if="visibleSongs.length === 0" class="playlist-songs-empty">
         <LjIcon :icon="ICONS.MUSIC.NO_AUDIO" size="32" />
         <div>{{ tm("playlists.no_songs") }}</div>
       </div>
     </div>
 
-    <div v-if="playlist.songs.length > 0" class="playlist-songs-footer">
+    <div v-if="visibleSongs.length > 0" class="playlist-songs-footer">
       <div class="playlist-songs-summary">
         {{
-          playlist.songs.length > 1
-            ? tm("playlists.song_count_plural", { n: playlist.songs.length })
-            : tm("playlists.song_count", { n: playlist.songs.length })
+          visibleSongs.length > 1
+            ? tm("playlists.song_count_plural", { n: visibleSongs.length })
+            : tm("playlists.song_count", { n: visibleSongs.length })
         }}
-        · {{ formatDuration(getPlaylistDuration(playlist)) }}
+        · {{ formatDuration(getPlaylistDuration({ ...playlist, songs: visibleSongs })) }}
       </div>
       <div class="playlist-songs-options">
         <LjTooltip :text="tm('playlists.shuffle')" side="top">
@@ -117,6 +122,8 @@ import Media from "@/composables/useMedia";
 import { usePlaylists } from "../composables/usePlaylists";
 import { usePlaylistPlayback } from "../composables/usePlaylistPlayback";
 import type { Playlist, PlaylistSong } from "@/types/Music";
+import { useMusicReferences } from "@/composables/useMusicReferences";
+import { musicTitle } from "@root/config/musicCatalog.mjs";
 
 const props = defineProps<{
   playlist: Playlist;
@@ -127,6 +134,7 @@ const tm = (key: string, named?: Record<string, unknown>) =>
   named ? i18nT(`modules.musics.${key}`, named) : i18nT(`modules.musics.${key}`);
 const { selectPlaylist, removeSong, getPlaylistDuration } = usePlaylists();
 const { playPlaylist, currentSong, playedSongs } = usePlaylistPlayback();
+const { items: visibleSongs, isAvailable } = useMusicReferences(() => props.playlist.songs);
 
 const scroller = ref<HTMLElement | null>(null);
 
@@ -169,11 +177,12 @@ function isPlayedSong(idMusic: number): boolean {
 }
 
 function playSong(song: PlaylistSong): void {
+  if (!isAvailable(song)) return;
   Media.open({ id_music: song.id_music, mode: MusicActionEnum.AUDIO });
 }
 
 function playAll(): void {
-  playPlaylist(props.playlist);
+  playPlaylist(props.playlist, 0, isAvailable);
 }
 </script>
 

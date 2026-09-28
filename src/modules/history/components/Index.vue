@@ -22,13 +22,14 @@
     <div v-else class="music-list" role="list">
       <div v-for="item in history" :key="item.id_music" class="music-list-item" role="listitem">
         <div class="music-list-item-info">
-          <span class="music-list-item-name">{{ item.name }}</span>
+          <span class="music-list-item-name">{{ musicTitle(item) }}</span>
           <span class="music-list-item-meta">{{ relativeDate(item.opened_at) }}</span>
         </div>
         <div class="music-list-item-actions">
           <MusicMenuTable
             :id_music="item.id_music"
             :name="item.name"
+            :music-subtitle="musicTitle(item, 'Música')"
             :has_instrumental_music="item.has_instrumental_music"
           />
           <LjButton
@@ -56,12 +57,14 @@ import ModuleContainer from "@/components/ModuleContainer.vue";
 import MusicMenuTable from "@/components/MusicMenuTable.vue";
 import AppData from "@/helpers/AppData";
 import History from "@/helpers/History";
+import { useMusicReferences } from "@/composables/useMusicReferences";
+import { musicTitle } from "@root/config/musicCatalog.mjs";
 
 const { locale } = useI18n();
 
 const moduleContainer = ref(null);
 
-const history = computed(() => AppData.get("user_data.history", []));
+const { items: history } = useMusicReferences(() => AppData.get("user_data.history", []));
 
 const tm = (key) => moduleContainer.value?.tm(key) || key;
 
