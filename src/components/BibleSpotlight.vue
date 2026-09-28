@@ -105,10 +105,15 @@ import { KEYS } from "@/constants/UserDataKeys";
 
 type QuickNavState = "book" | "chapter" | "verse";
 
-const props = defineProps<{
-  modelValue: boolean;
-  initialBuffer?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    modelValue: boolean;
+    initialBuffer?: string;
+    /** O controle remoto envia a seleção ao host pelo evento select. */
+    projectLocally?: boolean;
+  }>(),
+  { projectLocally: true }
+);
 
 const emit = defineEmits<{
   (e: "update:modelValue", value: boolean): void;
@@ -244,7 +249,7 @@ function commitVerse(val: number): void {
 let selectionGeneration = 0;
 async function selectResult(res: BibleSearchResult): Promise<void> {
   const generation = ++selectionGeneration;
-  if (res.text && res.reference) {
+  if (props.projectLocally && res.text && res.reference) {
     const payload: BibleVersePayload = {
       text: res.text,
       reference: res.reference,

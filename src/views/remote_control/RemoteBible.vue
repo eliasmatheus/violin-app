@@ -102,7 +102,11 @@
       </div>
     </template>
 
-    <bible-spotlight v-model="bibleSearchOpen" @select="onBibleSearchSelect" />
+    <bible-spotlight
+      v-model="bibleSearchOpen"
+      :project-locally="false"
+      @select="onBibleSearchSelect"
+    />
   </div>
 </template>
 
