@@ -12,7 +12,7 @@
       :class="{ 'shell-main--active': footerActive }"
       :style="{ '--footer-height': footerHeight }"
     >
-      <div class="shell-grid" :class="{ 'shell-grid--with-sidebar': !liturgyModuleOpen }">
+      <div class="shell-grid" :class="{ 'shell-grid--with-sidebar': showLiturgySidebar }">
         <Transition name="chat-drawer-slide">
           <ChatDrawer v-if="Platform.isDesktop && (isChatOpen || isPinned)" />
         </Transition>
@@ -36,9 +36,8 @@
           </div>
         </div>
 
-        <!-- Sidebar Liturgia: oculta quando o módulo Liturgia já está aberto
-             (evita duplicar conteúdo) -->
-        <ShellLiturgyPanel v-if="!liturgyModuleOpen" class="shell-sidebar" />
+        <!-- O painel lateral aparece nos demais módulos conforme a preferência do usuário. -->
+        <ShellLiturgyPanel v-if="showLiturgySidebar" class="shell-sidebar" />
       </div>
     </main>
 
@@ -164,6 +163,10 @@ const showHome = computed(
 const liturgyModuleOpen = computed(() => {
   return $appdata.get<boolean>(KEYS.MODULES.LITURGY.SHOW, false) === true;
 });
+
+const showLiturgySidebar = computed(
+  () => !liturgyModuleOpen.value && $userdata.get<boolean>(KEYS.SHELL.LITURGY_VISIBLE, true) !== false
+);
 
 const fp = useFileProjection();
 

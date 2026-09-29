@@ -67,6 +67,7 @@ export const contextualPages: RibbonPage[] = [
         buttons: [
           { id: "mark_done", icon: ICONS.UI.CHECK_CIRCLE, label: "ribbon.btn.mark_done", action: "lit_mark_done", size: "small" },
           { id: "show_notes", icon: ICONS.UI.NOTE_TEXT, label: "ribbon.btn.show_notes", action: "lit_show_notes", size: "small" },
+          { id: "show_liturgy_sidebar", type: "switch", label: `${modulePath}.ribbon.show_sidebar`, optionKey: KEYS.SHELL.LITURGY_VISIBLE, defaultValue: true },
           { id: "lock_items", label: "ribbon.btn.lock_liturgy", action: "lit_lock", size: "small", stateBinding: {
             watchPath: KEYS.MODULES.LITURGY.LOCKED,
             iconOn: ICONS.ACTIONS.LOCK,

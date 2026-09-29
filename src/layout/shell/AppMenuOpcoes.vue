@@ -53,6 +53,17 @@
         />
       </div>
 
+      <div class="opt-row">
+        <label class="opt-checkbox">
+          <input
+            type="checkbox"
+            :checked="getUserData<boolean>(KEYS.SHELL.LITURGY_VISIBLE, true) !== false"
+            @change="saveUserData(KEYS.SHELL.LITURGY_VISIBLE, $c($event))"
+          />
+          <span>{{ $t("options.general.show_liturgy_sidebar") }}</span>
+        </label>
+      </div>
+
       <div v-if="isDesktop" class="opt-row">
         <label class="opt-checkbox">
           <input

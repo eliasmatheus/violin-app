@@ -371,6 +371,7 @@ export const KEYS = {
   },
   SHELL: {
     LITURGY_COLLAPSED: "shell.liturgy_collapsed",
+    LITURGY_VISIBLE: "shell.liturgy_visible",
     IS_DARK: "is_dark",
     IS_DEV: "is_dev",
     IS_MOBILE: "is_mobile",

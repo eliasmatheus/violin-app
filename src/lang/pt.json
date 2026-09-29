@@ -152,6 +152,7 @@
       "language": "Idioma:",
       "font": "Fonte da Interface:",
       "projection_font": "Fonte de Projeção:",
+      "show_liturgy_sidebar": "Exibir liturgia na lateral da tela",
       "start_with_os": "Iniciar com o sistema operacional",
       "clock_projection_on_boot": "Projetar o relógio ao iniciar",
       "clock_projection_on_boot_hint": "Abre o relógio em tela cheia no monitor de retorno ao iniciar o programa.",
