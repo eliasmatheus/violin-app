@@ -92,7 +92,7 @@ const fallback_label = computed(() => {
   const f = fallback_feature.value;
   if (!f) return "";
   if (f === "musicas") return "Slides de músicas";
-  if (f === "retorno") return "Stage Display (Retorno)";
+  if (f === "retorno") return t("options.monitors.roles.stage");
   if (f === "operador") return "Operador";
   return f;
 });

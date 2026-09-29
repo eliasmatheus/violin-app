@@ -132,7 +132,7 @@ const fallback_label = computed(() => {
   if (!f) return "";
   // Resolve o nome amigável da feature herdada
   if (f === "musicas") return "Slides de músicas";
-  if (f === "retorno") return "Stage Display (Retorno)";
+  if (f === "retorno") return t("options.monitors.roles.stage");
   if (f === "operador") return "Operador";
   return f;
 });

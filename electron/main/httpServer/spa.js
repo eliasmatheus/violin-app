@@ -289,7 +289,7 @@ function _setupAliases(app) {
     }
     return res
       .status(404)
-      .send("Use /musica?transmissao (OBS) ou /musica?retorno (stage).");
+      .send("Use /musica?transmissao (OBS) ou /musica?retorno.");
   });
 
   app.get("/relogio", (req, res) => {
@@ -309,7 +309,7 @@ function _setupAliases(app) {
     }
     return res
       .status(404)
-      .send("Use /biblia?transmissao (OBS) ou /biblia?retorno (stage).");
+      .send("Use /biblia?transmissao (OBS) ou /biblia?retorno.");
   });
 
   app.get("/controle", (req, res) => {

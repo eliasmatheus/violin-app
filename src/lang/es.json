@@ -193,7 +193,7 @@
       "use_default": "Usar predeterminado",
       "roles": {
         "projection": "Proyección",
-        "stage": "Retorno (Stage)",
+        "stage": "Retorno",
         "operator": "Operador",
         "none": "sin monitor",
         "missing": "monitor desconectado",
