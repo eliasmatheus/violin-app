@@ -19,6 +19,7 @@ const MODULES_LIBRAS = `${MODULES}.${ModuleEnum.LIBRAS}`;
 const MODULES_LITURGY = `${MODULES}.${ModuleEnum.LITURGY}`;
 const MODULES_MEDIA = `${MODULES}.${ModuleEnum.MEDIA}`;
 const MODULES_MEDIA_CONFIG = `${MODULES}.${ModuleEnum.MEDIA}.config`;
+const MODULES_PRESENTATION_MODE = `${MODULES}.${ModuleEnum.PRESENTATION_MODE}`;
 const MODULES_STOPWATCH = `${MODULES}.${ModuleEnum.STOPWATCH}`;
 const MODULES_TIMER = `${MODULES}.${ModuleEnum.TIMER}`;
 const MODULES_TIMER_WORSHIP = `${MODULES}.${ModuleEnum.TIMER_WORSHIP}`;
@@ -84,6 +85,12 @@ export const KEYS = {
       SHOW_NOTES: `${MODULES_LITURGY}.show_notes`,
       MARK_ON_ACCESS: `${MODULES_LITURGY}.mark_on_access`,
       SHOW: `${MODULES_LITURGY}.show`,
+    },
+    PRESENTATION_MODE: {
+      /** AppData: módulo aberto em alguma aba. */
+      SHOW: `${MODULES_PRESENTATION_MODE}.show`,
+      /** UserData: esconde o corpo do ribbon e as abas de módulo enquanto a aba está ativa. */
+      EXPANDED: `${MODULES_PRESENTATION_MODE}.expanded`,
     },
     MUSICS: {
       SELECTED_PLAYLIST: `${MODULES}.${ModuleEnum.MUSICS}.selected_playlist`,

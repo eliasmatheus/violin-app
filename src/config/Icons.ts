@@ -179,6 +179,7 @@ export const ICONS = {
     NAME_DRAW: "users",
     ONLINE_VIDEOS: "brand-youtube",
     OVERLAY: "stack-2",
+    PRESENTATION_MODE: "presentation",
     REMOTE_CONTROL: "device-remote",
     SCHEDULED_ITEMS: "calendar-check",
     SLIDE_EDITOR: "slideshow",

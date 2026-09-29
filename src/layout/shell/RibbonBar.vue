@@ -25,6 +25,7 @@
     </template>
 
     <div
+      v-show="!isShellExpanded"
       id="ribbon-tabpanel"
       ref="corpoRibbon"
       class="ribbon-body"
@@ -279,6 +280,7 @@ import RibbonTabs from "@/components/RibbonTabs.vue";
 import { LjSlider, LjSwitch } from "@/components/ui";
 import { THEMES } from "@/config/Theme";
 import { prefetchModule } from "@/helpers/ModulePrefetch";
+import { setModuleExpanded, useShellExpanded } from "@/composables/useModuleExpanded";
 import { ensureContrastOnDark } from "@/helpers/ColorContrast";
 
 const { t } = useI18n();
@@ -517,6 +519,21 @@ watch(
     })
 );
 const isContextualActive: ComputedRef<boolean> = computed(() => !!activePageObj.value?.contextual);
+
+// Com o módulo expandido o corpo some, mas as abas do ribbon continuam
+// clicáveis. Escolher outra página é pedir o ribbon de volta: sem isso o
+// clique trocaria um corpo que ninguém vê.
+const { activeModule, isExpanded: isShellExpanded } = useShellExpanded();
+watch(
+  () => ribbonStore.activePage,
+  (pageId: string) => {
+    const moduleId = activeModule.value;
+    if (!isShellExpanded.value || !moduleId) return;
+    const page = modules.find((p: RibbonPage) => p.id === pageId);
+    if (page?.contextual && (page.activeOnModules || []).includes(moduleId)) return;
+    setModuleExpanded(moduleId, false);
+  }
+);
 const visiblePages: ComputedRef<RibbonPage[]> = computed(() => ribbonStore.visiblePages);
 
 function selectContextualPageForModule(moduleId: string | null): void {
@@ -762,6 +779,7 @@ function executeButton(btn: RibbonButton): void {
       "background_sound",
       "background_projection",
       "scheduled_items",
+      "presentation_mode",
     ];
     const pattern = new RegExp(`^(${actions.join("|")})_(.+)$`);
     const m = btn.action.match(pattern);

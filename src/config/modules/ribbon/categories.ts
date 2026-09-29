@@ -57,6 +57,15 @@ export const categories: Record<string, ModuleCategory> = {
     order: 4,
     groups: [ModuleGroupEnum.FAVORITES_LIST],
   },
+  // Última de propósito: entra sem empurrar as abas que o operador já conhece.
+  [ModuleCategoryEnum.LIVE]: {
+    id: ModuleCategoryEnum.LIVE,
+    title: path + ModuleCategoryEnum.LIVE,
+    icon: ICONS.PROJECTION.SCREEN,
+    color: "#00897b",
+    order: 5,
+    groups: [ModuleGroupEnum.PRESENTATION],
+  },
 };
 
 export const categoryList = Object.values(categories)

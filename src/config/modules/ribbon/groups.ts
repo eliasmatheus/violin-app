@@ -13,7 +13,7 @@ export const groups: ModuleGroup[] = [
   { id: ModuleGroupEnum.ONLINE_VIDEOS, title: path + "online_videos", order: 3 },
   { id: ModuleGroupEnum.USER, title: path + "user", order: 4 },
 
-  // LIVE category
+  // WORSHIP category
   { id: ModuleGroupEnum.MEDIA, title: path + "media", order: 6 },
 
   // BIBLE category
@@ -27,4 +27,7 @@ export const groups: ModuleGroup[] = [
 
   // FAVORITES category
   { id: ModuleGroupEnum.FAVORITES_LIST, title: path + "favorites", order: 12 },
+
+  // LIVE category
+  { id: ModuleGroupEnum.PRESENTATION, title: path + "presentation", order: 13 },
 ];

@@ -56,6 +56,8 @@ import { CategorizedDisplays, DisplayInfo } from "@/types/Projection";
 const props = defineProps({
   feature: { type: String, default: "" },
   route: { type: String, default: "" },
+  /** Rótulo com a janela fechada. Distingue botões vizinhos (tela principal, retorno). */
+  label: { type: String, default: null },
   iconColor: { type: String, default: null },
   size: { type: String, default: "large" },
   testid: { type: String, default: null },
@@ -109,7 +111,7 @@ const dynamicIconColor = computed<string | undefined>(() =>
   is_active.value ? "var(--lj-danger)" : (props.iconColor ?? undefined)
 );
 const dynamicLabel = computed(() =>
-  is_active.value ? t("ribbon.btn.stop_projection") : t("ribbon.btn.project")
+  is_active.value ? t("ribbon.btn.stop_projection") : props.label || t("ribbon.btn.project")
 );
 
 /** Resolução do monitor — vira a linha secundária do item de menu. */

@@ -33,6 +33,11 @@
   --lj-color-operator-line: #524752;
   --lj-color-list-bg: #232323;
   --lj-color-splash-bg: #2d2d28;
+
+  /* Modo apresentação. O palco imita a tela projetada e fica escuro em
+     qualquer tema; a área em volta dos painéis acompanha o tema. */
+  --lj-live-stage-bg: #0b0f17;
+  --lj-live-area-bg: var(--lj-surface-border);
   --lj-color-favorites-line: #e8e8e8;
 
   /* Cores funcionais */
@@ -355,6 +360,7 @@
   --lj-surface-border: #2a3441;
   --lj-surface-border-strong: #3a4654;
   --lj-surface-divider: #2a3441;
+  --lj-live-area-bg: #101826;
 
   /* Texto */
   --lj-text: #e5e7eb;

@@ -822,7 +822,8 @@
       "worship": "Culto",
       "bible": "Bíblia",
       "utilities": "Utilitários",
-      "favorites": "Favoritos"
+      "favorites": "Favoritos",
+      "live": "Ao vivo"
     },
     "groups": {
       "actions": "Ações",
@@ -850,6 +851,10 @@
       "info": "Informações",
       "items": "Itens",
       "library": "Biblioteca",
+      "navigation": "Navegação",
+      "outputs": "Saídas",
+      "presentation": "Apresentação",
+      "program": "Programa",
       "manage": "Gerenciar",
       "main_text": "Texto Principal",
       "media": "Mídia",

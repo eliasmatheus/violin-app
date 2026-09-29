@@ -5,7 +5,7 @@
     <RibbonBar />
 
     <!-- PageControl interno (tabs dos módulos abertos) -->
-    <OpenModulesTabs />
+    <OpenModulesTabs v-show="!isShellExpanded" />
 
     <main
       class="shell-main"
@@ -34,8 +34,9 @@
         </div>
 
         <!-- Sidebar Liturgia: oculta quando o módulo Liturgia já está aberto
-             (evita duplicar conteúdo) -->
-        <ShellLiturgyPanel v-if="!liturgyModuleOpen" class="shell-sidebar" />
+             (evita duplicar conteúdo) e com o Modo apresentação aberto, cujo
+             programa do culto substitui o painel -->
+        <ShellLiturgyPanel v-if="showLiturgyPanel" class="shell-sidebar" />
       </div>
     </main>
 
@@ -111,6 +112,7 @@ import type { BibleSearchResult } from "@/types/Bible";
 import { registerShell } from "@/composables/useShell";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { useViewport } from "@/composables/useViewport";
+import { useShellExpanded } from "@/composables/useModuleExpanded";
 import { useFileProjection } from "@/composables/useFileProjection";
 import { useProjectionShutdown } from "@/composables/useProjectionShutdown";
 import { useBackgroundTasks } from "@/composables/useBackgroundTasks";
@@ -151,9 +153,12 @@ const showDesktopDownload = computed(() => {
   );
 });
 
-const liturgyModuleOpen = computed(() => {
-  return $appdata.get<boolean>(KEYS.MODULES.LITURGY.SHOW, false) === true;
+const showLiturgyPanel = computed(() => {
+  if ($appdata.get<boolean>(KEYS.MODULES.LITURGY.SHOW, false) === true) return false;
+  return $appdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.SHOW, false) !== true;
 });
+
+const { isExpanded: isShellExpanded } = useShellExpanded();
 
 const fp = useFileProjection();
 

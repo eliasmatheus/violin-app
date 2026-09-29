@@ -1,0 +1,48 @@
+{
+  "title": "Modo apresentação",
+  "description": "Central de controle da projeção: monte o programa do culto e avance item a item ao vivo.",
+  "ribbon": {
+    "title_ctx": "Apresentação",
+    "btn": {
+      "start": "Iniciar",
+      "stop": "Parar",
+      "clear": "Limpar tela",
+      "new_session": "Nova sessão",
+      "new_item": "Novo item",
+      "duplicate": "Duplicar",
+      "import_liturgy": "Importar liturgia",
+      "save_program": "Salvar programa",
+      "delete_item": "Excluir item",
+      "previous": "Anterior",
+      "next": "Próximo",
+      "go_to_slide": "Ir para slide",
+      "lock_output": "Travar saída",
+      "main_screen": "Tela principal",
+      "stage_return": "Retorno de palco",
+      "library_files": "Arquivos",
+      "library_musics": "Músicas",
+      "library_videos": "Vídeos",
+      "library_media": "Mídia",
+      "expand": "Expandir módulo",
+      "collapse": "Recolher módulo",
+      "slide_grid": "Grade de slides",
+      "operator_notes": "Notas do operador"
+    }
+  },
+  "panels": {
+    "program": "Programa do culto",
+    "stage": "Palco",
+    "library": "Biblioteca",
+    "outputs": "Saídas"
+  },
+  "empty": {
+    "program": "O programa do culto aparece aqui.",
+    "stage": "Nada no ar.",
+    "library": "Arquivos, músicas, Bíblia e vídeos para enviar à tela.",
+    "outputs": "Tela principal e retorno de palco."
+  },
+  "actions": {
+    "expand": "Expandir módulo",
+    "collapse": "Recolher módulo"
+  }
+}
