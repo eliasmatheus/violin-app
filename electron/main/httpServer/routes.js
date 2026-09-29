@@ -362,7 +362,7 @@ function setupRoutes(
 
   // ---------------------------------------------------------------
   // POST /api/bible — projeta versículo ou encerra projeção
-  // Body: { action?: "close"|"next"|"prev", text?, reference?, bookId?, chapter?, verse? }
+  // Body: { action?: "close"|"next"|"prev", text?, reference?, bookId?, versionId?, chapter?, verse? }
   // ---------------------------------------------------------------
   app.post("/api/bible", (req, res) => {
     const mainWindow = getValidMainWindow();
@@ -370,7 +370,9 @@ function setupRoutes(
       return res.status(503).json({ error: "Janela principal não disponível" });
     }
 
-    const { action, text, reference, bookId, chapter, verse } = req.body || {};
+    const {
+      action, text, reference, bookId, chapter, verse, versionId: requestedVersionId,
+    } = req.body || {};
 
     if (action === "close") {
       const payload = { action: "bible-close" };
@@ -394,8 +396,14 @@ function setupRoutes(
       return res.status(400).json({ error: "text e reference são obrigatórios (ou action=close)" });
     }
 
+    if (
+      requestedVersionId != null &&
+      (!Number.isSafeInteger(requestedVersionId) || requestedVersionId < 1)
+    ) {
+      return res.status(400).json({ error: "versionId deve ser um inteiro positivo" });
+    }
     const userData = typeof getUserData === "function" ? getUserData() : {};
-    const versionId = userData?.id_bible_version;
+    const versionId = requestedVersionId ?? userData?.id_bible_version;
 
     const payload = {
       action: "bible-verse",

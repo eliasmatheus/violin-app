@@ -127,6 +127,7 @@ describe("BibleSpotlight em seus hosts", () => {
         text: chapter["1"],
         reference: "Judas 1:1",
         bookId: 65,
+        versionId: 1,
         chapter: 1,
         verse: 1,
       },

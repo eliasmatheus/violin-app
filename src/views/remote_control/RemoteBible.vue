@@ -389,6 +389,7 @@ function projectVerse(): void {
       text,
       reference,
       bookId: bibleSelection.value.book,
+      versionId: bibleSelection.value.version,
       chapter: bibleSelection.value.chapter,
       verse: bibleSelection.value.verse,
     },
@@ -408,13 +409,21 @@ async function onBibleSearchSelect(res: BibleSearchResult): Promise<void> {
   try {
     const resProject = await postApi(
       "/api/bible",
-      { text: res.text, reference: res.reference, bookId, chapter: res.chapter, verse: res.verse },
+      {
+        text: res.text,
+        reference: res.reference,
+        bookId,
+        versionId: res.id_bible_version,
+        chapter: res.chapter,
+        verse: res.verse,
+      },
       props.token
     );
     if (resProject.ok) {
       emit("show-snackbar", t("components.music_menu.execute") + ": " + res.reference);
 
       if (bookId && res.chapter) {
+        bibleSelection.value.version = res.id_bible_version;
         bibleSelection.value.book = bookId;
         bibleSelection.value.chapter = res.chapter;
         bibleSelection.value.verse = res.verse || 1;
@@ -460,6 +469,7 @@ function goToVerse(num: number): void {
       text,
       reference,
       bookId: props.activeBible.bookId,
+      versionId: props.activeBible.versionId ?? bibleSelection.value.version,
       chapter: props.activeBible.chapter,
       verse: num,
     },
