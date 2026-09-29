@@ -1,6 +1,7 @@
 import { ref, getCurrentScope, onScopeDispose, type Ref } from "vue";
 import { detachMediaSource as _detachSource } from "@/helpers/Dom";
 import Telemetry from "@/helpers/Telemetry";
+import { mediaElementDetails, mediaDiagnosticMessage } from "@/helpers/MediaDiagnostics";
 
 type TimeCallback = (currentTime: number, duration: number) => void;
 export type MediaElementKind = "audio" | "video";
@@ -11,8 +12,13 @@ export interface AudioTelemetryContext {
   id_music?: string | number | null;
   mode?: string;
   source_type?: string;
+  video_id?: string;
+  media_stage_epoch?: number;
+  fallback_origin?: Record<string, unknown>;
   lazy?: boolean;
   title?: string;
+  /** Source descriptor retained when an XHR source becomes an opaque blob URL. */
+  original_source?: Record<string, unknown>;
 }
 
 export interface AudioPlayback {
@@ -137,7 +143,7 @@ function _create(): AudioPlayback {
       network_state: el.networkState,
       media_error_code: error?.code,
       media_error_name: _mediaErrorName(error?.code),
-      media_error_message: error?.message,
+      media_error_message: mediaDiagnosticMessage(error?.message),
       source_kind: _sourceKind(sourceType),
       is_desktop: !!api,
       platform: api?.platform || "web",
@@ -242,6 +248,7 @@ function _create(): AudioPlayback {
                 ? "source_not_supported"
                 : "unknown";
       const failure = {
+        ...mediaElementDetails(el),
         stage: "media_element",
         reason,
         error_name: _mediaErrorName(el.error?.code),
@@ -672,6 +679,8 @@ function _create(): AudioPlayback {
       }
       return;
     }
+    const requestSource = el.getAttribute("src");
+    const requestContext = { ...(_elementTelemetryContext.get(el) || _telemetryContext || {}) };
     const playPromise = el.play();
     if (playPromise) {
       playPromise
@@ -689,20 +698,24 @@ function _create(): AudioPlayback {
           // É o desfecho esperado dessas ações, não uma falha de carregamento:
           // reportar viraria um alerta de erro a cada troca rápida de música.
           if ((e as { name?: string } | null)?.name === "AbortError") return;
+          const stale = requestSource !== el.getAttribute("src") || requestContext.playback_id !==
+            (_elementTelemetryContext.get(el) || _telemetryContext)?.playback_id;
+          const diagnostics = {
+            ...(stale ? { ...requestContext, snapshot_omitted: "source_replaced" }
+              : _telemetryProps(el, mediaElementDetails(el))),
+            stale_context: stale,
+            stage: "play_promise",
+            reason: (e as { name?: string } | null)?.name || "unknown",
+            message: mediaDiagnosticMessage((e as { message?: string } | null)?.message),
+          };
           Telemetry.track(
             "music_playback_failed",
-            _telemetryProps(el, {
-              stage: "play_promise",
-              reason: (e as { name?: string } | null)?.name || "unknown",
-            })
+            diagnostics
           );
           Telemetry.log(
             "error",
             "music play promise rejected",
-            _telemetryProps(el, {
-              stage: "play_promise",
-              reason: (e as { name?: string } | null)?.name || "unknown",
-            })
+            diagnostics
           );
           if (onError) onError(e);
         });

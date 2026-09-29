@@ -44,6 +44,7 @@ import { useOnlineVideoDownloads } from "@/composables/useOnlineVideoDownloads";
 import { VideoStateRevisionCounter } from "@/helpers/VideoStateVersion";
 import { createVideoPlaybackSnapshot, shouldRespondToVideoStateRequest } from "@/helpers/VideoPlaybackSnapshot";
 import { nextFileProjectionEpoch } from "@/presentation/FileProjectionActivation";
+import { mediaSourceDetails, mediaElementDetails, mediaFormatDetails, mediaDiagnosticMessage, mediaBlobDetails, mediaDiagnosticLog } from "@/helpers/MediaDiagnostics";
 
 const _audio = useAudioPlayback();
 const _slides = useSlides();
@@ -190,6 +191,12 @@ function _publishVideoProjectionIdentity(playbackId: string, projectionUrl: stri
     if (payload.type !== "video" || payload.url !== projectionUrl) return;
     if (payload.playback_id === playbackId) return;
     const versionedPayload = { ...payload, playback_id: playbackId };
+    mediaDiagnosticLog("debug", "media projection identity linked", {
+      playback_id: playbackId,
+      previous_playback_id: typeof payload.playback_id === "string" ? payload.playback_id.slice(0, 128) : null,
+      projection_epoch: payload.stage_epoch,
+      requested_source: mediaSourceDetails(projectionUrl),
+    });
     localStorage.setItem(KEYS.PROJECTION.LJ_FILE_PROJECTION, JSON.stringify(versionedPayload));
     $broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, versionedPayload);
   } catch {
@@ -210,6 +217,7 @@ function _keepVideoProjectionOnLoadError(): boolean {
 type DownloadedOutcome = "playing" | "stopped" | "embed";
 
 let _ytPrepareSeq = 0;
+let _ytFallbackDiagnostics: Record<string, unknown> | null = null;
 let _ytPreparation: { id: string; promise: Promise<DownloadedOutcome>; owns: boolean } | null = null;
 // Vídeo que ainda está sendo baixado (some assim que o download termina).
 let _ytDownloading: string | null = null;
@@ -392,6 +400,7 @@ async function _runDownloadedYouTube(
   title: string,
   seq: number
 ): Promise<DownloadedOutcome> {
+  const diagnosticContext = { video_id: id, media_stage_epoch: _stageEpoch, prepare_sequence: seq };
   const t = i18nAtual()?.global?.t;
   const say = (key: string): string => (t ? String(t(key)) : key);
   const tasks = useBackgroundTasks();
@@ -411,6 +420,13 @@ async function _runDownloadedYouTube(
       $snackbar.info(say("online_video.preparing"), { key: `ov-prep-${id}`, timeout: 5000 });
     }
     tasks.updateTask(taskId, { progress: p.percent, detail: OnlineVideo.phaseText(p) });
+  });
+  mediaDiagnosticLog(res.ok ? "debug" : "warn", "youtube download resolution", {
+    ...diagnosticContext,
+    phase: "download_resolution",
+    ...(res.ok ? { cached: res.cached, source: mediaSourceDetails(res.url), formats: mediaFormatDetails(res.meta) }
+      : { reason: res.error.kind, message: mediaDiagnosticMessage(res.error.message),
+        fallback_action: OnlineVideo.actionForFailure(res.error.kind) }),
   });
   if (_ytDownloading === id) _ytDownloading = null;
   // Baixou de verdade: o cartão passa a mostrar "baixado" sem piscar "não baixado" no meio.
@@ -445,6 +461,8 @@ async function _runDownloadedYouTube(
     return "stopped";
   }
   $snackbar.warning(text, { key: `ov-fallback-${id}`, timeout: 8000 });
+  _ytFallbackDiagnostics = { from_stage_epoch: diagnosticContext.media_stage_epoch,
+    prepare_sequence: seq, from_phase: "download_resolution", reason: kind };
   return "embed";
 }
 
@@ -525,6 +543,7 @@ async function _runStreamedYouTube(
   title: string,
   seq: number
 ): Promise<DownloadedOutcome> {
+  const diagnosticContext = { video_id: id, media_stage_epoch: _stageEpoch, prepare_sequence: seq };
   const t = i18nAtual()?.global?.t;
   const say = (key: string): string => (t ? String(t(key)) : key);
   const startedAt = _mediaClockMs();
@@ -537,6 +556,14 @@ async function _runStreamedYouTube(
   try {
     _ytDownloading = id; // até os links chegarem, cancelar ou abrir outra coisa desiste do pedido
     const res = await OnlineVideo.stream(id);
+    mediaDiagnosticLog(res.ok ? "debug" : "warn", "youtube stream resolution", {
+      ...diagnosticContext, phase: "stream_resolution",
+      ...(res.ok ? { muxed: res.muxed, cached: res.cached ?? false,
+        video_source: mediaSourceDetails(res.video.url), audio_source: mediaSourceDetails(res.audio.url),
+        video_format: mediaFormatDetails(res.video), audio_format: mediaFormatDetails(res.audio) }
+        : { reason: res.error.kind, message: mediaDiagnosticMessage(res.error.message),
+          fallback_action: OnlineVideo.actionForFailure(res.error.kind) }),
+    });
     resolutionMs = _mediaElapsedMs(phaseStartedAt);
     if (_ytDownloading === id) _ytDownloading = null;
     if (seq !== _ytPrepareSeq) {
@@ -546,7 +573,7 @@ async function _runStreamedYouTube(
 
     if (!res.ok) {
       const kind = res.error.kind;
-      console.warn("[OnlineVideo] abrir direto falhou:", { id, kind, message: res.error.message });
+      console.warn("[OnlineVideo] abrir direto falhou:", { id, kind, message: mediaDiagnosticMessage(res.error.message) });
       // Já há um download comum em curso para este vídeo (um pré-download, por exemplo): não
       // dá para tocar dele antes de terminar, então o operador o acompanha, com barra.
       if (kind === "busy") {
@@ -575,6 +602,8 @@ async function _runStreamedYouTube(
         });
       }
       outcome = "embed_fallback";
+      _ytFallbackDiagnostics = { from_stage_epoch: diagnosticContext.media_stage_epoch,
+        prepare_sequence: seq, from_phase: "stream_resolution", reason: kind };
       return "embed";
     }
 
@@ -585,6 +614,10 @@ async function _runStreamedYouTube(
       return "stopped";
     }
     projectionOpenMs = _mediaElapsedMs(phaseStartedAt);
+    mediaDiagnosticLog("debug", "youtube stream projection activated", {
+      ...diagnosticContext, phase: "media_ready_wait", playback_id: _activePlayback?.playback_id,
+      video_format: mediaFormatDetails(res.video), audio_format: mediaFormatDetails(res.audio),
+    });
     _ytStarting = id;
     phaseStartedAt = _mediaClockMs();
     const started = await _waitForStreamStart(seq);
@@ -601,10 +634,18 @@ async function _runStreamedYouTube(
         ready_state: el.readyState,
         network_state: el.networkState,
         error_code: el.error?.code ?? null,
-        error_message: el.error?.message ?? null,
+        error_message: mediaDiagnosticMessage(el.error?.message) ?? null,
       };
       console.warn("[OnlineVideo] o vídeo aberto direto não chegou a tocar:", { id, ...detail });
       Telemetry.track("online_video_stream_start_failed", { video_id: id, ...detail });
+      mediaDiagnosticLog("warn", "youtube stream media not ready", {
+        ...diagnosticContext, phase: "media_ready_wait", playback_id: _activePlayback?.playback_id,
+        elapsed_ms: mediaReadyMs, fallback_action: "embed",
+        ...mediaElementDetails(el),
+      });
+      _ytFallbackDiagnostics = { from_stage_epoch: diagnosticContext.media_stage_epoch,
+        prepare_sequence: seq, from_phase: "media_ready_wait", reason: "media_not_ready",
+        playback_id: _activePlayback?.playback_id };
       _self.close(true, true, true, true);
       $snackbar.warning(say(OnlineVideo.messageKeyForStreamFailure("unknown")), {
         key: `ov-fallback-${id}`,
@@ -634,7 +675,7 @@ function _loadAudioSrc(
   audioUrl: string,
   idCheck: string | number | null,
   retryFn: (id: string | number) => void,
-  onSource: (src: string, lazy: boolean) => void = (src, lazy) => {
+  onSource: (src: string, lazy: boolean, _sourceDetails?: Record<string, unknown>) => void = (src, lazy) => {
     _audio.setSrc(src, lazy);
     _self.pause(false);
   },
@@ -644,7 +685,7 @@ function _loadAudioSrc(
   // que outra faixa assumiu `_activePlayback`; usar o contexto global nesse
   // ponto misturaria um erro antigo com o playback novo.
   let requestContext: AudioTelemetryContext | null = _activePlayback
-    ? { ..._activePlayback, source_type: _sourceType(audioUrl) }
+    ? { ..._activePlayback, source_type: _sourceType(audioUrl), original_source: mediaSourceDetails(audioUrl) }
     : null;
   const requestTelemetry = (extra: Record<string, unknown> = {}): Record<string, unknown> =>
     requestContext ? _telemetryFor(requestContext, extra) : extra;
@@ -657,7 +698,7 @@ function _loadAudioSrc(
     if (idCheck != null) retryFn(idCheck);
   };
   if (_activePlayback) {
-    _activePlayback = { ..._activePlayback, source_type: _sourceType(audioUrl) };
+    _activePlayback = { ..._activePlayback, source_type: _sourceType(audioUrl), original_source: mediaSourceDetails(audioUrl) };
     if (!deferAudioContext) _audio.setTelemetryContext(_activePlayback);
   }
   Telemetry.track(
@@ -692,7 +733,7 @@ function _loadAudioSrc(
       "music_audio_streaming_started",
       requestTelemetry({ id_music: idCheck, source_type: _sourceType(audioUrl) })
     );
-    onSource(audioUrl, true);
+    onSource(audioUrl, true, requestContext?.original_source);
     console.info("[Media] arquivo direto em streaming:", {
       kind: $appdata.get(KEYS.MODULES.MEDIA.CONFIG.VIDEO_FILE, false) ? "video" : "audio",
       source_type: _sourceType(audioUrl),
@@ -744,6 +785,14 @@ function _loadAudioSrc(
       this.response instanceof Blob &&
       this.response.size > 0
     ) {
+      let responseContentType: string | null = null;
+      try { responseContentType = this.getResponseHeader("Content-Type"); } catch { /* optional metadata */ }
+      const originalSource = { ...mediaSourceDetails(audioUrl), ...mediaBlobDetails(this.response, responseContentType) };
+      if (requestContext) requestContext = { ...requestContext, original_source: originalSource };
+      if (_activePlayback?.playback_id === requestContext?.playback_id && _activePlayback) {
+        _activePlayback = { ..._activePlayback, original_source: originalSource };
+        if (!deferAudioContext) _audio.setTelemetryContext(_activePlayback);
+      }
       Telemetry.histogram("louvorja.music.audio.load.duration", elapsed, {
         outcome: "completed",
         source_type: _sourceType(audioUrl),
@@ -770,7 +819,7 @@ function _loadAudioSrc(
       );
       if (ehRemota(audioUrl)) reportNetworkResult(true, "media");
       const sourceUrl = URL.createObjectURL(this.response as Blob);
-      onSource(sourceUrl, false);
+      onSource(sourceUrl, false, requestContext?.original_source);
       console.info("[Media] arquivo direto transferido:", {
         source_type: _sourceType(audioUrl),
         bytes: this.response.size,
@@ -1449,9 +1498,9 @@ const _self = {
       audioUrl,
       idMusic,
       (id) => _self.open(id),
-      (src, lazy) => {
+      (src, lazy, sourceDetails) => {
         _audio
-          .prepare(src, lazy, _audio.currentTime.value, switchContext)
+          .prepare(src, lazy, _audio.currentTime.value, { ...switchContext, original_source: sourceDetails })
           .then((faixa) => {
             // Outra música entrou no ar durante o carregamento: esta não serve
             // mais, e o blob dela só sai da memória se alguém soltar.
@@ -1955,6 +2004,7 @@ const _self = {
       playback_id,
       id_music: params.id_music,
       mode: audioMode,
+      media_stage_epoch: stageEpoch,
       title: params.title,
     };
     Telemetry.track("music_audio_open_requested", {
@@ -1998,6 +2048,7 @@ const _self = {
         id_music: null,
         mode: audioMode,
         source_type: _sourceType(audioUrl),
+        media_stage_epoch: stageEpoch,
         title: params.title,
       });
       $appdata.set(KEYS.MODULES.MEDIA.CONFIG.AUDIO, audioUrl);
@@ -2089,6 +2140,7 @@ const _self = {
       id_music,
       mode,
       source_type: _sourceType(audioUrl),
+      media_stage_epoch: stageEpoch,
       title: data.name,
     });
     $appdata.set(KEYS.MODULES.MEDIA.CONFIG.AUDIO, audioUrl);
@@ -2112,6 +2164,7 @@ const _self = {
     // Dois cliques no mesmo vídeo enquanto ele abre partilham a tentativa em
     // curso; um segundo vídeo de fato revoga a primeira tentativa.
     const stageEpoch = _opening.value?.id === id ? _stageEpoch : ++_stageEpoch;
+    if (_ytFallbackDiagnostics?.from_stage_epoch !== stageEpoch) _ytFallbackDiagnostics = null;
     const opening = { id, title };
     _opening.value = opening;
     try {
@@ -2152,6 +2205,8 @@ const _self = {
   async openEmbeddedYouTube(url: string, title: string, expectedStageEpoch?: number): Promise<void> {
     const stageEpoch = expectedStageEpoch ?? ++_stageEpoch;
     if (stageEpoch !== _stageEpoch) return;
+    const fallbackOrigin = expectedStageEpoch !== undefined && _ytFallbackDiagnostics?.from_stage_epoch === stageEpoch
+      ? { ..._ytFallbackDiagnostics } : undefined;
     const projectionEpoch = nextFileProjectionEpoch();
     if (expectedStageEpoch === undefined) _dropPendingDownload();
     $dev.write("open youtube", { url, title });
@@ -2160,9 +2215,16 @@ const _self = {
       playback_id,
       mode: "youtube",
       source_type: "youtube",
+      video_id: OnlineVideo.videoIdFromUrl(url) || undefined,
+      media_stage_epoch: stageEpoch,
+      fallback_origin: fallbackOrigin,
       title,
     };
     Telemetry.track("music_youtube_requested", { playback_id, title });
+    mediaDiagnosticLog("debug", "youtube embed requested", {
+      ...youtubeContext, title: undefined, phase: "embed_requested",
+      requested_source: mediaSourceDetails(url),
+    });
 
     // Trocar de um vídeo embutido para outro fica na MESMA janela (mesma feature "file"):
     // `_initYoutube` já destrói o player antigo antes de criar o novo. Fechar e reabrir aqui
@@ -2234,13 +2296,21 @@ const _self = {
       stage_epoch: projectionEpoch,
     });
 
+    const stateDiagnostics = { received_messages: 0, mismatched_playback_messages: 0, invalid_sample_messages: 0 };
     _ytUnlisten = $broadcast.listen((msg) => {
       if (msg.type !== BROADCAST_TYPE.YOUTUBE_STATE) return;
+      stateDiagnostics.received_messages = Math.min(stateDiagnostics.received_messages + 1, 10000);
       const p = msg.payload as Record<string, unknown>;
       if (!p) return;
-      if (p.playback_id !== playback_id) return;
+      if (p.playback_id !== playback_id) {
+        stateDiagnostics.mismatched_playback_messages = Math.min(stateDiagnostics.mismatched_playback_messages + 1, 10000);
+        return;
+      }
       if (typeof p.sampledAt !== "number" || !Number.isSafeInteger(p.sampledAt) ||
-          p.sampledAt < _ytLastSampledAt) return;
+          p.sampledAt < _ytLastSampledAt) {
+        stateDiagnostics.invalid_sample_messages = Math.min(stateDiagnostics.invalid_sample_messages + 1, 10000);
+        return;
+      }
       _ytLastSampledAt = p.sampledAt;
       if (typeof p.currentTime === "number" && Number.isFinite(p.currentTime) && p.currentTime >= 0 &&
           typeof p.duration === "number" && Number.isFinite(p.duration) && p.duration >= 0 &&
@@ -2295,6 +2365,10 @@ const _self = {
     });
     _ytWatchdog = setTimeout(() => {
       if (_isYouTube() && !_ytStateReceived) {
+        mediaDiagnosticLog("warn", "youtube player state watchdog", {
+          ...youtubeContext, title: undefined, phase: "state_wait", reason: "no_player_state",
+          timeout_ms: 15000, last_state: _ytLastState, ...stateDiagnostics,
+        });
         Telemetry.track(
           "music_playback_failed",
           _telemetryFor(youtubeContext, {

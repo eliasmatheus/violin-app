@@ -156,6 +156,42 @@ function onlyFragmentedFormats() {
   h.stream.mockResolvedValue(streamFail("busy"));
 }
 
+it("retains real XHR Blob MIME, bytes and original basename when play rejects the opaque source", async () => {
+  openAudio.mockRestore();
+  const { default: Telemetry } = await import("@/helpers/Telemetry");
+  const log = vi.spyOn(Telemetry, "log").mockImplementation(() => {});
+  let request!: XMLHttpRequest;
+  class FakeXHR {
+    status = 200;
+    response = new Blob(["<html>denied</html>"], { type: "text/html" });
+    responseType = "";
+    timeout = 0;
+    onload: ((_this: XMLHttpRequest) => void) | null = null;
+    constructor() { request = this as unknown as XMLHttpRequest; }
+    open() {} send() {} abort() {}
+    getResponseHeader() { return "text/html; charset=utf-8"; }
+  }
+  vi.stubGlobal("XMLHttpRequest", FakeXHR);
+  const create = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:loaded-body");
+  const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockRejectedValue(new DOMException("source blob:loaded-body unsupported", "NotSupportedError"));
+  try {
+    await media.openAudio({ url: "https://provider.example/Private%20file.mov?signature=secret", title: "Private title", mediaType: "video" });
+    request.onload?.call(request, new ProgressEvent("load"));
+    await Promise.resolve(); await Promise.resolve();
+    expect(create).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledWith("error", "music play promise rejected", expect.objectContaining({
+      stage: "play_promise", playback_id: expect.any(String), source_scheme: "blob",
+      original_source: expect.objectContaining({ file_ext: "mov", file_basename: "Private file.mov",
+        blob_mime: "text/html", blob_bytes: 19, response_content_type: "text/html", codec: "unknown" }),
+    }));
+    const failed = log.mock.calls.find(([level]) => level === "error")?.[2];
+    expect(JSON.stringify(failed)).not.toMatch(/signature|provider\.example|loaded-body|<html>/);
+  } finally {
+    media.close(true);
+    log.mockRestore(); create.mockRestore(); play.mockRestore(); vi.unstubAllGlobals();
+  }
+});
+
 describe("acompanhar o download do yt-dlp e projetar", () => {
   beforeEach(onlyFragmentedFormats);
 
@@ -989,6 +1025,45 @@ describe("posse do palco durante a abertura do vídeo", () => {
 });
 
 describe("fim natural do player embutido", () => {
+  it("correlates stream failure, embed fallback and watchdog while counting rejected state messages", async () => {
+    vi.useFakeTimers();
+    const { default: Telemetry } = await import("@/helpers/Telemetry");
+    const log = vi.spyOn(Telemetry, "log").mockImplementation(() => {});
+    const onlineVideo = await import("@/helpers/OnlineVideo");
+    const restore = [
+      vi.spyOn(onlineVideo, "downloadEnabled").mockReturnValue(true),
+      vi.spyOn(onlineVideo, "stream").mockImplementation(h.stream),
+      vi.spyOn(onlineVideo, "ensure").mockImplementation(h.ensure),
+    ];
+    try {
+      h.stream.mockResolvedValue({ ok: false, error: { kind: "network", message: "blocked https://provider/private?sig=secret" } });
+      h.ensure.mockResolvedValue(cancelled);
+      expect(await media.openYouTube(embed(ID), "Private title")).toBe(true);
+      const resolution = log.mock.calls.find(([, message]) => message === "youtube stream resolution")?.[2];
+      const embedRequest = log.mock.calls.find(([, message]) => message === "youtube embed requested")?.[2];
+      expect(resolution).toMatchObject({ video_id: ID, phase: "stream_resolution", reason: "network", fallback_action: "embed" });
+      expect(JSON.stringify(resolution)).not.toMatch(/secret|provider|Private title/);
+      expect(embedRequest).toMatchObject({ video_id: ID, media_stage_epoch: resolution?.media_stage_epoch,
+        playback_id: expect.any(String), fallback_origin: { from_stage_epoch: resolution?.media_stage_epoch,
+          prepare_sequence: resolution?.prepare_sequence, from_phase: "stream_resolution", reason: "network" } });
+      for (const listener of [...h.listeners]) {
+        listener({ type: BROADCAST_TYPE.YOUTUBE_STATE, payload: { playback_id: "stale", sampledAt: Date.now() } });
+        listener({ type: BROADCAST_TYPE.YOUTUBE_STATE, payload: { playback_id: embedRequest?.playback_id, sampledAt: "bad" } });
+      }
+      await vi.advanceTimersByTimeAsync(15000);
+      const watchdog = log.mock.calls.find(([, message]) => message === "youtube player state watchdog")?.[2];
+      expect(watchdog).toMatchObject({ playback_id: embedRequest?.playback_id, video_id: ID,
+        media_stage_epoch: resolution?.media_stage_epoch, reason: "no_player_state",
+        received_messages: 2, mismatched_playback_messages: 1, invalid_sample_messages: 1 });
+      expect(watchdog?.fallback_origin).toEqual(embedRequest?.fallback_origin);
+      expect(log.mock.calls.filter(([, message]) => message === "youtube player state watchdog")).toHaveLength(1);
+    } finally {
+      media.close(true);
+      restore.forEach((spy) => spy.mockRestore());
+      log.mockRestore();
+    }
+  });
+
   it("responde ao reopen do YouTube com posição pausada do playback correto", async () => {
     await media.openEmbeddedYouTube(embed(ID), "Vídeo 1");
     const projection = h.send.mock.calls.find(
