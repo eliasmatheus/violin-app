@@ -790,12 +790,9 @@ onBeforeUnmount(() => {
   flex: 1;
   overflow: auto;
   position: relative;
-  /* Fundo clean: navy gradient suave do topo pro fundo, sem vinheta.
-     --lj-navy* acompanha a cor escolhida em todos os temas (inclusive os
-     "claros", que só trocam a marca — ver tokens.css), então esta tela nunca
-     destoa do resto do shell nem do texto branco do DesktopDownloadPrompt. */
-  background: linear-gradient(180deg, var(--lj-navy-dark) 0%, var(--lj-navy-darker) 100%);
-  color: var(--lj-text-on-navy-muted);
+  /* O fundo inicial acompanha a luminosidade real da superfície do tema. */
+  background: var(--lj-home-bg);
+  color: var(--lj-home-text);
 }
 
 .shell-content::before {
@@ -806,7 +803,7 @@ onBeforeUnmount(() => {
   background-image: url("/ico/favicon-180x180.png");
   background-repeat: no-repeat;
   background-position: center center;
-  background-size: 140px 140px;
+  background-size: clamp(140px, 12vw, 180px) auto;
   pointer-events: none;
   transition: opacity 120ms ease-out;
 }

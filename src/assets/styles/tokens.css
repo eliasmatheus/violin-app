@@ -32,7 +32,13 @@
   --lj-color-operator-grid: #232323;
   --lj-color-operator-line: #524752;
   --lj-color-list-bg: #232323;
-  --lj-color-splash-bg: #2d2d28;
+  --lj-color-splash-bg: #f7fafd;
+  /* Área inicial vazia da janela principal: azul do logo em superfícies claras. */
+  --lj-home-bg: #b8dcf2;
+  --lj-home-text: var(--lj-text-muted);
+  --lj-home-action-bg: var(--lj-navy);
+  --lj-home-action-hover: var(--lj-navy-dark);
+  --lj-home-action-text: var(--lj-white);
   --lj-color-favorites-line: #e8e8e8;
 
   /* Cores funcionais */
@@ -347,6 +353,11 @@
 /* [data-theme] fica no <html>: é de lá que o conteúdo teleportado para o
    <body> (AppMenu, diálogos, menus) herda as superfícies escuras. */
 [data-theme="dark"] {
+  --lj-home-bg: #204f78;
+  --lj-home-text: var(--lj-text-on-navy-muted);
+  --lj-home-action-bg: var(--lj-orange);
+  --lj-home-action-hover: var(--lj-orange-dark);
+  --lj-home-action-text: var(--lj-gray-900);
   /* Surface */
   --lj-surface-bg: #1f2937;
   --lj-surface-bg-soft: #161e2c;

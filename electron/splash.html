@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LouvorJA Violin</title>
   <style>
-    /* Replica do fmIniciando.dfm — 508×117, fundo #2D2D28 */
+    /* Splash claro alinhado ao novo logo, em uma janela de 508×117. */
     :root {
-      color-scheme: dark;
+      color-scheme: light;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #2D2D28;
-      color: #fff;
+      background: #F7FAFD;
+      color: #173D68;
       font-family: "Tahoma", "Segoe UI", "Helvetica Neue", sans-serif;
       user-select: none;
       -webkit-user-select: none;
@@ -49,13 +49,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #1b2a41 0%, #29569b 100%);
+      background: linear-gradient(145deg, #EFF8FF 0%, #DCEFFE 100%);
+      border-right: 1px solid #D3E7F5;
     }
 
     .splash-logo {
       height: 69%;
       width: auto;
-      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+      filter: drop-shadow(0 3px 5px rgba(15, 64, 104, 0.16));
     }
 
     .splash-content {
@@ -71,16 +72,16 @@
       font-size: 30px;
       font-weight: 700;
       letter-spacing: 0.02em;
-      color: #fff;
+      color: #173D68;
       line-height: 1;
     }
 
-    .splash-title b { color: #F8C800; }
+    .splash-title b { color: #A56300; }
 
     .splash-subtitle {
       font-size: 13px;
       font-weight: 400;
-      color: #b8b8b0;
+      color: #586B80;
       line-height: 1;
       letter-spacing: 0.02em;
     }
@@ -88,7 +89,7 @@
     .splash-info {
       margin-top: 8px;
       font-size: 11px;
-      color: #d1cfc4;
+      color: #586B80;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -97,8 +98,8 @@
     .splash-spinner {
       width: 12px;
       height: 12px;
-      border: 2px solid rgba(255,255,255,0.18);
-      border-top-color: #efb400;
+      border: 2px solid rgba(27, 79, 138, 0.18);
+      border-top-color: #1B4F8A;
       border-radius: 50%;
       animation: splash-spin 0.7s linear infinite;
     }

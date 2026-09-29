@@ -90,11 +90,11 @@ const primaryLabel = computed(() => {
   margin: auto;
   padding: var(--lj-space-8);
   gap: var(--lj-space-8);
-  border: 1px solid var(--lj-white-alpha-18);
+  border: 1px solid var(--lj-surface-border);
   border-radius: var(--lj-radius-lg);
-  background: var(--lj-black-alpha-18);
+  background: var(--lj-surface-bg);
   box-shadow: var(--lj-shadow-3);
-  color: var(--lj-text-on-navy);
+  color: var(--lj-text);
 }
 
 .desktop-download__mark {
@@ -116,7 +116,7 @@ const primaryLabel = computed(() => {
 
 .desktop-download__title {
   margin: 0;
-  color: var(--lj-text-on-navy);
+  color: var(--lj-text);
   font-size: var(--lj-text-2xl);
   font-weight: var(--lj-weight-semibold);
   line-height: 1.2;
@@ -125,7 +125,7 @@ const primaryLabel = computed(() => {
 .desktop-download__description {
   max-width: 50ch;
   margin: var(--lj-space-4) 0 0;
-  color: var(--lj-text-on-navy-muted);
+  color: var(--lj-text-muted);
   font-size: var(--lj-text-md);
   line-height: 1.55;
 }
@@ -156,30 +156,30 @@ const primaryLabel = computed(() => {
 
 .desktop-download__primary {
   padding: 0 var(--lj-space-6);
-  border: 1px solid var(--lj-orange);
-  background: var(--lj-orange);
-  color: var(--lj-white);
+  border: 1px solid var(--lj-home-action-bg);
+  background: var(--lj-home-action-bg);
+  color: var(--lj-home-action-text);
 }
 
 .desktop-download__primary:hover {
-  border-color: var(--lj-orange-dark);
-  background: var(--lj-orange-dark);
+  border-color: var(--lj-home-action-hover);
+  background: var(--lj-home-action-hover);
 }
 
 .desktop-download__secondary {
   padding: 0 var(--lj-space-4);
   border: 1px solid transparent;
-  color: var(--lj-text-on-navy);
+  color: var(--lj-text);
 }
 
 .desktop-download__secondary:hover {
-  border-color: var(--lj-white-alpha-18);
-  background: var(--lj-white-alpha-08);
+  border-color: var(--lj-surface-border);
+  background: var(--lj-surface-bg-hover);
 }
 
 .desktop-download__primary:focus-visible,
 .desktop-download__secondary:focus-visible {
-  outline: 2px solid var(--lj-white);
+  outline: 2px solid var(--lj-navy-active);
   outline-offset: 2px;
 }
 
@@ -188,7 +188,7 @@ const primaryLabel = computed(() => {
   flex-wrap: wrap;
   gap: var(--lj-space-4);
   margin: var(--lj-space-5) 0 0;
-  color: var(--lj-text-on-navy-muted);
+  color: var(--lj-text-muted);
   font-size: var(--lj-text-sm);
 }
 

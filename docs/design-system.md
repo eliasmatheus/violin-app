@@ -68,10 +68,14 @@ cores fixas do app Delphi original.
 | `--lj-color-operator-grid`   | `#232323`                | Grade de slides do `/operator`              |
 | `--lj-color-operator-line`   | `#524752`                | Linha de separação no operador              |
 | `--lj-color-list-bg`         | `#232323`                | Fundo de listas em projeção                 |
-| `--lj-color-splash-bg`       | `#2d2d28`                | Fundo da tela de splash                     |
+| `--lj-color-splash-bg`       | `#f7fafd`                | Fundo da tela de splash                     |
 | `--lj-color-favorites-line`  | `#e8e8e8`                | Linha de favoritos (light)                  |
 | `--lj-color-cover-gold-dark` | `#c89500`                | Capa no player dark                         |
 | `--lj-gold-alpha-60`         | `rgba(239, 180, 0, 0.6)` | Overlay gold semi-transparente              |
+
+Na área inicial da janela principal, `--lj-home-bg` é azul claro sólido
+(`#b8dcf2`) nos temas de superfície clara e azul profundo sólido (`#204f78`)
+no tema escuro. `--lj-home-text` acompanha o contraste do tema.
 
 ---
 

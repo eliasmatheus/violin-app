@@ -2,8 +2,8 @@
 
 /**
  * Splash window — janela frameless 508×117 que cobre a inicialização inteira.
- * Replica fmIniciando.dfm (Delphi): fundo #2D2D28, fade-in via AlphaBlend e a
- * mensagem "Inicializando programa...".
+ * Usa a identidade clara do LouvorJA, fade-in e a mensagem
+ * "Inicializando programa...".
  *
  * Abre no primeiro instante do `whenReady` e sai quando a janela principal
  * aparece pintada — quem fecha é `revealMainWindow()`, no main.cjs. O que ela
@@ -47,7 +47,7 @@ function show() {
     skipTaskbar: true,
     alwaysOnTop: true,
     show: false,
-    backgroundColor: "#2D2D28",
+    backgroundColor: "#F7FAFD",
     webPreferences: {
       contextIsolation: true,
       sandbox: true,
