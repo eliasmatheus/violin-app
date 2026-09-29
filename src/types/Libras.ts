@@ -21,3 +21,16 @@ export interface LibrasCacheStats {
   total_bundles_bytes: number;
   total_bytes: number;
 }
+
+/** Referências para reproduzir uma entrada sem alterar o payload do tradutor. */
+export interface LibrasTranslationContext {
+  operation?: "direct" | "live_music" | "live_bible" | "download_music" | "download_bible";
+  part?: "text" | "slide" | "verse";
+  operationId?: string;
+  musicId?: number;
+  slideIndex?: number;
+  bibleVersion?: string;
+  bibleBookId?: number;
+  bibleChapter?: number;
+  bibleVerses?: number[];
+}

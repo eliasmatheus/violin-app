@@ -5,6 +5,7 @@
     :bible-version="version"
     :bible-book-id="bookId"
     :bible-chapter="Number(chapter) || undefined"
+    :bible-verses="verses"
     type="bible"
   />
   <div

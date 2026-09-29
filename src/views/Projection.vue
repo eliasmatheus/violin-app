@@ -12,6 +12,7 @@
   <LibrasOverlay
     :slide-lyric="slide?.lyric"
     :music-id="Number(slide?.id_music) || undefined"
+    :slide-index="slideIndex"
     type="music"
   />
 </template>
