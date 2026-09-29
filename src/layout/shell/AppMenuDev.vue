@@ -132,8 +132,8 @@ function getUserData<T = unknown>(key: string, defaultValue?: T): T {
   return $userdata.get<T>(key, defaultValue) as T;
 }
 
-const devtoolsMainWindow = ref(getUserData<boolean>(KEYS.OPTIONS.DEV.DEVTOOLS_MAIN_WINDOW, true));
-const devtoolsProjections = ref(getUserData<boolean>(KEYS.OPTIONS.DEV.DEVTOOLS_PROJECTIONS, true));
+const devtoolsMainWindow = ref(getUserData<boolean>(KEYS.OPTIONS.DEV.DEVTOOLS_MAIN_WINDOW, false));
+const devtoolsProjections = ref(getUserData<boolean>(KEYS.OPTIONS.DEV.DEVTOOLS_PROJECTIONS, false));
 const allowHttpRoot = ref(getUserData<boolean>(KEYS.OPTIONS.DEV.ALLOW_HTTP_ROOT, false));
 const logsTerminal = ref(getUserData<boolean>(KEYS.OPTIONS.DEV.LOGS_TERMINAL, true));
 const showLibrasText = ref(getUserData<boolean>(KEYS.MODULES.LIBRAS.SHOW_TEXT, false));

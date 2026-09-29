@@ -673,12 +673,10 @@ function createWindow() {
 
   // DevTools na janela principal. Não abre sozinho nem em dev: quem quer o
   // console liga em "Opções do Desenvolvedor" (options.dev.devtools_main_window),
-  // usa LJ_DEVTOOLS=1 ou o atalho. Em prod, só com LJ_DEVTOOLS=1 no env.
-  if (isDev) {
-    const devOpt = _userDataMain?.options?.dev?.devtools_main_window;
-    const openDevTools = devOpt == null ? process.env.LJ_DEVTOOLS === "1" : !!devOpt;
-    if (openDevTools) mainWindow.webContents.openDevTools({ mode: "detach" });
-  } else if (process.env.LJ_DEVTOOLS === "1") {
+  // usa LJ_DEVTOOLS=1 ou o atalho. A preferência salva vale também em produção.
+  const devOpt = _userDataMain?.options?.dev?.devtools_main_window;
+  const openDevTools = devOpt == null ? process.env.LJ_DEVTOOLS === "1" : devOpt === true;
+  if (openDevTools) {
     mainWindow.webContents.openDevTools({ mode: "detach" });
   }
 

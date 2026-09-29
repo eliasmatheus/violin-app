@@ -113,7 +113,7 @@ function _initialRouteScript(initialHash) {
 function _allowHttpRoot(getUserData) {
   try {
     const userData = typeof getUserData === "function" ? (getUserData() || {}) : {};
-    return !!userData?.options?.dev?.allow_http_root;
+    return userData?.options?.dev?.allow_http_root === true;
   } catch {
     return false;
   }
@@ -334,10 +334,6 @@ function _setupStaticSpa(app, { distDir, getToken, apenasRemotos = false }) {
     if (req.method !== "GET") return next();
     if (req.path.startsWith("/api/") || req.path === "/events") return next();
     if (req.path === "/") {
-      const ip = req.ip || req.socket?.remoteAddress || "";
-      if (!_isLocalhost(ip)) {
-        return res.status(404).send("A rota raiz do servidor HTTP está desativada para clientes remotos.");
-      }
       return indexHandler(req, res);
     }
     if (!_isAllowedSpaPath(req.path)) {
@@ -354,6 +350,14 @@ function _setupStaticSpa(app, { distDir, getToken, apenasRemotos = false }) {
  * @param {{ isDev: boolean, distDir: string, getToken: () => string|null, getUserData?: () => Record<string, unknown>, serveDistToRemote?: boolean }} opts
  */
 function install(app, { isDev, distDir, getToken, getUserData, serveDistToRemote = false }) {
+  // Consulte o snapshot vivo antes do proxy ou do dist, em todos os modos.
+  // Assim a opção vale na próxima requisição, sem reiniciar o servidor.
+  app.use((req, res, next) => {
+    if (req.path === "/" && !_allowHttpRoot(getUserData)) {
+      return res.status(404).send("A rota raiz do servidor HTTP está desativada.");
+    }
+    return next();
+  });
   _setupAliases(app);
 
   if (isDev) {
@@ -374,9 +378,6 @@ function install(app, { isDev, distDir, getToken, getUserData, serveDistToRemote
     // acessar /@vite/client, /src/main.js, etc. para o Vue montar.
     app.use((req, res, next) => {
       if (req.path.startsWith("/api/") || req.path === "/events") return next();
-      if (req.path === "/" && !_allowHttpRoot(getUserData)) {
-        return res.status(404).send("A rota raiz do servidor HTTP está desativada em desenvolvimento.");
-      }
       return proxy(req, res);
     });
     return;
