@@ -12,6 +12,7 @@
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
+    "assets:brand": "node scripts/generate-brand-assets.mjs",
     "version:major": "npm version major",
     "version:minor": "npm version minor",
     "version:patch": "npm version patch",

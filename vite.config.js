@@ -241,6 +241,16 @@ export default async ({ mode }) => {
               sizes: "180x180",
               type: "image/png",
             },
+            {
+              src: (process.env.VITE_BASE_URL ?? "/") + "ico/favicon-192x192.png",
+              sizes: "192x192",
+              type: "image/png",
+            },
+            {
+              src: (process.env.VITE_BASE_URL ?? "/") + "ico/favicon-512x512.png",
+              sizes: "512x512",
+              type: "image/png",
+            },
           ],
         },
       })
