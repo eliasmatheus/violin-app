@@ -4,5 +4,4 @@ export enum ModuleCategoryEnum {
   BIBLE = "bible",
   UTILITIES = "utilities",
   FAVORITES = "favorites",
-  LIVE = "live",
 }

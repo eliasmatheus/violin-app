@@ -8,7 +8,6 @@ export enum ModuleGroupEnum {
   HYMNAL = "hymnal",
   MEDIA = "media",
   ONLINE_VIDEOS = "online_videos",
-  PRESENTATION = "presentation",
   REMOTE = "remote",
   TEXTS = "texts",
   THEME = "theme",

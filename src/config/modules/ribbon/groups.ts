@@ -27,7 +27,4 @@ export const groups: ModuleGroup[] = [
 
   // FAVORITES category
   { id: ModuleGroupEnum.FAVORITES_LIST, title: path + "favorites", order: 12 },
-
-  // LIVE category
-  { id: ModuleGroupEnum.PRESENTATION, title: path + "presentation", order: 13 },
 ];

@@ -21,9 +21,9 @@ export const module: Module = {
   icon: ICONS.MODULES.PRESENTATION_MODE,
   color: "#00897b",
   showInMainMenu: true,
-  category: ModuleCategoryEnum.LIVE,
-  group: ModuleGroupEnum.PRESENTATION,
-  order: 0,
+  category: ModuleCategoryEnum.WORSHIP,
+  group: ModuleGroupEnum.CHURCH,
+  order: 3,
 }
 
 // As ações seguem `presentation_mode_<acao>`: o RibbonBar só repassa ao módulo
