@@ -105,6 +105,7 @@
     <bible-spotlight
       v-model="bibleSearchOpen"
       :project-locally="false"
+      :version-id="bibleSelection.version"
       @select="onBibleSearchSelect"
     />
   </div>

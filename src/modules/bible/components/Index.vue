@@ -79,7 +79,11 @@
       />
     </div>
 
-    <BibleSpotlight v-model="bibleSpotlightOpen" :initial-buffer="spotlightInitialBuffer" />
+    <BibleSpotlight
+      v-model="bibleSpotlightOpen"
+      :initial-buffer="spotlightInitialBuffer"
+      :version-id="bible.id_bible_version"
+    />
 
     <div v-if="!compact" class="bible-layout">
       <ModuleFormatDrawer v-model="show_format" :module-id="moduleId" :manifest="manifest" />
@@ -748,6 +752,7 @@ async function loadData(): Promise<void> {
 async function selVersion(id_bible_version: number | null): Promise<void> {
   if (id_bible_version) bible.id_bible_version = id_bible_version;
   bible.version = version.value?.abbreviation ?? null;
+  AppData.set(KEYS.MODULES.BIBLE.DATA.ID_BIBLE_VERSION, bible.id_bible_version);
   bible.verses = [];
   last_verse.value = 1;
   await loadData();

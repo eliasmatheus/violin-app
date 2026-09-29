@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   broadcastSend: vi.fn(),
 }));
 vi.mock("@/helpers/Database", () => ({ default: { get: mocks.databaseGet } }));
+vi.mock("@/helpers/AppData", () => ({ default: { get: () => 1 } }));
 vi.mock("@/helpers/UserData", () => ({
   default: { get: () => 1, set: mocks.userDataSet },
 }));
@@ -162,6 +163,8 @@ describe("BibleSpotlight em seus hosts", () => {
       book_id: 65,
       chapter: 1,
       verses: [1],
+      version_id: 1,
+      version: "",
       active: true,
     });
     expect(mocks.broadcastSend).toHaveBeenCalledWith(BROADCAST_TYPE.RIBBON_SELECT_PAGE, {
