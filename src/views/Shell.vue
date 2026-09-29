@@ -40,7 +40,7 @@
       </div>
     </main>
 
-    <AppFooter />
+    <AppFooter v-show="!presentationActive" />
     <OpeningBar />
 
     <CommandPalette v-if="cmdPaletteOpen" v-model="cmdPaletteOpen" />
@@ -104,6 +104,7 @@ import Platform from "@/helpers/Platform";
 import Telemetry from "@/helpers/Telemetry";
 import { ICONS } from "@/config/Icons";
 import { KEYS } from "@/constants/UserDataKeys";
+import { ModuleEnum } from "@/enums/ModuleEnum";
 import $popup from "@/helpers/Popup";
 import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
@@ -158,7 +159,11 @@ const showLiturgyPanel = computed(() => {
   return $appdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.SHOW, false) !== true;
 });
 
-const { isExpanded: isShellExpanded } = useShellExpanded();
+const { activeModule, isExpanded: isShellExpanded } = useShellExpanded();
+
+// O palco do Modo apresentação já tem os controles da música e do vídeo no
+// ar; o mini-player do rodapé seria um segundo painel dos mesmos botões.
+const presentationActive = computed(() => activeModule.value === ModuleEnum.PRESENTATION_MODE);
 
 const fp = useFileProjection();
 
@@ -174,9 +179,12 @@ const playerMinimized = computed(() => {
 
 const hasProjection = computed(() => fp.isProjecting.value);
 
-const footerActive = computed(() => playerMinimized.value || hasProjection.value);
+const footerActive = computed(
+  () => !presentationActive.value && (playerMinimized.value || hasProjection.value)
+);
 
 const footerHeight = computed(() => {
+  if (presentationActive.value) return "0px";
   if (playerMinimized.value) return "var(--lj-player-height)";
   if (hasProjection.value) return "36px";
   return "0px";

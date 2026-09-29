@@ -12,7 +12,10 @@
 
       <section class="pm-stage" data-testid="pm-stage">
         <header class="pm-bar">
-          <span class="pm-bar__title">{{ tm("panels.stage") }}</span>
+          <span v-if="liveKind" class="pm-on-air"><span class="pm-on-air__dot" />{{ tm("stage.on_air") }}</span>
+          <LjIcon v-if="stageIcon" :icon="stageIcon" :size="14" />
+          <span class="pm-bar__title" data-testid="pm-stage-title">{{ stageTitle }}</span>
+          <span v-if="stageMeta" class="pm-bar__meta">{{ stageMeta }}</span>
           <div class="pm-bar__tools">
             <LjButton
               size="sm"
@@ -24,7 +27,12 @@
             />
           </div>
         </header>
-        <div class="pm-stage__body">
+        <StageSlides
+          v-if="showSlideGrid"
+          :subtitle="liveProgramItem?.kind === 'music' ? liveProgramItem.subtitle : undefined"
+          :locked="outputLocked"
+        />
+        <div v-else class="pm-stage__body">
           <p class="pm-stage__empty">{{ tm("empty.stage") }}</p>
         </div>
       </section>
@@ -99,6 +107,8 @@ import ProgramItemDialog from "./ProgramItemDialog.vue";
 import ProgramSessionDialog from "./ProgramSessionDialog.vue";
 import ProgramSettingsDialog from "./ProgramSettingsDialog.vue";
 import OutputsPanel from "./OutputsPanel.vue";
+import StageSlides from "./StageSlides.vue";
+import { KIND_ICONS } from "../program/kinds";
 import Media from "@/composables/useMedia";
 import { useSlides } from "@/composables/useSlides";
 import { useLiveContent } from "../composables/useLiveContent";
@@ -132,6 +142,7 @@ const {
   goLive,
   toggleOpen,
   preparedItemId,
+  liveItemId,
   upNextItem,
   outputLocked,
   setOutputLocked,
@@ -182,6 +193,33 @@ function activate(itemId: string, { force = false } = {}): void {
   goLive(item.id);
   execute(item);
   Telemetry.track("presentation_item_live", { kind: item.kind });
+}
+
+/* ─── Palco ─── */
+
+/** A grade aparece para qualquer música no ar — do programa ou tocada de outro módulo. */
+const showSlideGrid = computed(() => liveKind.value === "music" && slides.totalSlides.value > 0);
+
+const liveProgramItem = computed(() => (liveItemId.value ? findItem(liveItemId.value) : null));
+
+const stageIcon = computed(() => {
+  if (!liveKind.value) return null;
+  return liveProgramItem.value ? KIND_ICONS[liveProgramItem.value.kind] : null;
+});
+
+const stageTitle = computed(() => {
+  if (liveKind.value === "music" && !liveProgramItem.value) return slides.title.value;
+  return liveProgramItem.value?.title || tm("panels.stage");
+});
+
+const stageMeta = computed(() => (liveKind.value ? (liveProgramItem.value?.subtitle ?? "") : ""));
+
+function goToSlidePrompt(): void {
+  if (!showSlideGrid.value || outputLocked.value) return;
+  $alert.prompt({ title: alertKey("stage.go_to_slide_title") }, (value: string | null) => {
+    const n = Number(value);
+    if (Number.isInteger(n) && n >= 1 && n <= slides.totalSlides.value) Media.goToSlide(n - 1);
+  });
 }
 
 /* ─── Saídas ─── */
@@ -406,6 +444,7 @@ const RIBBON_HANDLERS: Record<string, () => void> = {
   previous: () => navigate("prev"),
   next: () => navigate("next"),
   lock_output: toggleLock,
+  go_to_slide: goToSlidePrompt,
 };
 
 useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
@@ -488,6 +527,48 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
 
 .pm-bar__accent {
   color: var(--lj-orange);
+}
+
+.pm-on-air {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--lj-danger);
+  color: var(--lj-white);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.pm-on-air__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--lj-white);
+  animation: pm-on-air-pulse 1.6s infinite;
+}
+
+@keyframes pm-on-air-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.pm-bar__meta {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--lj-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pm-bar__title {

@@ -151,5 +151,12 @@
     "prepared": "En cola — sale al aire al desbloquear",
     "send": "Enviar",
     "nothing_next": "Fin del programa."
+  },
+  "stage": {
+    "on_air": "AL AIRE",
+    "cover": "Portada",
+    "play": "Reproducir",
+    "pause": "Pausar",
+    "go_to_slide_title": "Ir a la diapositiva nº"
   }
 }

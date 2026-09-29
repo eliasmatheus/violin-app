@@ -4,14 +4,39 @@ import ProjectionWindows from "@/helpers/ProjectionWindows";
 import Telemetry from "@/helpers/Telemetry";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { KEYS } from "@/constants/UserDataKeys";
+import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
+import { MusicActionEnum } from "@/enums/MusicActionEnum";
+import Media from "@/composables/useMedia";
+import type { LiturgyItem } from "@/types/Liturgy";
 import { useLiturgyExecution } from "@/modules/liturgy/composables/useLiturgyExecution";
 import type { ProgramBibleRef, ProgramItem } from "@/types/Presentation";
+
+/** Versões da música que têm letra para a grade (as de "só áudio" não têm). */
+const SLIDE_MODES: Record<string, MusicActionEnum> = {
+  sung: MusicActionEnum.AUDIO,
+  pb: MusicActionEnum.INSTRUMENTAL,
+  lyric: MusicActionEnum.NO_AUDIO,
+  no_audio: MusicActionEnum.NO_AUDIO,
+};
+
+/**
+ * Música com letra toca minimizada: os slides vão para a grade do palco do
+ * módulo, e não para a janela do player por cima dele. O resto — música a
+ * escolher na hora, personalizada, só áudio — segue o caminho da liturgia.
+ */
+function playMusicOnStage(source: LiturgyItem): boolean {
+  const mode = SLIDE_MODES[source.subtipo || "sung"];
+  if (!mode || source.escolha || !source.id_music || source.id_music < 0) return false;
+  void Media.open({ id_music: source.id_music, mode, minimized: true });
+  return true;
+}
 
 /**
  * Executar um item do programa.
  *
- * Até o palco do módulo existir (F2–F4), quem executa é o motor da liturgia:
- * música abre o player, arquivo vai para a projeção, e assim por diante.
+ * Música com letra vai para a grade do palco (F3). O resto, até o palco saber
+ * mostrar (F4), é o motor da liturgia: arquivo vai para a projeção, e assim
+ * por diante.
  * O versículo, que a liturgia não conhece, segue o caminho do BibleSpotlight —
  * a autoridade da Bíblia no shell transforma a intenção no versículo projetado.
  */
@@ -45,6 +70,7 @@ export function useProgramExecution() {
       return true;
     }
     if (item.source) {
+      if (item.source.tipo === LiturgyItemTypeEnum.MUSICA && playMusicOnStage(item.source)) return true;
       executeItem(item.source);
       return true;
     }

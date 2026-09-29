@@ -2532,7 +2532,11 @@ const _self = {
               const id = $appdata.get(KEYS.MODULES.MEDIA.ID_MUSIC) as string | number | null;
               // Arquivos diretos da liturgia não têm id_music. Não tente
               // reabrir o banco com null após um erro de codec do vídeo.
-              if (a && id != null) self.open(id);
+              // A nova tentativa fica onde a música estava: minimizada, ela
+              // não pode reabrir o player por cima de quem a controla.
+              if (a && id != null) {
+                self.open({ id_music: id, minimized: self.isMinimized() });
+              }
             }
           );
         },

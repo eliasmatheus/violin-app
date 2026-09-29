@@ -151,5 +151,12 @@
     "prepared": "Na fila — vai ao ar ao destravar",
     "send": "Enviar",
     "nothing_next": "Fim do programa."
+  },
+  "stage": {
+    "on_air": "NO AR",
+    "cover": "Capa",
+    "play": "Tocar",
+    "pause": "Pausar",
+    "go_to_slide_title": "Ir para o slide nº"
   }
 }
