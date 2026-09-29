@@ -105,6 +105,7 @@ function recordKey(record) {
  * A process killed before the asynchronous write finishes can lose that write.
  */
 function createRuntimeIncidentJournal({ file, io = fs, now = Date.now }) {
+  const resolveFile = typeof file === "function" ? file : () => file;
   let records = null;
   let tail = Promise.resolve();
   let lastWriteError = null;
@@ -126,7 +127,8 @@ function createRuntimeIncidentJournal({ file, io = fs, now = Date.now }) {
 
   async function load() {
     if (records !== null) return;
-    for (const candidate of [file, `${file}.bak`]) {
+    const currentFile = resolveFile();
+    for (const candidate of [currentFile, `${currentFile}.bak`]) {
       try {
         const stat = await io.stat(candidate);
         if (!stat.isFile() || stat.size > MAX_FILE_BYTES) continue;
@@ -147,7 +149,7 @@ function createRuntimeIncidentJournal({ file, io = fs, now = Date.now }) {
     const contents = JSON.stringify({ version: 1, records: next });
     if (Buffer.byteLength(contents, "utf8") > MAX_FILE_BYTES) throw new Error("Incident journal exceeds byte limit");
     try {
-      await atomicWriteJson({ io, file, contents });
+      await atomicWriteJson({ io, file: resolveFile(), contents });
       records = next;
       lastWriteError = null;
     } catch (error) {
@@ -183,9 +185,10 @@ function createRuntimeIncidentJournal({ file, io = fs, now = Date.now }) {
     return serialize(async () => {
       // Remove recoverable remnants first so a confirmed clear cannot restore
       // old data from .bak after a later restart.
-      await io.remove(`${file}.bak`);
-      await io.remove(`${file}.tmp`);
-      await io.remove(file);
+      const currentFile = resolveFile();
+      await io.remove(`${currentFile}.bak`);
+      await io.remove(`${currentFile}.tmp`);
+      await io.remove(currentFile);
       records = [];
       lastWriteError = null;
     });

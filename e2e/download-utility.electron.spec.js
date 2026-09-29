@@ -109,7 +109,9 @@ test("downloads and cancels through the real preload in a separate utility proce
       }));
       expect(runtime.packaged).toBe(true);
       expect(await fs.realpath(runtime.executable)).toBe(await fs.realpath(packagedExecutable));
-      expect(path.resolve(runtime.userData)).toBe(root);
+      expect(path.resolve(runtime.userData)).toBe(
+        path.join(root, "documents", "LouvorJA Violin", ".electron")
+      );
       expect(path.resolve(runtime.documents)).toBe(path.join(root, "documents"));
     } else {
       expect(

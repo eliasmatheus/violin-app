@@ -31,6 +31,18 @@ beforeEach(async () => {
 afterEach(async () => { vi.restoreAllMocks(); await fs.remove(dir); });
 
 describe("runtime incident journal", () => {
+  it("grava no novo diretório após a mudança da pasta de dados", async () => {
+    let destination = file;
+    const queue = createRuntimeIncidentJournal({ file: () => destination, now: () => clock });
+    await queue.append(incident(1));
+    await queue.flush();
+    destination = path.join(dir, "chosen", "incidents.json");
+    await queue.append(incident(2));
+    const records = await fs.readJson(destination);
+    expect(records.records.map((record) => record.incident_id)).toEqual([id(1), id(2)]);
+    await queue.clear();
+    expect(await fs.pathExists(destination)).toBe(false);
+  });
   it("recupera incidente confirmado após reinício e preserva detecção e recuperação", async () => {
     const first = journal();
     await first.append(incident());

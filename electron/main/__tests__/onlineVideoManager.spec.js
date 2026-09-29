@@ -81,6 +81,26 @@ afterEach(() => {
 });
 
 describe("ensure — caminho feliz", () => {
+  it("encerra um download e aguarda as ferramentas antes de soltar a pasta sem apagar vídeos offline", async () => {
+    const idle = deferred();
+    const tools = fakeTools({ waitForIdle: vi.fn(() => idle.promise) });
+    const run = vi.fn(({ signal }) => new Promise((_, reject) => {
+      signal.addEventListener("abort", () => reject(new OnlineVideoError("cancelled", "Cancelado")), { once: true });
+    }));
+    const { manager } = make({ tools, run });
+    fs.writeFileSync(manager.store.pathFor(A), "offline video");
+    manager.store.keep(A);
+    const download = manager.ensure(B);
+    await vi.waitFor(() => expect(run).toHaveBeenCalled());
+    const closing = manager.close();
+    expect(await download).toMatchObject({ ok: false, error: { kind: "cancelled" } });
+    await vi.waitFor(() => expect(tools.waitForIdle).toHaveBeenCalled());
+    expect(manager.store.has(A)).toBe(true);
+    expect(manager.store.isKept(A)).toBe(true);
+    idle.resolve();
+    await closing;
+  });
+
   it("baixa, move para o cache e devolve a URL louvorja://", async () => {
     const { manager, run } = make();
     const res = await manager.ensure(A);

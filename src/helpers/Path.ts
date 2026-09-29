@@ -10,7 +10,7 @@ export default {
    * Constrói a URL para um arquivo do banco de dados JSON.
    *
    * No desktop (Electron): retorna louvorja://json_db/<path> — servido via
-   *   protocolo customizado com cache local em userData/json_db/.
+   *   protocolo customizado com cache local em <dados>/json_db/.
    * No web/PWA: retorna API_URL_DB + <path> diretamente.
    *
    * @param path  Ex: "/pt_musics" ou "/music_123"
@@ -35,7 +35,7 @@ export default {
    * Constrói a URL para um arquivo de mídia (áudio, imagem, etc.).
    *
    * No desktop (Electron): retorna louvorja://files/<path> — servido via
-   *   protocolo customizado a partir de userData/files/ (populado em D3).
+   *   protocolo customizado a partir de <dados>/files/ (populado em D3).
    * No web/PWA: retorna API_URL_FILES + <path> diretamente.
    *
    * @param path  Ex: "/audio/12345.mp3"

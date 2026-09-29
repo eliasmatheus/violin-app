@@ -252,7 +252,7 @@ $userdata.set("theme", "dark");
 ## Onde moram os dados
 
 Tudo que é do usuário fica numa **pasta de dados única** — `Documents/LouvorJA Violin`
-por padrão, trocável em "Sincronizar Arquivos → Armazenamento". No `userData` do
+por padrão, trocável em "Sincronizar Arquivos → Armazenamento". No endereço antigo do
 sistema sobra apenas a âncora `data-location.json`, que diz onde essa pasta está:
 alguém precisa saber o endereço antes de abri-la.
 
@@ -260,7 +260,11 @@ alguém precisa saber o endereço antes de abri-la.
 <dados>/
 ├── files/      acervo — áudio, capas, imagens
 ├── storage/    preferências — user_data.json, config.json, monitor_prefs.json
-└── library/    documentos — liturgias salvas, playlists, coletâneas, itens agendados
+├── library/    documentos — liturgias salvas, playlists, coletâneas, itens agendados
+├── Videos/     vídeos online baixados e suas marcas de manter
+├── json_db/    cache das respostas JSON
+├── bin/        yt-dlp e ffmpeg
+└── .electron/  perfil, IndexedDB, cookies, caches e logs internos
 ```
 
 A divisão que importa é entre **documento** e **cache**:
@@ -268,11 +272,12 @@ A divisão que importa é entre **documento** e **cache**:
 |          | Documento                                                                             | Cache                                                         |
 | -------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | O quê    | preferências, liturgias salvas, playlists, coletâneas personalizadas, itens agendados | `json_db/`, catálogos baixados, bundles do Libras, thumbnails |
-| Onde     | pasta de dados                                                                        | `userData`                                                    |
+| Onde     | pasta de dados                                                                        | pasta de dados                                                |
 | Se sumir | o operador perde trabalho que ele fez à mão                                           | o app baixa de novo                                           |
 
 Ao criar armazenamento novo, classifique primeiro: documento vai para a pasta de
-dados via `DocStore`; cache pode ficar onde for mais barato.
+dados via `DocStore`; cache também fica dentro da raiz escolhida. O perfil do
+Electron só muda de pasta no próximo boot, após fechar os bancos abertos.
 
 No desktop **o main é o único escritor**. O renderer nunca grava em disco por conta
 própria: `$userdata.set` manda um patch por IPC e `DocStore` manda a coleção. Os dois

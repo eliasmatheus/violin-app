@@ -133,6 +133,7 @@ declare global {
       stats: () => Promise<{
         dataDir?: string;
         dataDirIssue?: { wanted: string; reason: string } | null;
+        restartRequired?: boolean;
         filesDir?: string;
         files?: { bytes: number; count: number };
         json?: { bytes: number; count: number };

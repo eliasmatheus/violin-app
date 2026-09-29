@@ -341,11 +341,11 @@ async function start({ port, mainWindow } = {}) {
     rendererRequests: _getRendererRequests(),
   });
 
-  // Arquivos legacy do Delphi (`userData/server/*`) — opcional, mantém
+  // Arquivos legacy do Delphi (`<dados>/server/*`) — opcional, mantém
   // compatibilidade com instalações antigas que ainda apontem para esse path.
-  const legacyDir = path.join(paths.userData(), "server");
+  const legacyDir = path.join(paths.dataDir(), "server");
   fs.ensureDirSync(legacyDir);
-  app.use("/legacy", express.static(legacyDir));
+  app.use("/legacy", (req, res, next) => express.static(path.join(paths.dataDir(), "server"))(req, res, next));
 
   // SPA + aliases Delphi (/musica?transmissao, /biblia?transmissao, ...).
   spa.install(app, {

@@ -1060,6 +1060,18 @@ function createManager(cfg) {
     return store.sweepPartials();
   }
 
+  /** Encerra trabalho e leitores sem apagar os MP4 nem suas marcas de manter. */
+  async function close() {
+    const pending = [...jobs.values(), ...resolutions.values()].map((item) => item.promise);
+    cancelAll();
+    await settleCancelled(pending);
+    await Promise.all([...sessions.keys()].map(disposeSession));
+    await Promise.all([...disposingSessions.values()]);
+    await tools.waitForIdle?.();
+    clearInterval(sessionSweep);
+    sessionSweep = null;
+  }
+
   return {
     store,
     tools,
@@ -1076,6 +1088,7 @@ function createManager(cfg) {
     diagnosticSnapshot,
     list,
     init,
+    close,
     setPresentationActive,
     urlFor,
   };

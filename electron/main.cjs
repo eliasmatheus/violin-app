@@ -87,6 +87,7 @@ const netHealth = require("./main/netHealth.js");
 const telemetryErrorQueue = require("./main/telemetryErrorQueue.js");
 const { createRuntimeHealthMonitor } = require("./main/runtimeHealth.js");
 const { createRuntimeIncidentJournal } = require("./main/runtimeIncidentJournal.js");
+const { migrateLegacyData } = require("./main/dataMigration.js");
 const { createPresentationActivity } = require("./main/presentationActivity.js");
 const { buildCsp } = require("./main/csp.js");
 const { backgroundWindows } = require("./main/e2eWindowMode.js");
@@ -130,8 +131,7 @@ configureAppPaths();
 /**
  * Leva as preferências de `<userData>/storage` para a pasta de dados.
  *
- * Copia em vez de mover: se a versão seguinte tiver que voltar atrás, o
- * arquivo antigo continua onde estava. Roda antes de `_userDataMain` ser
+ * Move somente preferências ausentes no destino. Roda antes de `_userDataMain` ser
  * lido, mais abaixo neste módulo — depois seria tarde, o main já teria
  * carregado um estado vazio.
  */
@@ -149,7 +149,7 @@ function migrateStorageToDataDir() {
       if (!nome.endsWith(".json")) continue;
       const dest = path.join(target, nome);
       if (fs.existsSync(dest)) continue;
-      fs.copySync(path.join(legacy, nome), dest);
+      fs.moveSync(path.join(legacy, nome), dest, { overwrite: false });
       copiados++;
     }
     if (copiados) console.log(`[main] Preferências migradas para ${target} (${copiados} arquivos)`);
@@ -157,8 +157,6 @@ function migrateStorageToDataDir() {
     console.warn("[main] Falha ao migrar preferências:", e?.message || e);
   }
 }
-
-migrateStorageToDataDir();
 
 /** Um diretório que existe e tem pelo menos uma entrada dentro. */
 function _temConteudo(dir) {
@@ -171,7 +169,7 @@ function _temConteudo(dir) {
 
 /**
  * O que, dentro de `dir`, conta como acervo a mudar de lugar. `files/` e
- * `storage/` e `library/` ficam de fora porque são a estrutura nova: sem essa exceção a
+ * `storage/`, `library/` e `Videos/` ficam de fora porque são a estrutura nova: sem essa exceção a
  * própria pasta de dados, recém-criada com as preferências dentro, passaria
  * por origem de migração e encerraria a busca antes de olhar as outras.
  */
@@ -236,6 +234,12 @@ if (!app.requestSingleInstanceLock()) {
   return;
 }
 console.log("[LouvorJA] Instância única: lock adquirido.");
+migrateStorageToDataDir();
+// O lock permanece no endereço estável da âncora; o perfil pode acompanhar a
+// pasta escolhida sem permitir duas instâncias com pastas de dados diferentes.
+paths.configureProfile();
+const legacyDataMigration = migrateLegacyData(paths.bootstrapDir(), paths.dataDir());
+void legacyDataMigration.catch((error) => console.warn("[main] Migração de dados falhou:", error?.message || error));
 // Mesmo AppUserModelID do instalador NSIS em todas as BrowserWindows. O Windows
 // agrupa as projeções sob o app, em vez de mostrá-las como aplicativos distintos.
 if (process.platform === "win32") app.setAppUserModelId("br.com.louvorja.app");
@@ -328,20 +332,20 @@ let appTray = null;
 const pendingRuntimeIncidents = [];
 const runtimeTelemetryReady = new Set();
 const runtimeIncidentJournal = createRuntimeIncidentJournal({
-  file: path.join(paths.userData(), "runtime-incidents.json"),
+  file: () => path.join(paths.dataDir(), "runtime-incidents.json"),
 });
 // Consentimento só é conhecido após carregar user_data. Até lá, o journal não
 // persiste incidentes; a fila em memória ainda pode entregá-los ao renderer.
 let runtimeJournalConsent = false;
 
-const MAIN_ERROR_QUEUE_PATH = path.join(paths.userData(), "telemetry-main-errors.json");
+const mainErrorQueuePath = () => path.join(paths.dataDir(), "telemetry-main-errors.json");
 
 function _readPendingMainErrors() {
-  return telemetryErrorQueue.read(MAIN_ERROR_QUEUE_PATH);
+  return telemetryErrorQueue.read(mainErrorQueuePath());
 }
 
 function _ackMainError(id) {
-  return telemetryErrorQueue.acknowledge(MAIN_ERROR_QUEUE_PATH, id);
+  return telemetryErrorQueue.acknowledge(mainErrorQueuePath(), id);
 }
 
 function _compactRuntimeSnapshot() {
@@ -496,7 +500,7 @@ function reportMainProcessError(source, error) {
   // O renderer pode estar travado ou o processo pode morrer antes de o IPC
   // chegar. A fila permite enviar o stack no próximo boot e evita perda muda
   // justamente no caso mais importante: uncaughtException.
-  telemetryErrorQueue.enqueue(MAIN_ERROR_QUEUE_PATH, payload);
+  telemetryErrorQueue.enqueue(mainErrorQueuePath(), payload);
   safeSend(mainWindow, "telemetry:main-error", payload);
   console.error(`[${source}]`, payload.message);
 }
@@ -868,6 +872,7 @@ app.whenReady().then(async () => {
   // bootstrap de monitores, limpeza de cache e a subida do servidor HTTP, e
   // nada disso dá sinal de vida ao operador.
   splash.show();
+  await legacyDataMigration;
 
   // A identificação de monitores e a limpeza dos caches de desenvolvimento
   // são independentes. Em máquinas lentas não faz sentido somar os dois
@@ -2022,10 +2027,11 @@ ipcMain.handle("shell:openPath", async (_event, filePath) => {
   }
 });
 ipcMain.handle("storage:setDataDir", async (_e, newDir, opts) => {
+  if (downloader.isDownloading()) throw new Error("Aguarde ou cancele o download antes de alterar a pasta de dados.");
   // Nao mova/troque a raiz enquanto uma escrita ainda usa o caminho antigo.
   if (_userDataFlushTimer) await _flushUserData();
-  await Promise.all([userStore.flush(), docStore.flush()]);
-  const result = await storage.setDataDir(newDir, opts);
+  await Promise.all([userStore.flush(), docStore.flush(), runtimeIncidentJournal.flush()]);
+  const result = await onlineVideo.withDataDirChange(() => storage.setDataDir(newDir, opts));
   if (result.ok) _userDataMain = userStore.read("user_data") || {};
   return result;
 });

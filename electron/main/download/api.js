@@ -7,7 +7,7 @@ const paths = require("../paths.js");
 const apiConfig = require("../apiConfig.js");
 
 const TTL_MS = 24 * 60 * 60 * 1000; // 24h
-const CACHE_FILE = () => path.join(paths.userData(), "configweb.json");
+const CACHE_FILE = () => path.join(paths.dataDir(), "configweb.json");
 
 let _config = {
   paramsUrl: "",
@@ -119,8 +119,9 @@ async function getParams({ force = false } = {}) {
   const params = parseIni(text);
 
   // Persistir cache
-  await fs.ensureDir(path.dirname(cacheFile));
-  await fs.writeJson(cacheFile, params, { spaces: 2 });
+  const destination = CACHE_FILE();
+  await fs.ensureDir(path.dirname(destination));
+  await fs.writeJson(destination, params, { spaces: 2 });
   console.log(`[download.api] Params atualizados (${Object.keys(params).length} chaves)`);
 
   return params;

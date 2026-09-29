@@ -272,7 +272,8 @@ const removeFromList = (id) =>
   );
 
 /** As trilhas de um vídeo que ainda baixa (a cópia que as janelas leem) ficam aqui. */
-const streamDirOf = (id) => path.join(root, "online_videos", ".stream", id);
+const streamDirOf = (id) =>
+  path.join(root, "documents", "LouvorJA Violin", "Videos", ".stream", id);
 
 const tasks = () =>
   main.evaluate(async (url) => {
@@ -781,7 +782,7 @@ test.describe("quando algo dá errado", () => {
   });
 
   test("binário corrompido: o download reinstala as ferramentas e o vídeo baixa", async () => {
-    const ffmpeg = path.join(root, "bin", toolName("ffmpeg"));
+    const ffmpeg = path.join(root, "documents", "LouvorJA Violin", "bin", toolName("ffmpeg"));
     fs.writeFileSync(ffmpeg, Buffer.from([0, 1, 2, 3, 4, 5]), { mode: 0o755 });
     await removeFromList(SHORT);
 
@@ -1794,7 +1795,7 @@ test.describe("Meus vídeos online: baixar de antemão e gerenciar", () => {
     });
 
     test("com o yt-dlp quebrado: usa o YouTube e renova a ferramenta ao encerrar a apresentação", async () => {
-      const ytdlp = path.join(root, "bin", toolName("yt-dlp"));
+      const ytdlp = path.join(root, "documents", "LouvorJA Violin", "bin", toolName("yt-dlp"));
       await removeFromDisk(LONG);
       if (nodeProcess.platform === "win32") {
         // Um PE inválido produz a mesma categoria de erro de ferramenta e força
