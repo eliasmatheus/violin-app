@@ -98,6 +98,46 @@ describe("bounded media diagnostics", () => {
     expect(mediaDiagnosticVideoId("https://www.youtube.com/embed/too_long_identifier")).toBeNull();
   });
 
+  it.each([
+    {
+      name: "unquoted UNC path",
+      message: String.raw`open \\private-server\share\personal\song.mov failed: access denied`,
+      expected: "open [path] failed: access denied",
+    },
+    {
+      name: "double-quoted UNC path with spaces and an apostrophe",
+      message: String.raw`open "\\private-server\Shared media\Song's folder\song one.mov" failed: code 4`,
+      expected: 'open "[path]" failed: code 4',
+    },
+    {
+      name: "single-quoted UNC path with spaces",
+      message: String.raw`open '\\private-server\Shared media\personal\song one.mov' failed: code 4`,
+      expected: "open '[path]' failed: code 4",
+    },
+    {
+      name: "unquoted extended Windows UNC path",
+      message: String.raw`open \\?\UNC\private-server\share\personal\song.mov failed: access denied`,
+      expected: "open [path] failed: access denied",
+    },
+    {
+      name: "double-quoted extended Windows UNC path with spaces",
+      message: String.raw`open "\\?\UNC\private-server\Shared media\personal\song one.mov" failed: code 4`,
+      expected: 'open "[path]" failed: code 4',
+    },
+    {
+      name: "single-quoted extended Windows UNC path with lowercase prefix",
+      message: String.raw`open '\\?\unc\private-server\Shared media\personal\song one.mov' failed: code 4`,
+      expected: "open '[path]' failed: code 4",
+    },
+    {
+      name: "UNC alongside existing drive and POSIX paths",
+      message: String.raw`open \\private-server\share\song.mov or C:\Users\private\song.mov or /Users/private/song.mov failed`,
+      expected: "open [path] or [path] or [path] failed",
+    },
+  ])("scrubs $name while preserving the surrounding error", ({ message, expected }) => {
+    expect(mediaDiagnosticMessage(message)).toBe(expected);
+  });
+
   it("keeps actual Blob metadata and safe library references without guessing codecs", () => {
     expect(
       mediaBlobDetails(

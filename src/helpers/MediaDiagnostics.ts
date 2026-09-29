@@ -44,12 +44,18 @@ export function mediaSourceDetails(value: unknown): Record<string, unknown> {
 
 export function mediaDiagnosticMessage(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
-  return value
-    .slice(0, 500)
-    .replace(/(?:https?|file|louvorja|blob|data):[^\s"'<>]*/gi, "[source]")
-    .replace(/\b[a-z]:[\\/][^\s"'<>]*/gi, "[path]")
-    .replace(/(^|[\s("'=])\/[^\s"'<>]*/g, "$1[path]")
-    .slice(0, 240);
+  return (
+    value
+      .slice(0, 500)
+      .replace(/(?:https?|file|louvorja|blob|data):[^\s"'<>]*/gi, "[source]")
+      // Quoted UNC paths may contain spaces; retain their delimiters and the error after them.
+      .replace(/"\\\\(?:\?\\UNC\\)?[^\\/"'<>\s]+\\[^"<>\r\n]+"/gi, '"[path]"')
+      .replace(/'\\\\(?:\?\\UNC\\)?[^\\/"'<>\s]+\\[^'<>\r\n]+'/gi, "'[path]'")
+      .replace(/\\\\(?:\?\\UNC\\)?[^\\/"'<>\s]+\\[^\s"'<>]+/gi, "[path]")
+      .replace(/\b[a-z]:[\\/][^\s"'<>]*/gi, "[path]")
+      .replace(/(^|[\s("'=])\/[^\s"'<>]*/g, "$1[path]")
+      .slice(0, 240)
+  );
 }
 
 export function mediaMimeType(value: unknown): string {
