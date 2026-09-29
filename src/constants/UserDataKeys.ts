@@ -42,6 +42,23 @@ export function moduleShowInMainMenu(id: string): string {
 
 export const KEYS = {
   MODULES: {
+    ANNOUNCEMENTS: {
+      TRANSITION_TYPE: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_type`,
+      TRANSITION_DURATION: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_duration`,
+      /** Parâmetros da transição — folhas por efeito (via tabela) + `EASE` compartilhado. */
+      TRANSITION_OPTIONS: {
+        ROOT: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_options`,
+        EASE: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_options.ease`,
+        FADE_STYLE: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_options.fade_style`,
+        DIR: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_options.dir`,
+        ZOOM: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_options.zoom`,
+        ZOOM_ORIGIN: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_options.zoom_origin`,
+        WIPE_DIR: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_options.wipe_dir`,
+        SPLIT_DIR: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_options.split_dir`,
+        FLIP_AXIS: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_options.flip_axis`,
+        CIRCLE_ORIGIN: `${MODULES}.${ModuleEnum.ANNOUNCEMENTS}.transition_options.circle_origin`,
+      },
+    },
     BACKGROUND_PROJECTION: {
       SHOW_RETURN: `${MODULES}.${ModuleEnum.BACKGROUND_PROJECTION}.show_return`,
       IS_PLAYING: `${MODULES}.${ModuleEnum.BACKGROUND_PROJECTION}.is_playing`,

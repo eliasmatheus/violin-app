@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { nextTick } from "vue";
+import { createPinia, setActivePinia } from "pinia";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import {
   AnnouncementsPresentationAuthority,
@@ -29,6 +30,11 @@ import AnnouncementsProjection from "@/views/AnnouncementsProjection.vue";
 
 describe("AnnouncementsProjection recovery", () => {
   let wrapper: VueWrapper | null = null;
+
+  // A projeção lê as preferências (transições) via UserData → store Pinia.
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
 
   afterEach(() => {
     wrapper?.unmount();
@@ -101,5 +107,34 @@ describe("AnnouncementsProjection recovery", () => {
     });
     await nextTick();
     expect(wrapper.text()).toContain("Current");
+  });
+
+  it("applies the slide media fit to the projected image", async () => {
+    Object.assign(URL, {
+      createObjectURL: vi.fn(() => "blob:ann-media"),
+      revokeObjectURL: vi.fn(),
+    });
+    const authority = new AnnouncementsPresentationAuthority();
+    const fitted = authority.publish({
+      ...beginAnnouncementIntent(),
+      slides: [{
+        id: "img", nome: "Img", ordem: 1,
+        imageData: new ArrayBuffer(8), style: { mediaFit: "cover" },
+      }],
+      index: 0,
+    });
+    wrapper = mount(AnnouncementsProjection, { attachTo: document.body });
+    Broadcast.send(BROADCAST_TYPE.ANNOUNCEMENTS_STATE, fitted);
+    await nextTick();
+    expect(wrapper.find("img.ann-media").attributes("style")).toContain("object-fit: cover");
+
+    const plain = authority.publish({
+      ...beginAnnouncementIntent(),
+      slides: [{ id: "img", nome: "Img", ordem: 1, imageData: new ArrayBuffer(8) }],
+      index: 0,
+    });
+    Broadcast.send(BROADCAST_TYPE.ANNOUNCEMENTS_STATE, plain);
+    await nextTick();
+    expect(wrapper.find("img.ann-media").attributes("style")).toContain("object-fit: contain");
   });
 });

@@ -118,7 +118,8 @@
             />
             <LjButton
               size="sm"
-              :icon="ICONS.PLAYER.STOP"
+              variant="danger"
+              :icon="ICONS.PLAYER.STOP_NOW"
               :disabled="!projecting"
               @click="stopProject"
             >
@@ -154,8 +155,14 @@
             controls
             muted
             class="an-preview-media"
+            :style="mediaFitStyle"
           />
-          <img v-else-if="editing.imageData" :src="imageObjectUrl" class="an-preview-media" />
+          <img
+            v-else-if="editing.imageData"
+            :src="imageObjectUrl"
+            class="an-preview-media"
+            :style="mediaFitStyle"
+          />
           <div
             v-if="editing.texto"
             class="an-preview-text"
@@ -300,6 +307,23 @@
                 @update:model-value="setStyle('alignY', $event)"
               />
             </LjField>
+            <LjField
+              v-if="editing.imageData || editing.videoData"
+              layout="column"
+              :label="tm('media_fit')"
+            >
+              <LjSelect
+                size="sm"
+                :model-value="editing.style?.mediaFit || 'contain'"
+                :items="[
+                  { label: tm('fit_cover'), value: 'cover' },
+                  { label: tm('fit_contain'), value: 'contain' },
+                  { label: tm('fit_fill'), value: 'fill' },
+                  { label: tm('fit_none'), value: 'none' },
+                ]"
+                @update:model-value="setStyle('mediaFit', $event)"
+              />
+            </LjField>
           </div>
         </div>
       </aside>
@@ -350,6 +374,7 @@ interface AnnStyle {
   textShadow?: boolean;
   textShadowColor?: string;
   textShadowBlur?: number;
+  mediaFit?: "cover" | "contain" | "fill" | "none";
 }
 
 interface Announcement {
@@ -414,6 +439,10 @@ const videoObjectUrl = computed(() => {
   );
   return _vidObjUrl;
 });
+
+const mediaFitStyle = computed(() => ({
+  objectFit: editing.value?.style?.mediaFit || "contain",
+}));
 
 const previewTextStyle = computed(() => {
   const hasMedia = !!(editing.value?.videoData || editing.value?.imageData);
@@ -832,8 +861,10 @@ function close(): void {
   position: relative;
 }
 .an-preview-media {
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   object-fit: contain;
 }
 .an-preview-text {
