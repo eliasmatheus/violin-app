@@ -78,6 +78,7 @@
 
   <!-- Layer 2: Overlays -->
   <OverlayRenderer />
+  <ProjectionClearScreen />
 </template>
 
 <script setup lang="ts">
@@ -92,6 +93,7 @@ import $modules from "@/helpers/Modules";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { getSetting } from "@/helpers/SettingsStorage";
 import OverlayRenderer from "@/components/OverlayRenderer.vue";
+import ProjectionClearScreen from "@/components/ProjectionClearScreen.vue";
 import Slide from "@/components/Slide.vue";
 import { MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
 import { KEYS } from "@/constants/UserDataKeys";

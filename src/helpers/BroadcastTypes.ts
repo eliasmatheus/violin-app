@@ -104,6 +104,17 @@ export const BROADCAST_TYPE = Object.freeze({
    *  Shell — que desliga o estado que ficaria marcando projeção ligada. */
   PROJECTION_CLOSED: "projection_closed",
 
+  /** "Limpar tela": cobre a tela principal e o retorno com o fundo configurado
+   *  em Opções; o conteúdo segue rodando por baixo.
+   *  Payload: { active: boolean }
+   *  Emitido por: presentation_mode. Recebido por: as views de projeção e
+   *  retorno (ProjectionClearScreen) e o espelho do módulo. */
+  PROJECTION_CLEAR: "projection_clear",
+
+  /** Janela de projeção recém-aberta pedindo o estado da tela limpa — o cache
+   *  do Broadcast é por janela. Respondido pelo presentation_mode. */
+  REQUEST_PROJECTION_CLEAR: "request_projection_clear",
+
   /** Texto do painel de recados. Emitido por message_board/Index.vue.
    *  Recebido por: (recepção futura). */
   MESSAGE_BOARD: "message_board",

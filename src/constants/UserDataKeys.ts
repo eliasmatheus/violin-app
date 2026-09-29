@@ -91,6 +91,8 @@ export const KEYS = {
       SHOW: `${MODULES_PRESENTATION_MODE}.show`,
       /** UserData: esconde o corpo do ribbon e as abas de módulo enquanto a aba está ativa. */
       EXPANDED: `${MODULES_PRESENTATION_MODE}.expanded`,
+      /** UserData: saída travada. Mora aqui porque o stateBinding do ribbon lê o UserData; o módulo zera ao abrir. */
+      OUTPUT_LOCKED: `${MODULES_PRESENTATION_MODE}.output_locked`,
     },
     MUSICS: {
       SELECTED_PLAYLIST: `${MODULES}.${ModuleEnum.MUSICS}.selected_playlist`,

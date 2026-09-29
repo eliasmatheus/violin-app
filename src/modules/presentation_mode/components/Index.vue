@@ -39,15 +39,20 @@
         </div>
       </section>
 
-      <aside class="pm-outputs" data-testid="pm-outputs">
-        <header class="pm-bar pm-bar--soft">
-          <LjIcon :icon="ICONS.UI.MONITORS" :size="14" />
-          <span class="pm-bar__title">{{ tm("panels.outputs") }}</span>
-        </header>
-        <div class="pm-panel-body">
-          <LjEmpty :icon="ICONS.UI.MONITORS" :title="tm('empty.outputs')" />
-        </div>
-      </aside>
+      <OutputsPanel
+        :up-next="upNextItem"
+        :up-next-meta="upNextMeta"
+        :prepared="!!preparedItemId"
+        :locked="outputLocked"
+        :can-navigate="canNavigate"
+        :flash="upNextFlash"
+        @first="navigate('first')"
+        @prev="navigate('prev')"
+        @next="navigate('next')"
+        @last="navigate('last')"
+        @toggle-lock="toggleLock"
+        @send="sendUpNext"
+      />
     </div>
 
     <ProgramItemDialog
@@ -93,6 +98,12 @@ import ProgramPanel from "./ProgramPanel.vue";
 import ProgramItemDialog from "./ProgramItemDialog.vue";
 import ProgramSessionDialog from "./ProgramSessionDialog.vue";
 import ProgramSettingsDialog from "./ProgramSettingsDialog.vue";
+import OutputsPanel from "./OutputsPanel.vue";
+import Media from "@/composables/useMedia";
+import { useSlides } from "@/composables/useSlides";
+import { useLiveContent } from "../composables/useLiveContent";
+import { cleared, setCleared, startOutputs, stopOutputs } from "../composables/useOutputs";
+import { formatHHMM, plannedStarts } from "../program/time";
 import { newId, useProgram } from "../composables/useProgram";
 import { useProgramExecution } from "../composables/useProgramExecution";
 import { importLiturgy, programToLiturgy } from "../program/liturgy";
@@ -120,11 +131,18 @@ const {
   sessionOf,
   goLive,
   toggleOpen,
+  preparedItemId,
+  upNextItem,
+  outputLocked,
+  setOutputLocked,
+  prepare,
 } = useProgram();
 const { execute } = useProgramExecution();
 
 onMounted(() => {
   void ensureLoaded();
+  // A trava vale para o culto em andamento, não para a próxima abertura.
+  if (outputLocked.value) setOutputLocked(false);
 });
 
 const expanded = computed(() => isModuleExpanded(moduleId));
@@ -149,16 +167,84 @@ function findItem(itemId: string): ProgramItem | null {
  * Duplo clique: o item entra no ar e é executado. Item com sub-itens só abre
  * a lista e espera o operador escolher — nada vai para a tela.
  */
-function activate(itemId: string): void {
+function activate(itemId: string, { force = false } = {}): void {
   const item = findItem(itemId);
   if (!item) return;
   if (item.children?.length) {
     toggleOpen(item.id, true);
     return;
   }
+  // Saída travada: a tela principal fica como está e o item espera na fila.
+  if (outputLocked.value && !force) {
+    prepare(item.id);
+    return;
+  }
   goLive(item.id);
   execute(item);
   Telemetry.track("presentation_item_live", { kind: item.kind });
+}
+
+/* ─── Saídas ─── */
+
+const slides = useSlides();
+const { current: liveKind } = useLiveContent();
+
+/** Há partes para percorrer: os slides da música que está no ar. */
+const canNavigate = computed(
+  () => !outputLocked.value && liveKind.value === "music" && slides.totalSlides.value > 0
+);
+
+const upNextFlash = ref(false);
+let flashTimer: ReturnType<typeof setTimeout> | null = null;
+function flashUpNext(): void {
+  upNextFlash.value = true;
+  if (flashTimer) clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => (upNextFlash.value = false), 700);
+}
+
+/**
+ * Próximo avança a parte do item no ar. Na última parte — ou num item sem
+ * partes — não pula de item sozinho: destaca "A seguir", que o operador envia.
+ */
+function navigate(to: "first" | "prev" | "next" | "last"): void {
+  if (outputLocked.value) return;
+  if (!canNavigate.value) {
+    if (to === "next") flashUpNext();
+    return;
+  }
+  const last = slides.totalSlides.value - 1;
+  if (to === "next" && slides.slideIndex.value >= last) {
+    flashUpNext();
+    return;
+  }
+  if (to === "first") Media.firstSlide();
+  else if (to === "prev") Media.prevSlide();
+  else if (to === "next") Media.nextSlide();
+  else Media.lastSlide();
+}
+
+const upNextMeta = computed(() => {
+  const item = upNextItem.value;
+  if (!item) return "";
+  const start = plannedStarts(program.value).get(item.id);
+  return [item.subtitle, start === undefined ? "" : formatHHMM(start)].filter(Boolean).join(" · ");
+});
+
+function sendUpNext(): void {
+  const item = upNextItem.value;
+  if (!item) return;
+  if (item.id === preparedItemId.value) prepare(null);
+  activate(item.id);
+}
+
+/** Destravar manda ao ar o que ficou na fila. */
+function toggleLock(): void {
+  const locking = !outputLocked.value;
+  setOutputLocked(locking);
+  if (locking) return;
+  const queued = preparedItemId.value;
+  prepare(null);
+  if (queued) activate(queued, { force: true });
 }
 
 /* ─── Itens ─── */
@@ -314,6 +400,12 @@ const RIBBON_HANDLERS: Record<string, () => void> = {
   delete_item: () => confirmRemoveItem(selectedItemId.value),
   import_liturgy: importFromLiturgy,
   save_program: saveAsLiturgy,
+  start: () => void startOutputs(),
+  stop: () => void stopOutputs(),
+  clear: () => setCleared(!cleared.value),
+  previous: () => navigate("prev"),
+  next: () => navigate("next"),
+  lock_output: toggleLock,
 };
 
 useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {

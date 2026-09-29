@@ -1,5 +1,7 @@
 import { computed, ref } from "vue";
 import $docs from "@/helpers/DocStore";
+import $userdata from "@/helpers/UserData";
+import { KEYS } from "@/constants/UserDataKeys";
 import Telemetry from "@/helpers/Telemetry";
 import { DB_TABLE } from "@/constants/DbTables";
 import type { Program, ProgramItem, ProgramSession } from "@/types/Presentation";
@@ -44,6 +46,12 @@ const _liveItemId = ref<string | null>(null);
 const _liveStartedAt = ref<number | null>(null);
 const _doneIds = ref<ReadonlySet<string>>(new Set());
 const _openItems = ref<Record<string, boolean>>({});
+/** Item que o operador mandou ao ar com a saída travada: vai quando destravar. */
+const _preparedItemId = ref<string | null>(null);
+
+const _outputLocked = computed(
+  () => $userdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.OUTPUT_LOCKED, false) === true
+);
 
 let _loadSeq = 0;
 
@@ -53,6 +61,7 @@ function _resetRuntime(): void {
   _liveStartedAt.value = null;
   _doneIds.value = new Set();
   _openItems.value = {};
+  _preparedItemId.value = null;
 }
 
 async function _load(date: string): Promise<void> {
@@ -108,6 +117,20 @@ const nextItemId = computed(() => {
   return i >= 0 ? (list[i + 1]?.id ?? null) : null;
 });
 
+/**
+ * "A seguir": o item na fila (saída travada); senão o que vem depois do que
+ * está no ar; sem nada no ar, o primeiro ainda não concluído.
+ */
+const upNextItem = computed<ProgramItem | null>(() => {
+  const list = items.value;
+  if (_preparedItemId.value) return list.find((i) => i.id === _preparedItemId.value) ?? null;
+  if (_liveItemId.value) {
+    const i = list.findIndex((item) => item.id === _liveItemId.value);
+    if (i >= 0) return list[i + 1] ?? null;
+  }
+  return list.find((item) => !_doneIds.value.has(item.id)) ?? null;
+});
+
 export function useProgram() {
   return {
     date: _date,
@@ -121,6 +144,19 @@ export function useProgram() {
     doneIds: _doneIds,
     openItems: _openItems,
     nextItemId,
+    preparedItemId: _preparedItemId,
+    upNextItem,
+    outputLocked: _outputLocked,
+
+    setOutputLocked(locked: boolean): void {
+      $userdata.set(KEYS.MODULES.PRESENTATION_MODE.OUTPUT_LOCKED, locked);
+    },
+
+    /** Com a saída travada, o duplo clique só enfileira. `null` esvazia a fila. */
+    prepare(itemId: string | null): void {
+      _preparedItemId.value = itemId;
+      if (itemId) _selectedItemId.value = itemId;
+    },
 
     async ensureLoaded(): Promise<void> {
       if (!_loaded.value) await _load(_date.value);
@@ -228,6 +264,7 @@ export function useProgram() {
 
     removeItem(itemId: string): void {
       if (_selectedItemId.value === itemId) _selectedItemId.value = null;
+      if (_preparedItemId.value === itemId) _preparedItemId.value = null;
       if (_liveItemId.value === itemId) {
         _liveItemId.value = null;
         _liveStartedAt.value = null;

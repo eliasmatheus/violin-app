@@ -44,6 +44,8 @@
   --lj-live-late-text: var(--lj-danger-dark);
   --lj-live-early-text: var(--lj-success);
   --lj-live-early-border: rgba(22, 163, 74, 0.3);
+  /* Faixa do slide atual no retorno de palco (miniatura). */
+  --lj-live-return-slide-bg: #1a201a;
   --lj-color-favorites-line: #e8e8e8;
 
   /* Cores funcionais */

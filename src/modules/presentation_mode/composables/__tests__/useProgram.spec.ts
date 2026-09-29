@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
 import type { Program, ProgramItem } from "@/types/Presentation";
 
 const store = new Map<string, Program>();
@@ -21,8 +22,11 @@ describe("useProgram", () => {
   let program: ReturnType<typeof useProgram>;
 
   beforeEach(async () => {
+    setActivePinia(createPinia());
     store.clear();
     program = useProgram();
+    // O singleton guarda o estado ao vivo; passar por outra data o zera.
+    await program.setDate("2000-01-01");
     await program.setDate("2026-09-05");
     program.setSessions([
       { id: "s1", label: "Abertura", items: [item("a"), item("b")] },
@@ -71,6 +75,25 @@ describe("useProgram", () => {
     program.removeItem("c");
     expect(program.liveItemId.value).toBeNull();
     expect(program.items.value.map((i) => i.id)).toEqual(["a", "b"]);
+  });
+
+  it("A seguir: o primeiro não concluído, depois o seguinte ao que está no ar", () => {
+    expect(program.upNextItem.value?.id).toBe("a");
+    program.goLive("a");
+    expect(program.upNextItem.value?.id).toBe("b");
+    program.goLive("c");
+    expect(program.upNextItem.value).toBeNull();
+  });
+
+  it("com a saída travada, o item na fila passa à frente em A seguir", () => {
+    program.setOutputLocked(true);
+    expect(program.outputLocked.value).toBe(true);
+    program.goLive("a");
+    program.prepare("c");
+    expect(program.upNextItem.value?.id).toBe("c");
+    program.removeItem("c");
+    expect(program.preparedItemId.value).toBeNull();
+    program.setOutputLocked(false);
   });
 
   it("trocar de data zera o estado ao vivo e carrega o outro programa", async () => {

@@ -120,6 +120,7 @@
               :live="element.id === liveItemId"
               :next="element.id === nextItemId"
               :done="doneIds.has(element.id)"
+              :prepared="element.id === preparedItemId"
               :selected="element.id === selectedItemId"
               :open="!!openItems[element.id]"
               @select="select(element.id)"
@@ -180,6 +181,7 @@ const {
   doneIds,
   openItems,
   nextItemId,
+  preparedItemId,
   setDate,
   setSessions,
   select,

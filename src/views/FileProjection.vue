@@ -1,5 +1,6 @@
 <template>
   <OverlayRenderer />
+  <ProjectionClearScreen />
   <div class="fp-wallpaper" :style="fallbackStyle"></div>
   <div v-if="fileProjection.active" class="file-projection">
     <img
@@ -56,6 +57,7 @@ import { PROJECTION_TYPE } from "@/constants/Projection";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import Broadcast from "@/helpers/Broadcast";
 import OverlayRenderer from "@/components/OverlayRenderer.vue";
+import ProjectionClearScreen from "@/components/ProjectionClearScreen.vue";
 import $idb from "@/helpers/IndexedDB";
 import { DB_TABLE } from "@/constants/DbTables";
 import {

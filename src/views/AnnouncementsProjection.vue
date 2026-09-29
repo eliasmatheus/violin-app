@@ -33,6 +33,7 @@
       <div v-if="!mediaUrl('video') && !mediaUrl('image') && !current.texto" class="ann-empty" />
     </template>
     <div v-else class="ann-empty" />
+    <ProjectionClearScreen />
   </div>
 </template>
 
@@ -46,6 +47,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { useProjectionCloseNotice } from "@/composables/useProjectionCloseNotice";
+import ProjectionClearScreen from "@/components/ProjectionClearScreen.vue";
 import { PROJECTION_TYPE } from "@/constants/Projection";
 import Broadcast from "@/helpers/Broadcast";
 import {

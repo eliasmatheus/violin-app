@@ -1,5 +1,6 @@
 <template>
   <OverlayRenderer />
+  <ProjectionClearScreen />
   <div class="fp-wallpaper" :style="fallbackStyle"></div>
   <div class="return-root" :class="{ 'return-root--ready': ready }">
     <div v-if="fileProjection.active" class="return-file-projection">
@@ -58,6 +59,7 @@ import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import Broadcast from "@/helpers/Broadcast";
 import OverlayRenderer from "@/components/OverlayRenderer.vue";
+import ProjectionClearScreen from "@/components/ProjectionClearScreen.vue";
 import {
   FileProjectionState,
   VideoMediaState,

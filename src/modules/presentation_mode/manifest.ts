@@ -64,7 +64,14 @@ export const contextualPages: RibbonPage[] = [
           { id: `${moduleId}_previous`, icon: ICONS.ACTIONS.PREVIOUS, label: `${btn}.previous`, action: `${moduleId}_previous`, color: "#3498db", size: "small" },
           { id: `${moduleId}_next`, icon: ICONS.ACTIONS.NEXT, label: `${btn}.next`, action: `${moduleId}_next`, color: "#3498db", size: "small" },
           { id: `${moduleId}_go_to_slide`, icon: ICONS.PROJECTION.PRESENT, label: `${btn}.go_to_slide`, action: `${moduleId}_go_to_slide`, color: "#3498db", size: "small" },
-          { id: `${moduleId}_lock_output`, icon: ICONS.ACTIONS.LOCK_OPEN, label: `${btn}.lock_output`, action: `${moduleId}_lock_output`, color: "#7f8c8d", size: "small" },
+          { id: `${moduleId}_lock_output`, label: `${btn}.lock_output`, action: `${moduleId}_lock_output`, color: "#7f8c8d", size: "small", stateBinding: {
+            watchPath: KEYS.MODULES.PRESENTATION_MODE.OUTPUT_LOCKED,
+            iconOn: ICONS.ACTIONS.LOCK,
+            iconOff: ICONS.ACTIONS.LOCK_OPEN,
+            colorOn: "#e74c3c",
+            labelOn: `${btn}.unlock_output`,
+            labelOff: `${btn}.lock_output`,
+          } },
         ],
       },
       {

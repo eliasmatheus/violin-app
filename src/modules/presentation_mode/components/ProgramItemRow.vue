@@ -4,7 +4,7 @@
       class="pm-row"
       :class="{
         'pm-row--live': live,
-        'pm-row--next': next && !live,
+        'pm-row--next': (next || prepared) && !live,
         'pm-row--selected': selected && !live,
       }"
       role="button"
@@ -34,6 +34,7 @@
       <span v-if="live" class="pm-live-badge">
         <span class="pm-live-badge__dot" />{{ tm("program.live") }}
       </span>
+      <span v-else-if="prepared" class="pm-queued-badge">{{ tm("program.queued") }}</span>
       <LjIcon
         v-else-if="done"
         :icon="ICONS.UI.CHECK"
@@ -83,6 +84,8 @@ const props = defineProps<{
   live: boolean;
   next: boolean;
   done: boolean;
+  /** Na fila: enviado com a saída travada, vai ao ar quando destravar. */
+  prepared: boolean;
   selected: boolean;
   open: boolean;
 }>();
@@ -238,6 +241,17 @@ const hasChildren = computed(() => (props.item.children?.length ?? 0) > 0);
   border-radius: 3px;
   background: var(--lj-danger);
   color: var(--lj-white);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.pm-queued-badge {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border: 1px solid var(--lj-navy-active);
+  border-radius: 3px;
+  color: var(--lj-text);
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.5px;

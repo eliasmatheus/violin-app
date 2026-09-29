@@ -26,7 +26,8 @@
       "expand": "Expandir módulo",
       "collapse": "Contraer módulo",
       "slide_grid": "Cuadrícula de diapositivas",
-      "operator_notes": "Notas del operador"
+      "operator_notes": "Notas del operador",
+      "unlock_output": "Desbloquear salida"
     }
   },
   "panels": {
@@ -66,7 +67,8 @@
     "edit_item": "Editar ítem",
     "edit_session": "Editar sesión",
     "default_session": "General",
-    "save_default_name": "Programa {date}"
+    "save_default_name": "Programa {date}",
+    "queued": "EN COLA"
   },
   "kinds": {
     "music": "Música",
@@ -130,5 +132,24 @@
     "save_title": "Nombre de la liturgia",
     "saved": "Programa guardado en la biblioteca de liturgias.",
     "save_failed": "No fue posible guardar el programa como liturgia."
+  },
+  "outputs": {
+    "start": "Iniciar presentación",
+    "stop": "Detener presentación",
+    "clear": "Limpiar pantalla (mostrar el fondo)",
+    "restore": "Volver al contenido",
+    "identify": "Identificar monitores",
+    "main_screen": "Pantalla principal",
+    "stage_return": "Retorno de escenario",
+    "monitor": "Monitor {n}",
+    "no_monitor": "sin monitor",
+    "first": "Primero",
+    "previous": "Anterior",
+    "next": "Siguiente",
+    "last": "Último",
+    "up_next": "A continuación",
+    "prepared": "En cola — sale al aire al desbloquear",
+    "send": "Enviar",
+    "nothing_next": "Fin del programa."
   }
 }
