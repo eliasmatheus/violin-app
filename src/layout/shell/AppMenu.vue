@@ -527,7 +527,7 @@ function onOpenOptions(e) {
   gap: var(--lj-space-5);
   height: var(--lj-appmenu-header-height);
   padding: 0 var(--lj-space-6);
-  background: var(--lj-home-bg);
+  background: var(--lj-shell-chrome-bg);
   color: var(--lj-shell-chrome-color);
   flex-shrink: 0;
   /* A janela não tem barra de título nativa em nenhuma plataforma e este
@@ -645,7 +645,7 @@ function onOpenOptions(e) {
 /* Abertura do painel: o backdrop dissolve e a superfície sobe um pouco.
    Trocar de tela é só um fade — deslizar sugeriria navegação lateral. */
 /* A entrada é uma cortina, não um fade. O painel já nasce ocupando a faixa da
-   systembar — ambos usam `--lj-home-bg` — e desce revelando o resto da tela.
+   systembar — ambos usam `--lj-shell-chrome-bg` — e desce revelando o resto da tela.
    Nada fica translúcido em nenhum instante, e é isso que importa: com o
    cross-fade anterior as abas da ribbon e o cabeçalho do painel ficavam
    legíveis ao mesmo tempo, e os semáforos desciam sobre uma faixa que ainda

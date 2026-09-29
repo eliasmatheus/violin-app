@@ -28,16 +28,6 @@
       </div>
 
       <div class="opt-row">
-        <label class="opt-label" for="opt-ui-style">{{ $t("options.general.ui_style") }}</label>
-        <LjSelect
-          id="opt-ui-style"
-          :items="opcoesEstiloUi"
-          :model-value="getUserData(KEYS.OPTIONS.UI_STYLE, THEMES.CLASSIC)"
-          @update:model-value="saveUserData(KEYS.OPTIONS.UI_STYLE, $event)"
-        />
-      </div>
-
-      <div class="opt-row">
         <label class="opt-label" for="opt-font">{{ $t("options.general.font") }}</label>
         <SelectFont
           id="opt-font"
@@ -1545,7 +1535,6 @@ import { DEFAULT_MAX_HEIGHT, MAX_HEIGHTS, normalizeMaxHeight } from "@/helpers/O
 import { ICONS } from "@/config/Icons";
 import { KEYS } from "@/constants/UserDataKeys";
 import { MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
-import { THEMES } from "@/config/Theme";
 import { AUTO_THEME_ID, isThemePreference, THEME_IDS } from "@/config/Themes";
 import { SLIDE_STYLE_DEFAULT } from "@/config/SlideStyle";
 import { estiloDeFundo } from "@/helpers/BackgroundStyle";
@@ -1651,16 +1640,6 @@ const opcoesIdioma = computed(() => [
   { value: "pt", label: "Português" },
   { value: "es", label: "Español" },
 ]);
-
-const opcoesEstiloUi = computed(() =>
-  Object.values(THEMES).map((estilo) => ({
-    value: estilo,
-    // O valor gravado continua sendo o enum minúsculo — RibbonBar compara com
-    // THEMES.VIOLIN. Só o rótulo passou a vir do i18n, em vez do enum cru em
-    // caixa alta.
-    label: t(`options.general.ui_styles.${estilo}`),
-  }))
-);
 
 const opcoesPosicaoFundo = computed(() => [
   { value: "cover", label: t("options.slides.pos_cover") },

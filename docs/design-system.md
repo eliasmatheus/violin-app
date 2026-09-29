@@ -74,10 +74,13 @@ cores fixas do app Delphi original.
 | `--lj-gold-alpha-60`         | `rgba(239, 180, 0, 0.6)` | Overlay gold semi-transparente              |
 
 Na área inicial da janela principal, `--lj-home-bg` é azul sólido
-(`#2e74aa`) nos temas claros de paleta azul e azul profundo sólido (`#153653`)
-no tema escuro. Os demais temas coloridos usam um tom da própria paleta.
-A barra superior e a lateral do menu principal usam a mesma cor. Texto,
-ícones e botões nativos da janela acompanham o contraste do fundo.
+(`#2e74aa`) nos temas claros de paleta azul. No tema escuro, usa o mesmo
+`--lj-body-bg` da ribbon (`#1f2937`), enquanto a barra superior permanece
+azul (`#153653`). Os demais temas coloridos usam um tom da própria paleta.
+`--lj-shell-chrome-bg` controla a barra superior e a lateral do menu.
+Texto, ícones e botões nativos da janela acompanham o contraste do fundo.
+No escuro, a aba selecionada também usa `--lj-body-bg`, sem mudar de tom
+na passagem para o corpo da ribbon.
 
 ---
 
@@ -537,15 +540,15 @@ border-radius: var(--lj-radius-lg); /* dialogs */
 ### AppMenu Sidebar
 
 ```css
-background: var(--lj-appmenu-sidebar-bg); /* navy */
-color: var(--lj-appmenu-sidebar-color); /* white 70% */
+background: var(--lj-appmenu-sidebar-bg); /* acompanha --lj-shell-chrome-bg */
+color: var(--lj-appmenu-sidebar-color); /* branco */
 
 /* item hover */
 background: var(--lj-appmenu-sidebar-hover-bg); /* white 8% */
 
 /* item ativo */
 background: var(--lj-appmenu-sidebar-active-bg); /* orange */
-color: var(--lj-appmenu-sidebar-active-color); /* #fff */
+color: var(--lj-appmenu-sidebar-active-color); /* texto escuro sobre laranja */
 ```
 
 ---

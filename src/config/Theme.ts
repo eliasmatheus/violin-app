@@ -1,8 +1,3 @@
-export const THEMES = {
-  CLASSIC: "classic",
-  VIOLIN: "violin",
-};
-
 export const COLOR_THEMES = {
   DEFAULT: "darkblue",
   DARK: "dark",

@@ -271,13 +271,11 @@ import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { getRibbonModules, isModuleVisible } from "@/config/modules";
 import { KEYS } from "@/constants/UserDataKeys";
-import { COLORS } from "@constants/Colors";
 import type { RibbonButton, RibbonGroup, RibbonPage } from "@/types/Ribbon";
 import RibbonButtonComponent from "@/layout/shell/RibbonButtonComponent.vue";
 import RibbonGroupComponent from "@/layout/shell/RibbonGroupComponent.vue";
 import RibbonTabs from "@/components/RibbonTabs.vue";
 import { LjSlider, LjSwitch } from "@/components/ui";
-import { THEMES } from "@/config/Theme";
 import { prefetchModule } from "@/helpers/ModulePrefetch";
 import { ensureContrastOnDark } from "@/helpers/ColorContrast";
 
@@ -629,14 +627,6 @@ function resolveBtnIcon(btn: RibbonButton): string {
 }
 
 function resolveBtnColor(btn: RibbonButton): string | undefined {
-  // Estilo de interface "Electron": todos os botões da ribbon usam a cor
-  // primária do tema ativo (stateBinding também — estado indicado por ícone).
-  // Em tema escuro os ícones ficam brancos para contraste na ribbon escura.
-  const uiStyle = $userdata.get<string>(KEYS.OPTIONS.UI_STYLE, THEMES.CLASSIC);
-  if (uiStyle === THEMES.VIOLIN) {
-    const isDark = $appdata.get<boolean>(KEYS.SHELL.IS_DARK, false);
-    return isDark ? "#FFFFFF" : COLORS.PRIMARY;
-  }
   let color: string | undefined;
   if (btn.stateBinding) {
     const val = $userdata.get(btn.stateBinding.watchPath);
@@ -644,7 +634,7 @@ function resolveBtnColor(btn: RibbonButton): string | undefined {
   } else {
     color = btn.color;
   }
-  // A paleta "classic" vem do Delphi, pensada pra fundo claro: no tema escuro
+  // A paleta dos ícones vem do Delphi, pensada para fundo claro: no tema escuro
   // parte dela cai abaixo do contraste mínimo contra o corpo do ribbon e o
   // ícone some. Clareia só quem precisa, sem reescrever cada manifest.
   if (!color) return color;
@@ -801,7 +791,7 @@ useBroadcastListener(BROADCAST_TYPE.RIBBON_SELECT_PAGE, (payload: unknown) => {
   display: flex;
   align-items: stretch;
   height: var(--lj-tab-height);
-  background: var(--lj-home-bg);
+  background: var(--lj-shell-chrome-bg);
   position: relative;
   z-index: 2;
 }

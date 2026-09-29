@@ -77,7 +77,7 @@ function toggleMaximize() {
   display: flex;
   align-items: stretch;
   height: var(--lj-systembar-height);
-  background: var(--lj-home-bg);
+  background: var(--lj-shell-chrome-bg);
   color: var(--lj-shell-chrome-color);
   font-size: var(--lj-text-base);
   user-select: none;

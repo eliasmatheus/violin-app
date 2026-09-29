@@ -241,7 +241,6 @@ export const KEYS = {
     THEME: `${OPTIONS}.theme`,
     /** Último tema claro em uso, para o botão de alternar saber ao que voltar. */
     THEME_LAST_LIGHT: "theme_last_light",
-    UI_STYLE: `${OPTIONS}.ui_style`,
     MINIMIZE_ON_START: `${OPTIONS}.minimize_on_start`,
     FONT: `${OPTIONS}.font`,
     PROJECTION_FONT: `${OPTIONS}.projection_font`,

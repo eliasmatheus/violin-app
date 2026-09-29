@@ -33,9 +33,10 @@
   --lj-color-operator-line: #524752;
   --lj-color-list-bg: #232323;
   --lj-color-splash-bg: #f7fafd;
-  /* A área inicial e a barra superior compartilham a mesma cor. */
+  /* A barra superior acompanha a área inicial, exceto no tema escuro. */
   --lj-home-bg: #2e74aa;
   --lj-home-text: #ffffff;
+  --lj-shell-chrome-bg: var(--lj-home-bg);
   --lj-shell-chrome-color: #ffffff;
   --lj-shell-chrome-hover: rgba(255, 255, 255, 0.12);
   --lj-home-action-bg: var(--lj-navy);
@@ -199,7 +200,7 @@
   --lj-popup-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 10px 24px rgba(0, 0, 0, 0.12);
 
   /* App Menu sidebar (Sobre/Opções) */
-  --lj-appmenu-sidebar-bg: var(--lj-home-bg);
+  --lj-appmenu-sidebar-bg: var(--lj-shell-chrome-bg);
   --lj-appmenu-sidebar-color: #ffffff;
   --lj-appmenu-sidebar-hover-bg: rgba(255, 255, 255, 0.08);
   --lj-appmenu-sidebar-active-bg: var(--lj-orange);
@@ -356,8 +357,9 @@
 /* [data-theme] fica no <html>: é de lá que o conteúdo teleportado para o
    <body> (AppMenu, diálogos, menus) herda as superfícies escuras. */
 [data-theme="dark"] {
-  --lj-home-bg: #153653;
+  --lj-home-bg: var(--lj-body-bg);
   --lj-home-text: #edf5fc;
+  --lj-shell-chrome-bg: #153653;
   --lj-shell-chrome-color: #edf5fc;
   --lj-shell-chrome-hover: rgba(255, 255, 255, 0.12);
   --lj-home-action-bg: var(--lj-orange);
@@ -380,7 +382,7 @@
 
   /* Tabs (mais escuras) */
   --lj-tabs-bg: var(--lj-navy-darker);
-  --lj-tabs-active-bg: #243248;
+  --lj-tabs-active-bg: var(--lj-body-bg);
   --lj-tabs-active-color: #ffffff;
   --lj-tabs-ctx-active-color: #ffba66;
 
