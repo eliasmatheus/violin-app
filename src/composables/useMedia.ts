@@ -50,6 +50,9 @@ const _audio = useAudioPlayback();
 const _slides = useSlides();
 const _lyric = useLyric();
 const _album = useAlbum();
+function _closeAlbumForPresentation(): void {
+  if (_album.loading.value || _album.id_album.value !== null) _album.close();
+}
 let _loadingId: string | number | null = null;
 let _playlistOnEnd: (() => boolean) | null = null;
 // XHR atual de download de áudio — abortado ao trocar de música rapidamente
@@ -1093,6 +1096,7 @@ const _self = {
     const requestedId = params.id_music;
     if (!((typeof requestedId === "string" && requestedId.trim().length > 0) ||
       (typeof requestedId === "number" && Number.isFinite(requestedId)))) return;
+    _closeAlbumForPresentation();
 
     $dev.write("open media", params);
     const playback_id = _newPlaybackId();
@@ -1583,6 +1587,7 @@ const _self = {
       tempo_seconds?: number;
     }>;
   }): Promise<void> {
+    _closeAlbumForPresentation();
     const stageEpoch = ++_stageEpoch;
     _dropPendingDownload();
     _opening.value = null;
@@ -1952,6 +1957,7 @@ const _self = {
     } else if (typeof params != "object") {
       params = { id_music: params };
     }
+    _closeAlbumForPresentation();
     Telemetry.track("music_lyrics_opened", {
       id_music: params.id_music,
       id_album: params.id_album,
@@ -1984,6 +1990,7 @@ const _self = {
 
   async openAudio(params: MediaOpenParams | string | number, preserveProjectionStage = false): Promise<void> {
     params = _openParams(params);
+    _closeAlbumForPresentation();
     const stageEpoch = preserveProjectionStage ? _stageEpoch : ++_stageEpoch;
     if (!preserveProjectionStage) {
       _dropPendingDownload();

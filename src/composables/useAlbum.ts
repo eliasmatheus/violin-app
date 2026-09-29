@@ -40,17 +40,20 @@ function _create(): AlbumInstance {
   const data = ref<AlbumData>({});
   const loading = ref(false);
   const id_album = ref<string | number | null>(null);
+  let requestRevision = 0;
 
   async function open(albumId: string | number): Promise<OpenResult> {
     if (!isAlbumEnabled(albumId, getDisabledAlbums())) {
       return { redirect: null };
     }
     $dev.write("open album", albumId);
+    const revision = ++requestRevision;
 
     loading.value = true;
     $appdata.set("modules.album.loading", true);
 
     const albumData = await $database.get<AlbumData>(`album_${albumId}`);
+    if (revision !== requestRevision) return { redirect: null };
     if (albumData == null || !isAlbumEnabled(albumId, getDisabledAlbums())) {
       close();
       return { redirect: null };
@@ -76,6 +79,7 @@ function _create(): AlbumInstance {
   }
 
   function close(): void {
+    requestRevision++;
     $dev.write("close album");
     data.value = {};
     id_album.value = null;

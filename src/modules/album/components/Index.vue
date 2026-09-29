@@ -1,109 +1,261 @@
 <template>
-  <Window
-    v-model="module.show"
-    :title="module?.data?.name"
-    :image="module?.data?.url_image ? $path.file(module.data.url_image) : ''"
-    closable
-    compact
-    :image-size="125"
-    :color="module?.data?.color"
-    slot-left-class="w-100"
-    @close="closeAlbum()"
+  <LjDialog
+    :model-value="Boolean(module.show)"
+    :title="t('title')"
+    :accessible-title="albumName"
+    allow-global-hotkeys
+    size="lg"
+    @update:model-value="onDialogChange"
   >
-    <template #left>
+    <div class="album-detail">
+      <div class="album-summary">
+        <div class="album-cover" aria-hidden="true">
+          <img v-if="coverUrl && !coverFailed" :src="coverUrl" alt="" @error="coverFailed = true" />
+          <LjIcon v-else :icon="ICONS.MUSIC.ALBUM" :size="34" />
+        </div>
+        <div class="album-summary__copy">
+          <h2 class="album-summary__name">{{ albumName }}</h2>
+          <p v-if="!loading" class="album-summary__count">{{ trackCountLabel }}</p>
+        </div>
+      </div>
+
+      <LjProgress v-if="loading" indeterminate :label="t('loading')" />
+      <LjEmpty v-else-if="!tracks.length" :icon="ICONS.MUSIC.NOTE" :title="t('empty')" />
       <LjTable
-        v-if="!loading"
+        v-else
         sticky
         hover
-        class="w-100 lj-u-h-full album-tracks"
-        :style="{ backgroundColor: module.data.color, color: '#FFF' }"
+        class="album-tracks"
+        max-height="min(52vh, 520px)"
+        :aria-label="t('tracks_region')"
       >
+        <colgroup>
+          <col class="album-col-track" />
+          <col />
+          <col class="album-col-duration" />
+          <col class="album-col-actions" />
+        </colgroup>
         <thead>
           <tr>
-            <th
-              class="lj-u-text-end"
-              :style="{ backgroundColor: module.data.color, color: '#FFF' }"
-            >
-              {{ t("table.track") }}
+            <th scope="col" class="album-track-number">{{ t("table.track") }}</th>
+            <th scope="col">{{ t("table.music_name") }}</th>
+            <th scope="col" class="album-duration">{{ t("table.duration") }}</th>
+            <th scope="col" class="album-actions-heading">
+              <span class="album-visually-hidden">{{ t("table.actions") }}</span>
             </th>
-            <th
-              class="lj-u-text-start"
-              :style="{ backgroundColor: module.data.color, color: '#FFF' }"
-            >
-              {{ t("table.music_name") }}
-            </th>
-            <th
-              class="lj-u-text-end"
-              :style="{ backgroundColor: module.data.color, color: '#FFF' }"
-            >
-              {{ t("table.duration") }}
-            </th>
-            <th :style="{ backgroundColor: module.data.color, color: '#FFF' }" />
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in module.data.musics" :key="item.id_music">
-            <td class="lj-u-text-end">
-              {{ item.track }}
-            </td>
-            <td>{{ item.name }}</td>
-            <td class="lj-u-text-end">{{ $datetime.shortTime(item.duration) }}</td>
+          <tr v-for="item in tracks" :key="item.id_music">
+            <td class="album-track-number">{{ item.track ?? "" }}</td>
             <td>
-              <div class="lj-u-flex lj-u-justify-end">
+              <span class="album-track-name">{{ item.name }}</span>
+            </td>
+            <td class="album-duration">{{ $datetime.shortTime(item.duration) }}</td>
+            <td>
+              <div class="album-actions">
                 <MusicMenuTable
-                  :id_music="item.id_music"
+                  :id_music="Number(item.id_music)"
                   :name="item.name"
-                  color="white"
-                  :has_instrumental_music="item.has_instrumental_music"
+                  :has_instrumental_music="!!item.has_instrumental_music"
+                  :compact-breakpoint="760"
+                  defer-quick-actions
                 />
               </div>
             </td>
           </tr>
         </tbody>
       </LjTable>
-
-      <LjProgress v-if="loading" indeterminate class="album-progress" />
-    </template>
-  </Window>
+    </div>
+  </LjDialog>
 </template>
 
 <script setup>
+import { computed, ref, watch } from "vue";
 import { module as manifest } from "../manifest";
-
 import { useModule } from "@/composables/useModule";
 import { useAlbum } from "@/composables/useAlbum";
-import { LjProgress, LjTable } from "@/components/ui";
-import Window from "@/components/Window.vue";
+import { LjDialog, LjEmpty, LjIcon, LjProgress, LjTable } from "@/components/ui";
+import { ICONS } from "@/config/Icons";
 import MusicMenuTable from "@/components/MusicMenuTable.vue";
-import { watch } from "vue";
 import { useDisabledAlbums } from "@/composables/useMusicCatalog";
 import { isAlbumEnabled } from "@root/config/musicCatalog.mjs";
 
 const { module, t, $path, $datetime } = useModule(manifest);
-// Desestrutura `loading` do useAlbum() pra que vire um Ref top-level —
-// Vue auto-unwrapa refs top-level no template. Acessar via `album.loading`
-// retornaria o objeto Ref (sempre truthy), não o boolean.
 const { loading, close: closeAlbum } = useAlbum();
+const album = computed(() => module.value?.data ?? {});
+const albumName = computed(() =>
+  typeof album.value.name === "string" && album.value.name.trim() ? album.value.name : t("title")
+);
+const tracks = computed(() =>
+  Array.isArray(album.value.musics)
+    ? album.value.musics.filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          typeof item.name === "string" &&
+          Number.isInteger(Number(item.id_music)) &&
+          Number(item.id_music) > 0
+      )
+    : []
+);
+const trackCountLabel = computed(
+  () => `${tracks.value.length} ${t(tracks.value.length === 1 ? "track_one" : "track_many")}`
+);
+const coverUrl = computed(() => {
+  if (typeof album.value.url_image !== "string" || !album.value.url_image.trim()) return "";
+  try {
+    return $path.file(album.value.url_image);
+  } catch {
+    return "";
+  }
+});
+const coverFailed = ref(false);
+watch(coverUrl, () => {
+  coverFailed.value = false;
+});
+
+function onDialogChange(open) {
+  if (!open) closeAlbum();
+}
+
 const disabledAlbums = useDisabledAlbums();
 watch(disabledAlbums, (disabled) => {
-  if (module.value?.data?.id_album && !isAlbumEnabled(module.value.data.id_album, disabled))
-    closeAlbum();
+  if (album.value.id_album && !isAlbumEnabled(album.value.id_album, disabled)) closeAlbum();
 });
 </script>
 
 <style scoped>
-/* A janela do álbum pinta o fundo com a cor da capa e escreve em branco; a
-   barra precisa seguir esse contraste, não o acento do tema. */
-.album-progress {
-  --lj-ui-accent: var(--lj-white);
+.album-detail {
+  min-width: 0;
 }
 
-/* Pelo mesmo motivo, o realce da linha aqui é um véu translúcido e não a
-   superfície do tema: a cor da capa precisa continuar aparecendo por baixo,
-   senão o branco do texto some justamente na linha sob o cursor. A regra vence
-   a do primitivo por estar fora da camada `lj-table`, sem precisar de
-   !important. */
-.album-tracks :deep(tbody tr:hover) {
-  background: rgb(255 255 255 / 0.14);
+.album-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--lj-space-6);
+  min-width: 0;
+  margin-bottom: var(--lj-space-6);
+}
+
+.album-cover {
+  display: grid;
+  flex: 0 0 96px;
+  width: 96px;
+  height: 96px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--lj-surface-border);
+  border-radius: var(--lj-radius-md);
+  background: var(--lj-surface-bg-soft);
+  color: var(--lj-text-muted);
+}
+
+.album-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.album-summary__copy {
+  min-width: 0;
+}
+
+.album-summary__name {
+  margin: 0;
+  color: var(--lj-text);
+  font-size: var(--lj-text-2xl);
+  font-weight: var(--lj-weight-semibold);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.album-summary__count {
+  margin: var(--lj-space-3) 0 0;
+  color: var(--lj-text-muted);
+  font-size: var(--lj-text-base);
+}
+
+.album-tracks {
+  --album-actions-width: 260px;
+}
+
+.album-tracks :deep(.lj-table__table) {
+  table-layout: fixed;
+}
+
+.album-col-track {
+  width: 62px;
+}
+
+.album-col-duration {
+  width: 82px;
+}
+
+.album-col-actions {
+  width: var(--album-actions-width);
+}
+
+.album-track-number,
+.album-duration {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.album-duration {
+  white-space: nowrap;
+}
+
+.album-track-name {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.album-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.album-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 760px) {
+  .album-tracks {
+    --album-actions-width: 44px;
+  }
+}
+
+@media (max-width: 520px) {
+  .album-summary {
+    gap: var(--lj-space-5);
+  }
+
+  .album-cover {
+    flex-basis: 72px;
+    width: 72px;
+    height: 72px;
+  }
+
+  .album-summary__name {
+    font-size: var(--lj-text-xl);
+  }
+
+  .album-col-track {
+    width: 46px;
+  }
+
+  .album-col-duration {
+    width: 66px;
+  }
 }
 </style>

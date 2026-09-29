@@ -4,7 +4,7 @@
       <DialogOverlay class="lj-dialog__overlay" />
       <DialogContent
         class="lj-dialog"
-        :class="`lj-dialog--${size}`"
+        :class="[`lj-dialog--${size}`, { 'lj-dialog--module': allowGlobalHotkeys }]"
         v-bind="description ? {} : { 'aria-describedby': undefined }"
         @open-auto-focus="onOpenAutoFocus"
         @escape-key-down="onDismiss"
@@ -19,7 +19,12 @@
             class="lj-dialog__icon"
             :class="iconVariant && `lj-dialog__icon--${iconVariant}`"
           />
-          <DialogTitle class="lj-dialog__title">{{ title }}</DialogTitle>
+          <DialogTitle class="lj-dialog__title">
+            <span :aria-hidden="accessibleTitle ? true : undefined">{{ title }}</span>
+            <span v-if="accessibleTitle" class="lj-dialog__accessible-title">
+              {{ accessibleTitle }}
+            </span>
+          </DialogTitle>
           <DialogClose v-if="!persistent" class="lj-dialog__close" :aria-label="t('actions.close')">
             <LjIcon :icon="ICONS.ACTIONS.CLOSE" :size="15" />
           </DialogClose>
@@ -58,6 +63,10 @@ const props = withDefaults(
   defineProps<{
     modelValue?: boolean;
     title: string;
+    /** Nome anunciado por leitores de tela quando o título visual é genérico. */
+    accessibleTitle?: string;
+    /** Mantém atalhos globais em diálogos que representam uma janela de módulo. */
+    allowGlobalHotkeys?: boolean;
     description?: string;
     icon?: string;
     /** Tinge o ícone do cabeçalho — use para diferenciar aviso, risco e êxito. */
@@ -66,7 +75,7 @@ const props = withDefaults(
     /** Sem botão de fechar — a saída tem de ser por uma ação do rodapé. */
     persistent?: boolean;
   }>(),
-  { size: "md" }
+  { accessibleTitle: "", size: "md" }
 );
 
 const emit = defineEmits<{
@@ -186,6 +195,18 @@ function onDismiss(event: Event): void {
   margin: 0;
   font-size: var(--lj-text-xl);
   font-weight: var(--lj-weight-semibold);
+}
+
+.lj-dialog__accessible-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .lj-dialog__close {

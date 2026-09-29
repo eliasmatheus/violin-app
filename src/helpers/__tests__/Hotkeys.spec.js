@@ -62,4 +62,35 @@ describe("Hotkeys — KeyboardEvent sintético (POST /api/keyboard)", () => {
     expect(fired).toBe(1);
     Hotkeys.unregister("Space", handler);
   });
+
+  it("mantém atalhos no diálogo de módulo e os bloqueia no menu aberto", () => {
+    const layer = document.createElement("div");
+    layer.className = "lj-dialog--module";
+    layer.setAttribute("data-dismissable-layer", "");
+    layer.tabIndex = 0;
+    document.body.append(layer);
+
+    let fired = 0;
+    const handler = () => fired++;
+    Hotkeys.register("Ctrl+K", handler);
+    layer.focus();
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true })
+    );
+    expect(fired).toBe(1);
+
+    const menu = document.createElement("div");
+    menu.setAttribute("data-dismissable-layer", "");
+    menu.tabIndex = 0;
+    document.body.append(menu);
+    menu.focus();
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true })
+    );
+    expect(fired).toBe(1);
+
+    Hotkeys.unregister("Ctrl+K", handler);
+    menu.remove();
+    layer.remove();
+  });
 });
