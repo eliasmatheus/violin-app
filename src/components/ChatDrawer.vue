@@ -49,25 +49,27 @@
             v-for="msg in messages"
             :key="msg.id"
             class="chat-drawer__msg"
-            :class="{ 'chat-drawer__msg--local': !msg.deviceId }"
+            :class="msg.deviceId ? 'chat-drawer__msg--remote' : 'chat-drawer__msg--operator'"
           >
-            <span class="chat-drawer__sender">
-              <LjIcon
-                v-if="msg.deviceId && msg.platform === 'android'"
-                :icon="ICONS.UI.ANDROID"
-                :size="12"
-                class="chat-drawer__platform-icon"
-              />
-              <LjIcon
-                v-else-if="msg.deviceId && msg.platform === 'ios'"
-                :icon="ICONS.UI.APPLE"
-                :size="12"
-                class="chat-drawer__platform-icon"
-              />
-              {{ msg.sender }}
-            </span>
-            <span class="chat-drawer__text">{{ msg.text }}</span>
-            <span class="chat-drawer__time">{{ formatTime(msg.timestamp) }}</span>
+            <div class="chat-drawer__bubble">
+              <div class="chat-drawer__meta">
+                <LjIcon
+                  v-if="msg.deviceId && msg.platform === 'android'"
+                  :icon="ICONS.UI.ANDROID"
+                  :size="12"
+                  class="chat-drawer__platform-icon"
+                />
+                <LjIcon
+                  v-else-if="msg.deviceId && msg.platform === 'ios'"
+                  :icon="ICONS.UI.APPLE"
+                  :size="12"
+                  class="chat-drawer__platform-icon"
+                />
+                <span class="chat-drawer__sender">{{ msg.sender }}</span>
+                <span class="chat-drawer__time">{{ formatTime(msg.timestamp) }}</span>
+              </div>
+              <span class="chat-drawer__text">{{ msg.text }}</span>
+            </div>
           </div>
         </div>
 
@@ -272,45 +274,93 @@ watch(
   opacity: 0.5;
 }
 
+/* ---------------------------------------------------------------------------
+ * Bolhas — a linha ancora a bolha no lado certo; o tom diferencia quem fala:
+ * operador (navy sólido, à direita) × outros usuários (superfície suave, à
+ * esquerda). As cores vêm de tokens definidos (navy / surface / text).
+ * ------------------------------------------------------------------------- */
 .chat-drawer__msg {
   display: flex;
-  flex-direction: column;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--lj-surface-2);
-  max-width: 85%;
 }
 
-.chat-drawer__msg--local {
-  align-self: flex-end;
-  background: var(--lj-accent-soft, var(--lj-surface-2));
+.chat-drawer__msg--operator {
+  justify-content: flex-end;
+}
+
+.chat-drawer__msg--remote {
+  justify-content: flex-start;
+}
+
+.chat-drawer__bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 85%;
+  padding: 6px 10px;
+  border-radius: var(--lj-radius-md);
+}
+
+.chat-drawer__msg--operator .chat-drawer__bubble {
+  background: var(--lj-navy);
+  color: var(--lj-text-on-navy);
+  border-radius: 15px 15px 0 15px;
+}
+
+.chat-drawer__msg--remote .chat-drawer__bubble {
+  background: var(--lj-surface-bg-soft);
+  border: 1px solid var(--lj-surface-border);
+  color: var(--lj-text);
+  border-radius: 15px 15px 15px 0;
+}
+
+.chat-drawer__meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
 .chat-drawer__sender {
   font-size: 11px;
   font-weight: 600;
-  opacity: 0.7;
-  margin-bottom: 2px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-drawer__msg--operator .chat-drawer__sender {
+  color: var(--lj-text-on-navy-muted);
+}
+
+.chat-drawer__msg--remote .chat-drawer__sender {
+  color: var(--lj-text-muted);
 }
 
 .chat-drawer__platform-icon {
-  opacity: 0.8;
   flex-shrink: 0;
+}
+
+.chat-drawer__msg--remote .chat-drawer__platform-icon {
+  color: var(--lj-text-subtle);
+}
+
+.chat-drawer__time {
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 10px;
+}
+
+.chat-drawer__msg--operator .chat-drawer__time {
+  color: var(--lj-text-on-navy-muted);
+}
+
+.chat-drawer__msg--remote .chat-drawer__time {
+  color: var(--lj-text-subtle);
 }
 
 .chat-drawer__text {
   font-size: 13px;
   word-break: break-word;
-}
-
-.chat-drawer__time {
-  font-size: 10px;
-  opacity: 0.5;
-  align-self: flex-end;
-  margin-top: 2px;
 }
 
 /* Input */
