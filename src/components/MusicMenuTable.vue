@@ -27,8 +27,8 @@
           variant="ghost"
           icon-only
           :icon="ICONS.UI.DOTS_VERTICAL"
-          :title="t('shell.appmenu')"
-          :aria-label="t('shell.appmenu')"
+          :title="menuTitle"
+          :aria-label="menuTitle"
         />
       </template>
 
@@ -152,6 +152,7 @@ const props = withDefaults(
   defineProps<{
     id_music: number;
     name: string;
+    albumId?: number | null;
     musicSubtitle?: string;
     has_instrumental_music: boolean | number;
     color?: string;
@@ -162,7 +163,7 @@ const props = withDefaults(
     /** Monta ações rápidas apenas quando a linha é explorada, reduzindo o custo da tabela. */
     deferQuickActions?: boolean;
   }>(),
-  { compactBreakpoint: 550, deferQuickActions: true, musicSubtitle: "" }
+  { albumId: null, compactBreakpoint: 550, deferQuickActions: true, musicSubtitle: "" }
 );
 
 // Quantos botões rápidos `buttons` devolve; o espaço reservado antes de montá-los
@@ -170,6 +171,9 @@ const props = withDefaults(
 const QUICK_ACTION_COUNT = 7;
 
 const { t } = useI18n();
+const menuTitle = computed(() =>
+  props.name.trim() ? `${t("shell.appmenu")}: ${props.name}` : t("shell.appmenu")
+);
 const { width } = useViewport();
 const root = ref<HTMLElement | null>(null);
 const revealed = useRowReveal(root);
@@ -187,6 +191,12 @@ const showQuickActions = computed(() => !props.deferQuickActions || revealed.val
 const colorStyle = computed(() =>
   props.color ? { "--lj-text-muted": props.color, "--lj-text": props.color } : undefined
 );
+
+function openLyric(): void {
+  Media.openLyric(
+    props.albumId != null ? { id_music: props.id_music, id_album: props.albumId } : props.id_music
+  );
+}
 
 const buttons = computed<ButtonItem[]>(() => [
   {
@@ -233,7 +243,7 @@ const buttons = computed<ButtonItem[]>(() => [
     disabled: false,
     title: t("ribbon.btn.lyric"),
     icon: ICONS.MUSIC.LYRIC,
-    click: () => Media.openLyric(props.id_music),
+    click: openLyric,
   },
   {
     testid: "audio-only",
@@ -332,7 +342,7 @@ const menu = computed<MenuItem[]>(() => [
       {
         title: t("ribbon.btn.lyric"),
         icon: ICONS.MUSIC.LYRIC,
-        click: () => Media.openLyric(props.id_music),
+        click: openLyric,
       },
       { title: "-" },
       {

@@ -3,9 +3,20 @@
   "description": "Álbumes de doxología para adoración.",
   "albums": "Álbumes",
   "musics": "Músicas",
-  "search": "Buscar…",
+  "music_name": "Música",
+  "track": "Pista",
+  "duration": "Duración",
+  "actions": "Acciones",
+  "search_albums": "Buscar álbumes",
+  "search_musics": "Buscar músicas",
+  "back_to_albums": "Volver a los álbumes",
   "empty_albums": "Ningún álbum disponible.",
   "empty_musics": "Ninguna música en este álbum.",
-  "load_error": "Error al cargar la doxología.",
-  "play": "Reproducir"
+  "no_album_matches": "Ningún álbum coincide con la búsqueda.",
+  "no_music_matches": "Ninguna música coincide con la búsqueda.",
+  "loading_albums": "Cargando álbumes…",
+  "loading_musics": "Cargando músicas…",
+  "load_error": "No se pudieron cargar los álbumes de doxología.",
+  "load_musics_error": "No se pudieron cargar las músicas de este álbum.",
+  "retry": "Intentar de nuevo"
 }

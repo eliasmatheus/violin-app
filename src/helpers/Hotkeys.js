@@ -102,6 +102,15 @@ function _focusIsInForm() {
   return false;
 }
 
+/** Space pertence ao controle focado: cancelá-lo impediria o clique nativo do botão. */
+function _focusOwnsSpace() {
+  return Boolean(
+    document.activeElement?.closest?.(
+      'button, select, summary, [role="button"], [role="checkbox"], [role="radio"], [role="switch"], [role="menuitem"], [role="option"], [role="tab"], [role="slider"]'
+    )
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Handler global de keydown
 // ---------------------------------------------------------------------------
@@ -125,6 +134,7 @@ function _onKeyDown(e) {
   if (_layerEl && !_layerEl.closest(".lj-window, .lj-dialog--module")) return;
 
   const combo = _comboFromEvent(e);
+  if (combo === "space" && _focusOwnsSpace()) return;
   const handlers = _registry.get(combo);
   if (!handlers || handlers.length === 0) return;
 

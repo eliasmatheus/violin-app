@@ -63,6 +63,31 @@ describe("Hotkeys — KeyboardEvent sintético (POST /api/keyboard)", () => {
     Hotkeys.unregister("Space", handler);
   });
 
+  it("preserva Space para ativar o botão focado", () => {
+    const button = document.createElement("button");
+    document.body.append(button);
+    button.focus();
+
+    let fired = 0;
+    const handler = () => fired++;
+    Hotkeys.register("Space", handler);
+
+    const event = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+    button.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(fired).toBe(0);
+
+    button.blur();
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true })
+    );
+    expect(fired).toBe(1);
+
+    Hotkeys.unregister("Space", handler);
+    button.remove();
+  });
+
   it("mantém atalhos no diálogo de módulo e os bloqueia no menu aberto", () => {
     const layer = document.createElement("div");
     layer.className = "lj-dialog--module";
