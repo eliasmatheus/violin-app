@@ -38,3 +38,9 @@ jobs:
         env:
           NODE_ENV: production
           VITE_BASE_URL: /
+
+      - name: Instalar navegador dos testes de estilo
+        run: npx playwright install --with-deps chromium
+
+      - name: Conferir estilos do build contra o desenvolvimento
+        run: npm run test:e2e:build

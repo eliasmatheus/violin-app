@@ -10,6 +10,23 @@ async function openVideoPage(page, moduleId) {
 }
 
 async function expectControlsFit(page) {
+  // A altura sozinha não detecta `font: inherit` sobrescrevendo a escala no
+  // bundle: o gatilho continua com 32px, mas o texto cresce de 12.5 para 16px.
+  for (const id of ["video-projection-monitor", "video-return-monitor"]) {
+    const typography = await page.locator(`#${id}`).evaluate((trigger) => {
+      const style = getComputedStyle(trigger);
+      return {
+        actual: parseFloat(style.fontSize),
+        expected: parseFloat(style.getPropertyValue("--lj-ui-font-lg")),
+        role: parseFloat(
+          getComputedStyle(trigger.querySelector(".lj-monitor-select__role")).fontSize
+        ),
+      };
+    });
+    expect(typography.actual).toBe(typography.expected);
+    expect(typography.role).toBe(typography.expected);
+  }
+
   const geometry = await page.locator(".video-monitors").evaluate((controls) => {
     const content = controls.closest(".ribbon-group-content").getBoundingClientRect();
     const children = [...controls.querySelectorAll(".video-monitors-label, .lj-select, .lj-check")];
