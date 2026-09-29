@@ -8,9 +8,8 @@ const PARTIAL_DIR = ".partial";
 const PARTIAL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Vídeos baixados são cache: se sumirem, o app baixa de novo. Por isso ficam no
- * `userData`, fora da pasta de dados do usuário — que costuma morar num
- * OneDrive/iCloud, e centenas de megabytes de vídeo acordariam o sincronizador.
+ * Vídeos baixados ficam em `Videos/` dentro da pasta de dados do usuário.
+ * Downloads automáticos são cache: se sumirem, o app baixa de novo.
  *
  * Um vídeo que o operador mandou manter (`keep`) é a exceção: ele o baixou de
  * propósito para tê-lo pronto, então o despejo por espaço nunca o leva, e ele não

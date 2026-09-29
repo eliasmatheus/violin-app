@@ -4,7 +4,7 @@ import { nextTick } from "vue";
 
 const mocks = vi.hoisted(() => ({
   translateText: vi.fn<(text: string) => Promise<string>>(),
-  findCachedByText: vi.fn(async () => null),
+  findCachedByText: vi.fn<() => Promise<null>>(async () => null),
   setCached: vi.fn(async () => undefined),
   postMessage: vi.fn(),
 }));
@@ -68,14 +68,18 @@ describe("LibrasOverlay async translation", () => {
 
     wrapper = mount(LibrasOverlay, {
       attachTo: document.body,
-      props: { type: "bible", verseText: "" },
+      props: { type: "bible", verseText: "", bibleVersion: "NVI", bibleBookId: 43, bibleChapter: 3, bibleVerses: [16] },
     });
     const iframe = document.querySelector("iframe.libras-unity-iframe") as HTMLIFrameElement;
     vi.spyOn(iframe.contentWindow!, "postMessage").mockImplementation(mocks.postMessage);
     await wrapper.setProps({ verseText: "Primeiro verso" });
-    await vi.waitFor(() => expect(mocks.translateText).toHaveBeenCalledWith("Primeiro verso"));
-    await wrapper.setProps({ verseText: "Segundo verso" });
-    await vi.waitFor(() => expect(mocks.translateText).toHaveBeenCalledWith("Segundo verso"));
+    await vi.waitFor(() => expect(mocks.translateText).toHaveBeenCalledWith("Primeiro verso", expect.objectContaining({
+      operation: "live_bible", part: "verse", bibleVersion: "NVI", bibleBookId: 43, bibleChapter: 3, bibleVerses: [16],
+    })));
+    await wrapper.setProps({ verseText: "Segundo verso", bibleVerses: [17] });
+    await vi.waitFor(() => expect(mocks.translateText).toHaveBeenCalledWith("Segundo verso", expect.objectContaining({
+      bibleVersion: "NVI", bibleBookId: 43, bibleChapter: 3, bibleVerses: [17],
+    })));
     iframe.dispatchEvent(new Event("load"));
     window.dispatchEvent(
       new MessageEvent("message", {
@@ -103,5 +107,27 @@ describe("LibrasOverlay async translation", () => {
       .filter((message) => message.method === "playNow")
       .map((message) => message.params);
     expect(playedGlosses).toEqual(["GLOSS SEGUNDO"]);
+  });
+
+  it("keeps the input references captured before an asynchronous cache lookup", async () => {
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() });
+    const cached = deferred<null>();
+    mocks.findCachedByText.mockReturnValue(cached.promise);
+    mocks.translateText.mockResolvedValue("GLOSS");
+    const originalVerses = [16];
+    wrapper = mount(LibrasOverlay, {
+      attachTo: document.body,
+      props: { type: "bible", verseText: "", bibleVersion: "NVI", bibleBookId: 43,
+        bibleChapter: 3, bibleVerses: originalVerses },
+    });
+    await wrapper.setProps({ verseText: "Texto original" });
+    await vi.waitFor(() => expect(mocks.findCachedByText).toHaveBeenCalledOnce());
+    originalVerses[0] = 17;
+    await wrapper.setProps({ bibleVersion: "ARA", bibleChapter: 4, bibleVerses: [1] });
+    cached.resolve(null);
+    await vi.waitFor(() => expect(mocks.translateText).toHaveBeenCalledOnce());
+    expect(mocks.translateText).toHaveBeenCalledWith("Texto original", expect.objectContaining({
+      operation: "live_bible", bibleVersion: "NVI", bibleBookId: 43, bibleChapter: 3, bibleVerses: [16],
+    }));
   });
 });

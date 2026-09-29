@@ -517,7 +517,9 @@ const httpServerLoading = ref(false);
 const httpServerPort = ref(7070);
 const externalRoutesEnabled = ref(true);
 const localIps = ref([]);
-const selectedIp = ref("");
+// Restaura antes de carregar as interfaces, para o fallback não sobrescrever
+// a escolha salva enquanto a consulta IPC ainda está inicializando o painel.
+const selectedIp = ref(String($userdata.get(KEYS.OPTIONS.SELECTED_IP, "")));
 const copiedKey = ref(null);
 const globalShortcutsEnabled = ref(false);
 const useHostname = ref(false);
@@ -558,15 +560,11 @@ const primaryHost = computed(() => {
 
 // Seletor de IP — persistido em UserData.
 // Se o IP salvo não estiver mais na lista de interfaces, volta para o primaryHost.
-watch(
-  localIps,
-  (ips) => {
-    if (ips.length && !ips.includes(selectedIp.value)) {
-      selectedIp.value = primaryHost.value;
-    }
-  },
-  { immediate: true }
-);
+watch(localIps, (ips) => {
+  if (!ips.includes(selectedIp.value)) {
+    selectedIp.value = primaryHost.value;
+  }
+});
 
 watch(selectedIp, (ip) => {
   if (ip) $userdata.set(KEYS.OPTIONS.SELECTED_IP, ip);
@@ -978,8 +976,6 @@ onMounted(async () => {
       httpServerPort.value = cfg.httpServer?.port ?? 7070;
       useHostname.value = cfg.httpServer?.useHostname ?? false;
       hostname.value = await Platform.httpServer.hostname();
-      const savedIp = String($userdata.get(KEYS.OPTIONS.SELECTED_IP, ""));
-      selectedIp.value = savedIp && localIps.value.includes(savedIp) ? savedIp : primaryHost.value;
       if (Platform.httpServer.getDeviceSettings) {
         const ds = await Platform.httpServer.getDeviceSettings();
         onlyAuthorizedDevices.value = ds.only_authorized_devices === true;

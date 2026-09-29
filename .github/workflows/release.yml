@@ -95,6 +95,9 @@ jobs:
         # Um worker evita contenção de CPU no runner Windows durante o primeiro render.
         run: npm run test:e2e -- --workers=1
 
+      - name: Conferir estilos do build contra o desenvolvimento
+        run: npm run test:e2e:build
+
       - name: Habilitar long paths (Windows)
         if: matrix.platform == 'win'
         run: git config --global core.longpaths true

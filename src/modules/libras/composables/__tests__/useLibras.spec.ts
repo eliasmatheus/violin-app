@@ -76,7 +76,7 @@ describe("useLibras — guarda de ativação", () => {
   it("chama a API com o Libras ligado", async () => {
     const { useLibras } = await load({ libras_enabled: "true" });
     await useLibras().translateSlide("O meu lugar no mundo");
-    expect(translateText).toHaveBeenCalledWith("O meu lugar no mundo");
+    expect(translateText).toHaveBeenCalledWith("O meu lugar no mundo", expect.objectContaining({ operation: "live_music", part: "slide" }));
   });
 
   it("para de chamar quando a tradução é desligada em tempo real", async () => {
@@ -111,15 +111,15 @@ describe("useLibras — guarda de ativação", () => {
     });
     send("song-a", 1, "Antigo");
     await vi.waitFor(() => expect(translateText).toHaveBeenCalledTimes(1));
-    expect(translateText).toHaveBeenCalledWith("Primeiro");
+    expect(translateText).toHaveBeenCalledWith("Primeiro", expect.objectContaining({ musicId: 42, slideIndex: 0 }));
 
     send("song-b", 1, "Segundo");
     send("song-a", 3, "Atrasado");
     await vi.waitFor(() => expect(translateText).toHaveBeenCalledTimes(2));
-    expect(translateText).toHaveBeenLastCalledWith("Segundo");
+    expect(translateText).toHaveBeenLastCalledWith("Segundo", expect.objectContaining({ musicId: 42, slideIndex: 0 }));
     listeners.get(BROADCAST_TYPE.SLIDE_CHANGE)?.({ slide_index: 0, slide: { lyric: "Editor" } });
     await vi.waitFor(() => expect(translateText).toHaveBeenCalledTimes(3));
-    expect(translateText).toHaveBeenLastCalledWith("Editor");
+    expect(translateText).toHaveBeenLastCalledWith("Editor", expect.objectContaining({ operation: "live_music", slideIndex: 0 }));
   });
 
   it("keeps the refreshed envelope revision while avoiding retranslation of the same slide", async () => {
@@ -139,6 +139,6 @@ describe("useLibras — guarda de ativação", () => {
     await vi.waitFor(() => expect(translateText).toHaveBeenCalledTimes(1));
     send(5, 10, 1, "Segundo");
     await vi.waitFor(() => expect(translateText).toHaveBeenCalledTimes(2));
-    expect(translateText).toHaveBeenLastCalledWith("Segundo");
+    expect(translateText).toHaveBeenLastCalledWith("Segundo", expect.objectContaining({ musicId: 42, slideIndex: 1 }));
   });
 });

@@ -44,6 +44,7 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
+    "test:e2e:build": "playwright test --config playwright.build.config.js --workers=1",
     "test:visual": "percy exec -- playwright test e2e/visual.spec.js",
     "coverage": "vitest run --coverage",
     "prepare": "husky",

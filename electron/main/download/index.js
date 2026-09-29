@@ -8,6 +8,8 @@ const integrity = require("./integrity.js");
 const { UtilityQueue } = require("./utilityQueue.js");
 const { validateDownloadEntries } = require("./requestValidation.js");
 const { safeSend } = require("../safeWebContents.js");
+const { createWorkerDiagnostics } = require("./workerDiagnostics.js");
+const workerDiagnostics = createWorkerDiagnostics();
 
 // Apenas as origens do acervo oficial. A base configurada também é aceita
 // pelo validador; origens recebidas do renderer nunca entram nesta lista.
@@ -176,6 +178,7 @@ async function startDownload(files, webContents) {
       apiToken,
       filesDir,
       allowedRemoteOrigins: TRUSTED_MEDIA_ORIGINS,
+      reportDiagnostic: workerDiagnostics.record,
     });
     _activeQueue.add(toDownload.map((entry) => ({
       remote: entry.remote,
@@ -253,4 +256,6 @@ module.exports = {
   isDownloading,
   shutdown,
   checkFiles,
+  getChildProcessContext: workerDiagnostics.getChildProcessContext,
+  setWorkerDiagnosticsEnabled: workerDiagnostics.setEnabled,
 };

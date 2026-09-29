@@ -37,6 +37,7 @@ export function useLibras() {
    * se não encontrar, chama a API.
    */
   async function translateSlide(text: string, musicId?: number): Promise<void> {
+    const slideIndex = lastSlideIndex.value >= 0 ? lastSlideIndex.value : undefined;
     if (!scopeEnabled("music")) {
       gloss.value = "";
       originalText.value = "";
@@ -69,7 +70,10 @@ export function useLibras() {
     // 2. Chamar API de tradução
     isTranslating.value = true;
     try {
-      const result = await Libras.translateText(plainText);
+      const result = await Libras.translateText(plainText, {
+        operation: "live_music", part: "slide", musicId,
+        slideIndex,
+      });
       if (result) {
         gloss.value = result;
 

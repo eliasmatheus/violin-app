@@ -27,7 +27,13 @@ import {
   BUNDLE_RETRY_MAX,
   TRANSLATE_URL,
 } from "@/config/Libras";
-import { LibrasCacheEntry, LibrasCacheStats } from "@/types/Libras";
+import { LibrasCacheEntry, LibrasCacheStats, type LibrasTranslationContext } from "@/types/Libras";
+import {
+  beginLibrasTranslationDiagnostic,
+  createLibrasOperationId,
+  reportLibrasHttpFailure,
+  reportLibrasRequestFailure,
+} from "@/helpers/LibrasTranslationDiagnostics";
 
 /** Tabela de cache conforme tipo de conteúdo. */
 function cacheTable(type: "music" | "bible"): string {
@@ -40,17 +46,23 @@ function cacheTable(type: "music" | "bible"): string {
  * Traduz texto em português para gloss Libras.
  * Retorna a string gloss (ex.: "MARIA COMPRAR POR 3 PARCELA") ou null em caso de erro.
  */
-export async function translateText(text: string): Promise<string | null> {
-  if (!text?.trim()) return null;
+export async function translateText(
+  text: string,
+  context: LibrasTranslationContext = {}
+): Promise<string | null> {
+  const input = text?.trim();
+  if (!input) return null;
+  const diagnostic = beginLibrasTranslationDiagnostic(input, context);
+  const controller = new AbortController();
+  let response: Response | undefined;
 
   try {
-    const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-    const response = await fetchWithTimeout(TRANSLATE_URL, {
+    response = await fetchWithTimeout(TRANSLATE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text.trim() }),
+      body: JSON.stringify({ text: input }),
       signal: controller.signal,
       timeout: REQUEST_TIMEOUT,
       source: "libras-translate",
@@ -61,6 +73,7 @@ export async function translateText(text: string): Promise<string | null> {
 
     if (!response.ok) {
       $dev.write(`[libras] translate HTTP ${response.status}`);
+      reportLibrasHttpFailure(diagnostic, response, input);
       return null;
     }
 
@@ -68,6 +81,7 @@ export async function translateText(text: string): Promise<string | null> {
     return gloss || null;
   } catch (e) {
     $dev.write(`[libras] translate erro:`, (e as Error).message);
+    reportLibrasRequestFailure(diagnostic, e, input, response, controller.signal.aborted);
     return null;
   }
 }
@@ -421,7 +435,9 @@ export async function translateMusic(
   if (signal?.aborted) return null;
 
   onProgress?.("translate", 0, 1);
-  const gloss = await translateText(text);
+  const operationId = createLibrasOperationId();
+  const translationContext: LibrasTranslationContext = { operation: "download_music", operationId, musicId: idMusic };
+  const gloss = await translateText(text, { ...translationContext, part: "text" });
   if (!gloss) return null;
 
   if (signal?.aborted) return null;
@@ -445,7 +461,7 @@ export async function translateMusic(
     const existingSlide = await getCached(slideId, "music");
     if (existingSlide?.gloss) continue;
 
-    const slideGloss = await translateText(slideText);
+    const slideGloss = await translateText(slideText, { ...translationContext, part: "slide", slideIndex: i });
     if (slideGloss) {
       const slideTokens = uniqueTokens(slideGloss);
       await setCached({
@@ -517,7 +533,12 @@ export async function translateBibleChapter(
   if (signal?.aborted) return null;
 
   onProgress?.("translate", 0, 1);
-  const gloss = await translateText(text);
+  const operationId = createLibrasOperationId();
+  const translationContext: LibrasTranslationContext = {
+    operation: "download_bible", operationId, bibleVersion: versionAbbrev,
+    bibleBookId: book.id_bible_book, bibleChapter: chapter,
+  };
+  const gloss = await translateText(text, { ...translationContext, part: "text" });
   if (!gloss) return null;
 
   if (signal?.aborted) return null;
@@ -535,7 +556,9 @@ export async function translateBibleChapter(
     const existingVerse = await getCached(verseId, "bible");
     if (existingVerse?.gloss) continue;
 
-    const verseGloss = await translateText(verseText);
+    const verseGloss = await translateText(verseText, {
+      ...translationContext, part: "verse", bibleVerses: [Number(verseKeys[i])],
+    });
     if (verseGloss) {
       const verseTokens = uniqueTokens(verseGloss);
       await setCached({

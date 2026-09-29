@@ -92,6 +92,10 @@ function createRuntimeHealthMonitor(options = {}) {
   const emitIncident = typeof options.emitIncident === "function" ? options.emitIncident : () => {};
   const getRuntimeSnapshot =
     typeof options.getRuntimeSnapshot === "function" ? options.getRuntimeSnapshot : () => ({});
+  const getChildProcessContext = typeof options.getChildProcessContext === "function"
+    ? options.getChildProcessContext : () => ({});
+  const onEventLoopSample = typeof options.onEventLoopSample === "function"
+    ? options.onEventLoopSample : () => {};
   const createId = options.createId || randomUUID;
   const sampleIntervalMs = _integer(
     options.sampleIntervalMs || DEFAULT_SAMPLE_INTERVAL_MS,
@@ -158,9 +162,9 @@ function createRuntimeHealthMonitor(options = {}) {
     };
   }
 
-  function runtimeSnapshot() {
+  function runtimeSnapshot(details) {
     try {
-      const snapshot = getRuntimeSnapshot();
+      const snapshot = getRuntimeSnapshot(details);
       return snapshot && typeof snapshot === "object" ? snapshot : {};
     } catch (error) {
       return { snapshot_error: _string(error?.message || error, 300) };
@@ -185,7 +189,7 @@ function createRuntimeHealthMonitor(options = {}) {
       feature: _identifier(details.feature, 64) || "unknown",
       web_contents_id: webContentsId,
       ...heartbeatContext(webContentsId),
-      ...runtimeSnapshot(),
+      ...runtimeSnapshot(details),
       ...details,
       recent_runtime_events: recentEvents.slice(-10),
     };
@@ -216,6 +220,7 @@ function createRuntimeHealthMonitor(options = {}) {
 
   function sampleEventLoop() {
     const sampledAt = monotonicNow();
+    const sampleStart = previousSampleAt;
     const elapsedMs = Math.max(1, sampledAt - previousSampleAt);
     const cpu = process.cpuUsage(previousCpuUsage);
     previousCpuUsage = process.cpuUsage();
@@ -228,9 +233,13 @@ function createRuntimeHealthMonitor(options = {}) {
       main_loop_max_ms: _millisecondsFromNanoseconds(loopDelay.max),
       main_cpu_percent: Math.round((((cpu.user + cpu.system) / 1_000) / elapsedMs) * 1_000) / 10,
       sample_window_ms: Math.round(elapsedMs),
+      main_sample_started_at_ms: Math.round(sampleStart),
+      main_sample_ended_at_ms: Math.round(sampledAt),
     };
     lastLoopSample = sample;
     loopDelay.reset();
+
+    try { onEventLoopSample(sample); } catch { /* Keep the monitor independent of diagnostics. */ }
 
     const observedAt = now();
     if (
@@ -332,6 +341,8 @@ function createRuntimeHealthMonitor(options = {}) {
     if (!app || typeof app.on !== "function") return () => {};
     const handler = (_event, details = {}) => {
       const processType = _identifier(details.type, 80) || "unknown";
+      let childContext = {};
+      try { childContext = getChildProcessContext(details) || {}; } catch { /* best-effort */ }
       recordEvent("child_process_gone", {
         window_role: "unknown",
         feature: processType,
@@ -345,6 +356,7 @@ function createRuntimeHealthMonitor(options = {}) {
         exit_code: Number.isInteger(details.exitCode) ? details.exitCode : undefined,
         service_name: _identifier(details.serviceName, 120) || undefined,
         process_name: _identifier(details.name, 120) || undefined,
+        ...childContext,
       });
     };
     app.on("child-process-gone", handler);

@@ -19,6 +19,7 @@ Em caso de conflito, siga esta ordem:
 - Dados remotos: use `src/helpers/Http.ts` e `src/helpers/Database.ts`; eles concentram timeout, cache e fallback. Não introduza `fetch` avulso para dados do produto.
 - Estado e preferências: use `AppData`/`UserData` e as chaves de `src/constants/UserDataKeys.ts`; não crie chaves literais novas.
 - Janelas: envie eventos semânticos por `Broadcast`; não acople componentes a `BroadcastChannel` diretamente.
+- Armazenamento desktop: todos os dados usam `paths.dataDir()` (Documentos/LouvorJA Violin ou a pasta escolhida); vídeos em `Videos/`, perfil Electron em `.electron/`. O endereço do sistema guarda apenas a âncora e o lock. Mudança do perfil termina no próximo boot.
 
 ## Guardrails de alteração
 

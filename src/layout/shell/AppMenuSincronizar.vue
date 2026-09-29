@@ -483,6 +483,9 @@
                   $t("options.storage.folder_fallback", { dir: storageStats.dataDirIssue.wanted })
                 }}
               </p>
+              <p v-if="storageStats?.restartRequired" class="opt-hint">
+                {{ $t("options.storage.restart_required") }}
+              </p>
 
               <div class="opt-folder-actions">
                 <button type="button" class="opt-btn" @click="openFolder">
@@ -711,6 +714,7 @@ interface DiskUsage {
 interface StorageStats {
   dataDir?: string;
   dataDirIssue?: { wanted: string; reason: string } | null;
+  restartRequired?: boolean;
   filesDir?: string;
   files?: { bytes: number; count: number };
   json?: { bytes: number; count: number };

@@ -22,6 +22,7 @@ const paths = require("./paths.js");
 const { variantsOf } = require("./mediaVariants.js");
 const { isSizeAcceptable } = require("./mediaRoots.js");
 const mediaResolver = require("./mediaResolver.js");
+const { DATA_ENTRIES } = require("./dataMigration.js");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -109,6 +110,7 @@ async function stats() {
   return {
     dataDir: paths.dataDir(),
     dataDirIssue: paths.dataDirIssue(),
+    restartRequired: paths.profileRestartRequired(),
     filesDir,
     jsonDir,
     files: { bytes: filesStat.bytes, count: filesStat.files },
@@ -227,7 +229,8 @@ async function openFilesDir() {
 
 /**
  * Aponta a pasta de dados para outro lugar. Com moveExisting=true leva junto
- * o acervo (`files/`), as preferências (`storage/`) e os documentos (`library/`).
+ * o acervo (`files/`), as preferências (`storage/`), os documentos (`library/`)
+ * e os vídeos baixados (`Videos/`).
  *
  * @param {string} newDir
  * @param {object} options { moveExisting?: boolean }
@@ -250,7 +253,11 @@ async function setDataDir(newDir, options = {}) {
     }
 
     const moves = [];
-    for (const sub of ["files", "storage", "library"]) {
+    // O perfil está aberto pelo Chromium: muda no próximo boot, depois de fechar.
+    if (await fs.pathExists(path.join(abs, ".electron"))) {
+      throw new Error('A pasta de destino já contém ".electron". Escolha uma pasta sem dados existentes.');
+    }
+    for (const sub of DATA_ENTRIES.flatMap((name) => name.endsWith(".json") ? [name, `${name}.bak`, `${name}.tmp`] : [name])) {
       const from = path.join(oldDir, sub);
       if (!(await fs.pathExists(from))) continue;
       const to = path.join(abs, sub);
@@ -268,7 +275,7 @@ async function setDataDir(newDir, options = {}) {
         await fs.move(move.from, move.to, { overwrite: false });
         completed.push(move);
       }
-      paths.setDataDir(abs);
+      paths.setDataDir(abs, { moveExisting: true });
     } catch (error) {
       const failures = [];
       for (const move of completed.reverse()) {

@@ -64,6 +64,7 @@ import { KEYS_LS } from "@/constants/LocalStorageKeys";
 import { buildAnchorStyle } from "@/types/Overlay";
 import type { OverlayAnchor } from "@/types/Overlay";
 import Libras from "@/helpers/Libras";
+import type { LibrasTranslationContext } from "@/types/Libras";
 import { useLibrasState } from "@/modules/libras/composables/useLibrasState";
 import { DICTIONARY_BASE_URL } from "@/config/Libras";
 import { VLIBRAS_UNITY_URL } from "@/config/Vlibras";
@@ -73,16 +74,20 @@ const props = withDefaults(
     verseText?: string;
     type?: "music" | "bible";
     musicId?: number;
+    slideIndex?: number;
     bibleVersion?: string;
     bibleBookId?: number;
     bibleChapter?: number;
+    bibleVerses?: number[];
   }>(),
   {
     type: "music",
     musicId: undefined,
+    slideIndex: undefined,
     bibleVersion: undefined,
     bibleBookId: undefined,
     bibleChapter: undefined,
+    bibleVerses: undefined,
   }
 );
 const unitySrc = VLIBRAS_UNITY_URL;
@@ -340,6 +345,16 @@ function resetPlayback() {
 
 async function translateAndShow(text: string): Promise<void> {
   const generation = ++translationGeneration;
+  const translationContext: LibrasTranslationContext = {
+    operation: props.type === "bible" ? "live_bible" : "live_music",
+    part: props.type === "bible" ? "verse" : "slide",
+    musicId: props.musicId,
+    slideIndex: props.slideIndex,
+    bibleVersion: props.bibleVersion,
+    bibleBookId: props.bibleBookId,
+    bibleChapter: props.bibleChapter,
+    bibleVerses: props.bibleVerses ? [...props.bibleVerses] : undefined,
+  };
   const plainText = Libras.stripHtml(text);
   if (!plainText) {
     rawGloss.value = "";
@@ -371,7 +386,7 @@ async function translateAndShow(text: string): Promise<void> {
   // 3. API (só online — se nenhum cache existir)
   isTranslating.value = true;
   try {
-    const result = await Libras.translateText(plainText);
+    const result = await Libras.translateText(plainText, translationContext);
     if (generation !== translationGeneration) return;
     if (result) {
       rawGloss.value = result;

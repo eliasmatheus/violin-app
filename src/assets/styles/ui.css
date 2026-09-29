@@ -317,8 +317,8 @@
 .lj-drawer .lj-icon.lj-icon,
 .lj-table .lj-icon.lj-icon,
 .lj-calendar .lj-icon.lj-icon,
-.lj-card__icon.lj-card__icon,
-.lj-empty__icon.lj-empty__icon {
+.lj-card__icon.lj-icon.lj-icon,
+.lj-empty__icon.lj-icon.lj-icon {
   filter: none;
 }
 

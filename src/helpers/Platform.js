@@ -85,7 +85,7 @@ export default {
   },
 
   /**
-   * API de storage persistente em arquivos JSON (userData/storage/).
+   * API de storage persistente em arquivos JSON (<dados>/storage/).
    * Disponível apenas no Electron (D1).
    * null quando rodando no browser/PWA — Storage.js usa localStorage como fallback.
    *

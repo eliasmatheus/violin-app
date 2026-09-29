@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 const require = createRequire(import.meta.url);
 
 const base = mkdtempSync(join(tmpdir(), "louvorja-jsoncache-"));
+let cacheRoot = base;
 
 // `paths` fala com o Electron, que não existe aqui.
 const caminhoPaths = require.resolve("../paths.js");
@@ -16,7 +17,7 @@ require.cache[caminhoPaths] = {
   id: caminhoPaths,
   filename: caminhoPaths,
   loaded: true,
-  exports: { userData: () => base },
+  exports: { jsonCacheDir: () => join(cacheRoot, "json_db") },
 };
 
 const netHealth = require("../netHealth.js");
@@ -52,6 +53,7 @@ describe("jsonCache — falha de rede × resposta ruim", () => {
   });
 
   beforeEach(() => {
+    cacheRoot = base;
     netHealth._reset();
     for (const metodo of ["log", "warn", "error"]) {
       vi.spyOn(console, metodo).mockImplementation(() => {});
@@ -66,6 +68,18 @@ describe("jsonCache — falha de rede × resposta ruim", () => {
       res.end(corpo);
     };
   };
+
+  it("uma resposta em curso grava na pasta escolhida durante a espera da rede", async () => {
+    let send;
+    resposta = (_req, res) => { send = () => { res.writeHead(200); res.end('{"current":true}'); }; };
+    const response = jsonCache.fetchJson("/folder_changed", baseUrl);
+    await vi.waitFor(() => expect(send).toBeTypeOf("function"));
+    cacheRoot = join(base, "chosen");
+    send();
+    expect(await response).toMatchObject({ status: 200, fromCache: false });
+    expect(existsSync(join(cacheRoot, "json_db", "folder_changed.json"))).toBe(true);
+    expect(existsSync(join(base, "json_db", "folder_changed.json"))).toBe(false);
+  });
 
   it("resposta 5xx sem cache propaga o status e não é falha de rede", async () => {
     responde(500, "{}");

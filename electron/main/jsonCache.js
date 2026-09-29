@@ -3,7 +3,7 @@
 /**
  * jsonCache.js — Cache local de respostas JSON do servidor remoto.
  *
- * Salva cada arquivo JSON em userData/json_db/<caminho>.json com TTL diário.
+ * Salva cada arquivo JSON em <dados>/json_db/<caminho>.json com TTL diário.
  * Quando offline ou server retorna erro, serve o cache stale (melhor que falhar).
  *
  * Faz parte da Fase D2 — Cache de JSON do banco.
@@ -22,9 +22,9 @@ const netHealth = require("./netHealth.js");
 
 const TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 
-/** Retorna o diretório de cache (avaliado em runtime para ter o userData correto) */
+/** Avaliado em runtime para acompanhar a pasta escolhida em Armazenamento. */
 function CACHE_DIR() {
-  return path.join(paths.userData(), "json_db");
+  return paths.jsonCacheDir();
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +123,8 @@ const _inflight = new Map();
  * @returns {Promise<{body: Buffer|null, contentType: string, fromCache: boolean, status: number}>}
  */
 async function fetchJson(relPath, remoteBaseUrl, headers = {}) {
-  const localPath = safeLocalPath(relPath);
+  let localPath = safeLocalPath(relPath);
+  const requestKey = localPath;
 
   // Cache válido — retornar do disco (sem deduplicação necessária)
   if (await isCacheValid(localPath)) {
@@ -149,6 +150,7 @@ async function fetchJson(relPath, remoteBaseUrl, headers = {}) {
       const remoteUrl = remoteBaseUrl + sep + relPath;
       console.log(`[jsonCache] MISS ${relPath} — baixando: ${remoteUrl}`);
       const response = await httpRequest(remoteUrl, headers);
+      localPath = safeLocalPath(relPath);
       reached = true;
       console.log(`[jsonCache] Resposta de ${relPath}: status=${response.status}`);
 
@@ -221,6 +223,7 @@ async function fetchJson(relPath, remoteBaseUrl, headers = {}) {
 
       throw new Error(`HTTP ${response.status}`);
     } catch (e) {
+      localPath = safeLocalPath(relPath);
       // Resposta ruim (5xx, JSON inválido, disco) não é falta de internet: o
       // servidor foi alcançado, e contar isso adiantaria a queda por falso positivo.
       if (!reached) {
@@ -240,11 +243,11 @@ async function fetchJson(relPath, remoteBaseUrl, headers = {}) {
       }
       throw e;
     } finally {
-      _inflight.delete(localPath);
+      _inflight.delete(requestKey);
     }
   })();
 
-  _inflight.set(localPath, promise);
+  _inflight.set(requestKey, promise);
   return promise;
 }
 

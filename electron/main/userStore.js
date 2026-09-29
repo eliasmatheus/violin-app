@@ -4,7 +4,7 @@
  * userStore.js — Persistência de dados do usuário em arquivos JSON.
  *
  * Armazena cada chave como um arquivo JSON separado em:
- *   userData/storage/<key>.json
+ *   <dados>/storage/<key>.json
  *
  * Regras de segurança:
  *   - Chaves são validadas por regex (sem path traversal)

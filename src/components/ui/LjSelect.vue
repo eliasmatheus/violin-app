@@ -176,7 +176,9 @@ const selectedLabel = computed(() => (selectedItem.value ? labelOf(selectedItem.
   border: var(--lj-ui-border);
   border-radius: var(--lj-ui-radius);
   color: var(--lj-text);
-  font: inherit;
+  /* O tamanho vem de .lj-ui-size-*: o shorthand `font` o sobrescreveria
+     quando o build carregar o CSS deste componente depois de ui.css. */
+  font-family: inherit;
   cursor: pointer;
   outline: none;
   transition:

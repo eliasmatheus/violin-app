@@ -29,6 +29,7 @@ vi.mock("@/helpers/BibleBundleInstaller", () => ({
 }));
 vi.mock("@/helpers/Database", () => ({
   default: { get: h.dbGet, getLocal: h.dbGetLocal, getStoredIdsForPrefix: h.storedIds },
+  setDatabaseTimingReporter: vi.fn(),
 }));
 
 const CATALOG: Record<string, unknown> = {

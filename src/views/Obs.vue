@@ -4,6 +4,7 @@
     v-if="showLibrasObs"
     :slide-lyric="slide?.lyric"
     :music-id="Number(slide?.id_music) || undefined"
+    :slide-index="slideIndex"
     type="music"
   />
   <div class="obs-root">
@@ -46,7 +47,7 @@ function imageUrl(value) {
   }
 }
 
-const { slide } = useProjectionState();
+const { slide, slideIndex } = useProjectionState();
 const { showOnObs: showLibrasObs } = useLibrasState();
 
 onMounted(() => {

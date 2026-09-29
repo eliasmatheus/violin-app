@@ -8,7 +8,7 @@ const require = createRequire(import.meta.url);
 const fs = require("fs-extra");
 const { listLegacyMediaEntries } = require("../mediaMigration.js");
 let base, oldDir, targetDir, currentDir, storage, setDataDir;
-const collections = ["files", "storage", "library"];
+const collections = ["files", "storage", "library", "Videos", "json_db", "bin", "server"];
 
 beforeEach(async () => {
   base = await fs.mkdtemp(path.join(os.tmpdir(), "lj-data-move-"));
@@ -68,6 +68,23 @@ describe("storage.setDataDir", () => {
     await expectOriginals();
     expect(await fs.readJson(path.join(targetDir, "library", "saved.json"))).toEqual({ collection: "existing" });
     expect(await fs.pathExists(path.join(targetDir, "files"))).toBe(false);
+  });
+
+  it("detecta conflito nos vídeos antes de mover mídia ou preferências", async () => {
+    await fs.outputFile(path.join(targetDir, "Videos", "existing.mp4"), "preserve");
+    await expect(storage.setDataDir(targetDir, { moveExisting: true })).rejects.toThrow('já contém "Videos"');
+    await expectOriginals();
+  });
+
+  it("leva os caches de configuração e diagnóstico e agenda o perfil para o próximo boot", async () => {
+    await fs.outputJson(path.join(oldDir, "configweb.json"), { api: "cached" });
+    await fs.outputFile(path.join(oldDir, "runtime-incidents.json.bak"), "backup");
+    await fs.outputFile(path.join(oldDir, ".electron", "IndexedDB", "saved"), "open profile");
+    await storage.setDataDir(targetDir, { moveExisting: true });
+    expect(setDataDir).toHaveBeenCalledWith(targetDir, { moveExisting: true });
+    expect(await fs.readJson(path.join(targetDir, "configweb.json"))).toEqual({ api: "cached" });
+    expect(await fs.readFile(path.join(targetDir, "runtime-incidents.json.bak"), "utf8")).toBe("backup");
+    expect(await fs.readFile(path.join(oldDir, ".electron", "IndexedDB", "saved"), "utf8")).toBe("open profile");
   });
 
   it("restaura pastas já movidas se o movimento da biblioteca falhar", async () => {

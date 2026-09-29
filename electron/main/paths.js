@@ -7,21 +7,42 @@
 const { app } = require("electron");
 const path = require("path");
 const fs = require("fs-extra");
+const { prepareProfile } = require("./dataMigration.js");
 
 let _dataDirResolved = null;
 let _dataDirIssue = null;
 
-/** Arquivo, no userData, que aponta para a pasta de dados escolhida. */
+/** @typedef {{ dataDir: string, profileSource?: string }} DataLocation */
+
+/** Arquivo no endereço estável do sistema que aponta para a pasta escolhida. */
 function _anchorFile() {
-  return path.join(app.getPath("userData"), "data-location.json");
+  return path.join(_bootstrapDir(), "data-location.json");
+}
+
+function _bootstrapDir() {
+  const isolated = process.env.LJ_E2E_USER_DATA?.trim();
+  return isolated ? path.resolve(isolated) : path.join(app.getPath("appData"), "LouvorJA Violin");
 }
 
 function _readAnchor() {
   try {
     const raw = fs.readJsonSync(_anchorFile());
-    return raw && typeof raw.dataDir === "string" ? raw.dataDir : null;
+    return raw && typeof raw.dataDir === "string" && path.isAbsolute(raw.dataDir) ? raw : null;
   } catch (_) {
     return null;
+  }
+}
+
+/** A troca atômica evita perder o endereço da pasta se a gravação falhar. */
+function _writeAnchor(value) {
+  fs.ensureDirSync(_bootstrapDir());
+  const file = _anchorFile();
+  const temp = `${file}.tmp`;
+  try {
+    fs.writeJsonSync(temp, value, { spaces: 2 });
+    fs.renameSync(temp, file);
+  } finally {
+    fs.removeSync(temp);
   }
 }
 
@@ -29,7 +50,7 @@ function _defaultDataDir() {
   try {
     return path.join(app.getPath("documents"), "LouvorJA Violin");
   } catch (_) {
-    return path.join(app.getPath("userData"), "data");
+    return path.join(_bootstrapDir(), "data");
   }
 }
 
@@ -47,9 +68,41 @@ function _isWritable(dir) {
 }
 
 module.exports = {
-  /** Diretório de dados do usuário (%APPDATA%/LouvorJA Violin no Windows) */
+  /** Perfil interno do Electron, em `<dados>/.electron`. */
   userData() {
     return app.getPath("userData");
+  },
+
+  /** Local estável da âncora e do lock; também é a origem das versões antigas. */
+  bootstrapDir() {
+    return _bootstrapDir();
+  },
+
+  profileDir() {
+    return path.join(this.dataDir(), ".electron");
+  },
+
+  /** Configura o perfil antes de ready, preservando IndexedDB e preferências web. */
+  configureProfile() {
+    const anchor = _readAnchor();
+    const source = anchor?.profileSource;
+    const sameRoot = !anchor || path.resolve(anchor.dataDir) === path.resolve(this.dataDir());
+    const sourceDir = sameRoot && typeof source === "string" && path.isAbsolute(source)
+      && path.basename(source) === ".electron" ? source : null;
+    const dir = prepareProfile({ legacyDir: _bootstrapDir(), sourceDir, targetDir: this.profileDir() });
+    app.setPath("userData", dir);
+    app.setPath("sessionData", dir);
+    fs.ensureDirSync(path.join(dir, "logs"));
+    fs.ensureDirSync(path.join(dir, "Crashpad"));
+    app.setPath("logs", path.join(dir, "logs"));
+    app.setPath("crashDumps", path.join(dir, "Crashpad"));
+    // Um disco temporariamente indisponível não deve apagar a pasta escolhida.
+    if (sameRoot) _writeAnchor({ dataDir: this.dataDir() });
+    return dir;
+  },
+
+  profileRestartRequired() {
+    return path.resolve(app.getPath("userData")) !== path.resolve(this.profileDir());
   },
 
   /** Diretório temporário do sistema operacional */
@@ -69,11 +122,12 @@ module.exports = {
 
   /**
    * Pasta de dados: a raiz de tudo que é do usuário — `files/` com o acervo
-   * de mídia e `storage/` com as preferências. Uma pasta só para o operador
+   * de mídia, `storage/` com as preferências e `.electron/` com o perfil.
+   * Uma pasta só para o operador
    * levar embora, copiar para outra máquina ou apontar um backup.
    *
    * Resolução: pasta escolhida pelo usuário (âncora) → `Documents/LouvorJA
-   * Violin` → `<userData>` como último recurso. A âncora mora no userData
+   * Violin` → endereço estável do sistema como último recurso. A âncora mora ali
    * justamente porque alguém precisa saber onde a pasta está antes de abri-la.
    *
    * Documents pode não aceitar escrita — Controlled Folder Access do Windows
@@ -85,19 +139,19 @@ module.exports = {
   dataDir() {
     if (_dataDirResolved) return _dataDirResolved;
 
-    const anchored = _readAnchor();
+    const anchored = _readAnchor()?.dataDir;
     const candidates = anchored ? [anchored, _defaultDataDir()] : [_defaultDataDir()];
 
     for (const dir of candidates) {
       if (_isWritable(dir)) {
         _dataDirResolved = dir;
-        _dataDirIssue = null;
+        _dataDirIssue = dir === candidates[0] ? null : { wanted: candidates[0], reason: "not-writable" };
         return dir;
       }
     }
 
     _dataDirIssue = { wanted: candidates[0], reason: "not-writable" };
-    _dataDirResolved = app.getPath("userData");
+    _dataDirResolved = _bootstrapDir();
     console.warn(`[paths] Pasta de dados sem escrita (${candidates[0]}); usando ${_dataDirResolved}`);
     return _dataDirResolved;
   },
@@ -112,12 +166,15 @@ module.exports = {
    * Aponta a pasta de dados para outro lugar e grava a âncora. Não move
    * conteúdo — quem chama decide o que fazer com o que ficou para trás.
    */
-  setDataDir(dir) {
+  setDataDir(dir, { moveExisting = false } = {}) {
     const abs = path.resolve(dir);
     if (!_isWritable(abs)) {
       throw new Error(`[paths] Sem permissão de escrita em ${abs}`);
     }
-    fs.writeJsonSync(_anchorFile(), { dataDir: abs }, { spaces: 2 });
+    const currentProfile = app.getPath("userData");
+    const profileSource = moveExisting && path.basename(currentProfile) === ".electron"
+      && path.resolve(currentProfile) !== path.join(abs, ".electron") ? currentProfile : undefined;
+    _writeAnchor({ dataDir: abs, profileSource });
     _dataDirResolved = abs;
     _dataDirIssue = null;
     return abs;
@@ -126,6 +183,11 @@ module.exports = {
   /** Diretório de mídia (mp3, imagens, capas). */
   filesDir() {
     return path.join(this.dataDir(), "files");
+  },
+
+  /** Vídeos online baixados, junto do restante dos dados do usuário. */
+  videosDir() {
+    return path.join(this.dataDir(), "Videos");
   },
 
   /**
@@ -141,7 +203,7 @@ module.exports = {
         return null;
       }
     })();
-    const dirs = [path.join(app.getPath("userData"), "files")];
+    const dirs = [path.join(_bootstrapDir(), "files")];
     if (docs) {
       dirs.unshift(path.join(docs, "LouvorJA"));
       dirs.unshift(path.join(docs, "LouvorJA Violin"));
@@ -149,8 +211,8 @@ module.exports = {
     return dirs;
   },
 
-  /** Cache JSON do banco (userData/json_db). */
+  /** Cache JSON do banco, dentro da pasta de dados escolhida. */
   jsonCacheDir() {
-    return path.join(app.getPath("userData"), "json_db");
+    return path.join(this.dataDir(), "json_db");
   },
 };

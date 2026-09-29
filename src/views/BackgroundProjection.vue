@@ -130,10 +130,12 @@
   <LibrasOverlay
     :slide-lyric="projType === 'music' ? (slide?.lyric as string) : undefined"
     :music-id="projType === 'music' ? (slide?.id_music as number | undefined) : undefined"
+    :slide-index="projType === 'music' ? slideIndex : undefined"
     :verse-text="projType === 'bible' ? bibleText : undefined"
     :bible-version="projType === 'bible' ? bibleVersion : undefined"
     :bible-book-id="projType === 'bible' ? bibleBookId : undefined"
     :bible-chapter="projType === 'bible' ? Number(bibleChapter) || undefined : undefined"
+    :bible-verses="projType === 'bible' ? bibleVerses : undefined"
     :type="projType"
   />
 </template>
@@ -229,7 +231,7 @@ const fallbackStyle = computed(() =>
 
 /* ── Projection state ── */
 
-const { slide, title, progress } = useProjectionState();
+const { slide, title, progress, slideIndex } = useProjectionState();
 
 const fileState = reactive<{ active: boolean; type: string; url: string; playback_id?: string }>({
   active: false,

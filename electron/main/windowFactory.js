@@ -29,6 +29,11 @@ let _mainWindow = null;
 let _httpPort = null;
 let _windowObserver = null;
 let _presentationActivityObserver = null;
+let _operationMeasurer = (_operation, _details, run) => run();
+
+function setOperationMeasurer(measurer) {
+  _operationMeasurer = typeof measurer === "function" ? measurer : (_operation, _details, run) => run();
+}
 
 /**
  * Permite ao main observar lifecycle/crash das janelas sem acoplar a factory
@@ -243,11 +248,9 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
   const isLin = process.platform === "linux";
   const useMacPrimaryKiosk = fullscreen && isMac && !!target.primary && !backgroundWindows;
   const useMacPresentationLevel = fullscreen && isMac && _isProjectionPresentationWindow(route, feature) && !backgroundWindows;
-  // Em macOS Liquid Retina, o sistema pode aplicar máscara de cantos
-  // arredondados na NSWindow, revelando o wallpaper nas bordas. Aumentamos a
-  // janela alguns px para fora do display útil; os cantos arredondados ficam
-  // fora da área visível e o conteúdo cobre 100% do que aparece.
-  const overscan = fullscreen && isMac ? 24 : 0;
+  // O conteúdo precisa coincidir com o display: ampliar a janela para fora
+  // da tela também corta a barra de progresso e outros elementos nas bordas.
+  // roundedCorners:false remove a máscara sem alterar a área do renderer.
 
   // No Windows/Linux NÃO passar `fullscreen: true` no construtor com bounds
   // de monitor secundário: o Chromium frequentemente posiciona primeiro no
@@ -260,19 +263,18 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
   // e pode deixar o app preso no modo apresentação.
   const useDeferredFullscreen = fullscreen && (isWin || isLin) && !backgroundWindows;
   const winOpts = {
-    x: bounds.x - overscan,
-    y: bounds.y - overscan,
-    width: fullscreen ? bounds.width + overscan * 2 : (width || 800),
-    height: fullscreen ? bounds.height + overscan * 2 : (height || 600),
+    x: bounds.x,
+    y: bounds.y,
+    width: fullscreen ? bounds.width : (width || 800),
+    height: fullscreen ? bounds.height : (height || 600),
     fullscreen: false,
     kiosk: useMacPrimaryKiosk,
-    enableLargerThanScreen: fullscreen && isMac,
     frame,
     alwaysOnTop: !backgroundWindows && alwaysOnTop && !(fullscreen && isMac),
     title: _windowTitle(route),
     show: false,
     autoHideMenuBar: true,
-    roundedCorners: false, // Windows-only mas inofensivo nos demais
+    roundedCorners: false, // macOS e Windows: cobre os cantos sem cortar o conteúdo.
     // Preto evita o flash branco entre criar a janela e o renderer pintar o primeiro frame.
     backgroundColor: "#000000",
     transparent: false,
@@ -293,7 +295,7 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
     },
   };
 
-  const win = new BrowserWindow(winOpts);
+  const win = _operationMeasurer("window.construct", { feature }, () => new BrowserWindow(winOpts));
   if (isWin) {
     // O título do HTML é igual em todas as rotas. Preserve no preview da
     // taskbar o papel de cada janela, mesmo após o renderer atualizar <title>.
@@ -308,8 +310,6 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
     showInTaskbar,
     useDeferredFullscreen,
     useMacPresentationLevel,
-    isMac,
-    overscan,
   };
   _windowMeta.set(feature, windowMeta);
   try {
@@ -360,16 +360,6 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
     }
   });
 
-  if (fullscreen && isMac && overscan > 0) {
-    // Reforça bounds expandidos depois do construtor.
-    win.setBounds({
-      x: bounds.x - overscan,
-      y: bounds.y - overscan,
-      width: bounds.width + overscan * 2,
-      height: bounds.height + overscan * 2,
-    });
-  }
-
   // Bloqueia zoom acidental (Ctrl+Wheel/Ctrl+= ) em janelas de projeção —
   // num projetor mal manuseado um Ctrl+roda pode mexer no fontSize.
   try {
@@ -390,16 +380,16 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
     try {
       // Reforça posição/tamanho ANTES do fullscreen — alguns drivers de
       // projetor mexem nos bounds entre a criação e o primeiro paint.
-      win.setBounds({
+      _operationMeasurer("window.position", { feature }, () => win.setBounds({
         x: bounds.x,
         y: bounds.y,
         width: bounds.width,
         height: bounds.height,
-      });
+      }));
       win.setMenuBarVisibility(false);
       // setFullScreen(true) no Windows = borderless windowed cobrindo o monitor
       // (incluindo a taskbar). Mais previsível que mudar resolução.
-      if (!win.isFullScreen()) win.setFullScreen(true);
+      if (!win.isFullScreen()) _operationMeasurer("window.fullscreen", { feature }, () => win.setFullScreen(true));
     } catch (e) {
       console.warn(`[windowFactory] applyDeferredFullscreen ${feature}:`, e?.message || e);
     }
@@ -412,7 +402,7 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
   const showOnce = () => {
     if (_shown || win.isDestroyed()) return;
     _shown = true;
-    win.showInactive();
+    _operationMeasurer("window.show", { feature }, () => win.showInactive());
     _syncAuxBackgroundThrottling(win);
     _syncMainBackgroundThrottling();
     _applyDeferredFullscreen();
@@ -508,7 +498,7 @@ function openOnMonitor(options) {
   return _windowCloseGate.beforeOpen(options.feature).then((closed) => {
     // A timeout is not permission to reuse a window that may still be closing.
     // Fail this attempt; once `closed` arrives a later owner can open cleanly.
-    return closed ? _openOnMonitor(options) : { refused: "window-close-pending" };
+    return closed ? _operationMeasurer("window.open", { feature: options.feature }, () => _openOnMonitor(options)) : { refused: "window-close-pending" };
   });
 }
 
@@ -547,17 +537,16 @@ function _placeOnDisplay(win, display, meta) {
   const apply = () => {
     if (!win || win.isDestroyed()) return;
     const bounds = display.bounds;
-    const overscan = meta.fullscreen && meta.isMac ? meta.overscan || 0 : 0;
 
     try {
       if (win.isFullScreen && win.isFullScreen()) win.setFullScreen(false);
 
       if (meta.fullscreen) {
         win.setBounds({
-          x: bounds.x - overscan,
-          y: bounds.y - overscan,
-          width: bounds.width + overscan * 2,
-          height: bounds.height + overscan * 2,
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
         });
       } else {
         // Janela comum (operador): só muda de monitor, mantendo o tamanho que o
@@ -739,6 +728,7 @@ module.exports = {
   getWindow,
   setMainWindow,
   setWindowObserver,
+  setOperationMeasurer,
   setPresentationActivityObserver,
   setHttpPort,
   setTaskbarVisibility,

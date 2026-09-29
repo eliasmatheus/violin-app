@@ -86,7 +86,10 @@ const classicLibrary = require("./main/classicLibrary.js");
 const netHealth = require("./main/netHealth.js");
 const telemetryErrorQueue = require("./main/telemetryErrorQueue.js");
 const { createRuntimeHealthMonitor } = require("./main/runtimeHealth.js");
+const { createRuntimeWorkDiagnostics } = require("./main/runtimeWorkDiagnostics.js");
+const { createCpuProfileCapture } = require("./main/cpuProfileCapture.js");
 const { createRuntimeIncidentJournal } = require("./main/runtimeIncidentJournal.js");
+const { migrateLegacyData } = require("./main/dataMigration.js");
 const { createPresentationActivity } = require("./main/presentationActivity.js");
 const { buildCsp } = require("./main/csp.js");
 const { backgroundWindows } = require("./main/e2eWindowMode.js");
@@ -130,8 +133,7 @@ configureAppPaths();
 /**
  * Leva as preferências de `<userData>/storage` para a pasta de dados.
  *
- * Copia em vez de mover: se a versão seguinte tiver que voltar atrás, o
- * arquivo antigo continua onde estava. Roda antes de `_userDataMain` ser
+ * Move somente preferências ausentes no destino. Roda antes de `_userDataMain` ser
  * lido, mais abaixo neste módulo — depois seria tarde, o main já teria
  * carregado um estado vazio.
  */
@@ -149,7 +151,7 @@ function migrateStorageToDataDir() {
       if (!nome.endsWith(".json")) continue;
       const dest = path.join(target, nome);
       if (fs.existsSync(dest)) continue;
-      fs.copySync(path.join(legacy, nome), dest);
+      fs.moveSync(path.join(legacy, nome), dest, { overwrite: false });
       copiados++;
     }
     if (copiados) console.log(`[main] Preferências migradas para ${target} (${copiados} arquivos)`);
@@ -157,8 +159,6 @@ function migrateStorageToDataDir() {
     console.warn("[main] Falha ao migrar preferências:", e?.message || e);
   }
 }
-
-migrateStorageToDataDir();
 
 /** Um diretório que existe e tem pelo menos uma entrada dentro. */
 function _temConteudo(dir) {
@@ -171,7 +171,7 @@ function _temConteudo(dir) {
 
 /**
  * O que, dentro de `dir`, conta como acervo a mudar de lugar. `files/` e
- * `storage/` e `library/` ficam de fora porque são a estrutura nova: sem essa exceção a
+ * `storage/`, `library/` e `Videos/` ficam de fora porque são a estrutura nova: sem essa exceção a
  * própria pasta de dados, recém-criada com as preferências dentro, passaria
  * por origem de migração e encerraria a busca antes de olhar as outras.
  */
@@ -236,6 +236,12 @@ if (!app.requestSingleInstanceLock()) {
   return;
 }
 console.log("[LouvorJA] Instância única: lock adquirido.");
+migrateStorageToDataDir();
+// O lock permanece no endereço estável da âncora; o perfil pode acompanhar a
+// pasta escolhida sem permitir duas instâncias com pastas de dados diferentes.
+paths.configureProfile();
+const legacyDataMigration = migrateLegacyData(paths.bootstrapDir(), paths.dataDir());
+void legacyDataMigration.catch((error) => console.warn("[main] Migração de dados falhou:", error?.message || error));
 // Mesmo AppUserModelID do instalador NSIS em todas as BrowserWindows. O Windows
 // agrupa as projeções sob o app, em vez de mostrá-las como aplicativos distintos.
 if (process.platform === "win32") app.setAppUserModelId("br.com.louvorja.app");
@@ -328,23 +334,30 @@ let appTray = null;
 const pendingRuntimeIncidents = [];
 const runtimeTelemetryReady = new Set();
 const runtimeIncidentJournal = createRuntimeIncidentJournal({
-  file: path.join(paths.userData(), "runtime-incidents.json"),
+  file: () => path.join(paths.dataDir(), "runtime-incidents.json"),
 });
 // Consentimento só é conhecido após carregar user_data. Até lá, o journal não
 // persiste incidentes; a fila em memória ainda pode entregá-los ao renderer.
 let runtimeJournalConsent = false;
+const runtimeWorkDiagnostics = createRuntimeWorkDiagnostics({ enabled: () => runtimeJournalConsent });
+windowFactory.setOperationMeasurer(runtimeWorkDiagnostics.measure);
+const cpuProfileCapture = createCpuProfileCapture({
+  enabled: () => runtimeJournalConsent && !isQuitting,
+  appRoot: path.resolve(__dirname, ".."),
+  onResult: (incident) => _emitRuntimeIncident(incident),
+});
 
-const MAIN_ERROR_QUEUE_PATH = path.join(paths.userData(), "telemetry-main-errors.json");
+const mainErrorQueuePath = () => path.join(paths.dataDir(), "telemetry-main-errors.json");
 
 function _readPendingMainErrors() {
-  return telemetryErrorQueue.read(MAIN_ERROR_QUEUE_PATH);
+  return telemetryErrorQueue.read(mainErrorQueuePath());
 }
 
 function _ackMainError(id) {
-  return telemetryErrorQueue.acknowledge(MAIN_ERROR_QUEUE_PATH, id);
+  return telemetryErrorQueue.acknowledge(mainErrorQueuePath(), id);
 }
 
-function _compactRuntimeSnapshot() {
+function _compactRuntimeSnapshot(details = {}) {
   let appMetrics = [];
   let gpuFeatureStatus = {};
   let windows = [];
@@ -396,6 +409,8 @@ function _compactRuntimeSnapshot() {
     windows,
     process_metrics: appMetrics,
     gpu_feature_status: gpuFeatureStatus,
+    main_synchronous_operations: runtimeWorkDiagnostics.snapshot(details.main_sample_started_at_ms, details.main_sample_ended_at_ms),
+    main_operation_coverage: "instrumented_window_calls",
     ...onlineVideoDiagnostics,
   };
 }
@@ -433,9 +448,10 @@ function _flushPendingRuntimeIncidents(preferredTarget = null) {
 }
 
 function _emitRuntimeIncident(incident) {
+  incident = { ...incident, ...cpuProfileCapture.handleIncident(incident) };
   const level = incident?.severity === "fatal" || incident?.severity === "error"
     ? "error"
-    : "warn";
+    : incident?.incident_type === "cpu_profile_window" ? "info" : "warn";
   console[level]("[runtime-health]", {
     incident_type: incident?.incident_type,
     incident_status: incident?.incident_status,
@@ -460,6 +476,8 @@ function _emitRuntimeIncident(incident) {
 const runtimeHealth = createRuntimeHealthMonitor({
   emitIncident: _emitRuntimeIncident,
   getRuntimeSnapshot: _compactRuntimeSnapshot,
+  getChildProcessContext: (details) => downloader.getChildProcessContext(details),
+  onEventLoopSample: (sample) => cpuProfileCapture.observeEventLoopSample(sample),
 });
 onlineVideo.setStreamFailureReporter((failure) => {
   _emitRuntimeIncident({
@@ -475,7 +493,10 @@ onlineVideo.setStreamFailureReporter((failure) => {
     last_stream_failure: failure,
   });
 });
-const handleSystemResume = () => runtimeHealth.noteSystemResume();
+const handleSystemResume = () => {
+  cpuProfileCapture.cancel();
+  runtimeHealth.noteSystemResume();
+};
 windowFactory.setWindowObserver((win, context) => runtimeHealth.watchWindow(win, context));
 runtimeHealth.watchApp(app);
 runtimeHealth.start();
@@ -496,7 +517,7 @@ function reportMainProcessError(source, error) {
   // O renderer pode estar travado ou o processo pode morrer antes de o IPC
   // chegar. A fila permite enviar o stack no próximo boot e evita perda muda
   // justamente no caso mais importante: uncaughtException.
-  telemetryErrorQueue.enqueue(MAIN_ERROR_QUEUE_PATH, payload);
+  telemetryErrorQueue.enqueue(mainErrorQueuePath(), payload);
   safeSend(mainWindow, "telemetry:main-error", payload);
   console.error(`[${source}]`, payload.message);
 }
@@ -579,6 +600,7 @@ function createAppTray() {
 
 function quitApplication() {
   isQuitting = true;
+  cpuProfileCapture.cancel();
   console.info("[lifecycle] Encerramento solicitado pela bandeja.");
   try { windowFactory.closeAll(); } catch (error) {
     console.warn("[lifecycle] Falha ao fechar projeções antes de sair:", error?.message || error);
@@ -606,7 +628,7 @@ function createWindow() {
     console.log("[LouvorJA] userData:", paths.userData());
   }
 
-  mainWindow = createMainWindow(DEV_URL, prodHtmlPath, preloadPath);
+  mainWindow = runtimeWorkDiagnostics.measure("main_window.construct", { feature: "main" }, () => createMainWindow(DEV_URL, prodHtmlPath, preloadPath));
   runtimeHealth.watchWindow(mainWindow, { window_role: "main", feature: "main", route: "/" });
 
   // Fechar a janela principal durante uma projeção não pode destruir a fonte
@@ -651,12 +673,10 @@ function createWindow() {
 
   // DevTools na janela principal. Não abre sozinho nem em dev: quem quer o
   // console liga em "Opções do Desenvolvedor" (options.dev.devtools_main_window),
-  // usa LJ_DEVTOOLS=1 ou o atalho. Em prod, só com LJ_DEVTOOLS=1 no env.
-  if (isDev) {
-    const devOpt = _userDataMain?.options?.dev?.devtools_main_window;
-    const openDevTools = devOpt == null ? process.env.LJ_DEVTOOLS === "1" : !!devOpt;
-    if (openDevTools) mainWindow.webContents.openDevTools({ mode: "detach" });
-  } else if (process.env.LJ_DEVTOOLS === "1") {
+  // usa LJ_DEVTOOLS=1 ou o atalho. A preferência salva vale também em produção.
+  const devOpt = _userDataMain?.options?.dev?.devtools_main_window;
+  const openDevTools = devOpt == null ? process.env.LJ_DEVTOOLS === "1" : devOpt === true;
+  if (openDevTools) {
     mainWindow.webContents.openDevTools({ mode: "detach" });
   }
 
@@ -868,6 +888,7 @@ app.whenReady().then(async () => {
   // bootstrap de monitores, limpeza de cache e a subida do servidor HTTP, e
   // nada disso dá sinal de vida ao operador.
   splash.show();
+  await legacyDataMigration;
 
   // A identificação de monitores e a limpeza dos caches de desenvolvimento
   // são independentes. Em máquinas lentas não faz sentido somar os dois
@@ -1028,6 +1049,7 @@ app.on("before-quit", (event) => {
   // O listener de close da janela principal usa esta flag para diferenciar um
   // encerramento explícito de um clique acidental no X durante projeção.
   isQuitting = true;
+  cpuProfileCapture.cancel();
 
   if (quitFlushComplete) return;
   event.preventDefault();
@@ -1101,6 +1123,7 @@ app.on("before-quit", (event) => {
 app.on("will-quit", () => {
   powerMonitor.removeListener("resume", handleSystemResume);
   runtimeHealth.stop();
+  cpuProfileCapture.cancel();
   shortcuts.disable();
   powerBlocker.stop();
   if (appTray) {
@@ -1311,6 +1334,7 @@ function _walkSet(obj, path, value) {
 let _userDataMain = userStore.read("user_data") || {};
 httpServer.setUserDataProvider(() => _userDataMain);
 runtimeJournalConsent = _userDataMain?.options?.telemetry !== false;
+downloader.setWorkerDiagnosticsEnabled(runtimeJournalConsent);
 if (!runtimeJournalConsent) {
   void runtimeIncidentJournal.clear().catch((error) => {
     console.warn("[runtime-health] limpeza do journal falhou:", error?.message || error);
@@ -1367,7 +1391,10 @@ ipcMain.handle("userdata:patch", (event, payload) => {
     _walkSet(_userDataMain, payload.path, payload.value);
     if (payload.path === "options.telemetry" && typeof payload.value === "boolean") {
       runtimeJournalConsent = payload.value;
+      downloader.setWorkerDiagnosticsEnabled(runtimeJournalConsent);
       if (!runtimeJournalConsent) {
+        cpuProfileCapture.cancel();
+        runtimeWorkDiagnostics.clear();
         void runtimeIncidentJournal.clear().catch((error) => {
           console.warn("[runtime-health] limpeza do journal falhou:", error?.message || error);
         });
@@ -2022,10 +2049,11 @@ ipcMain.handle("shell:openPath", async (_event, filePath) => {
   }
 });
 ipcMain.handle("storage:setDataDir", async (_e, newDir, opts) => {
+  if (downloader.isDownloading()) throw new Error("Aguarde ou cancele o download antes de alterar a pasta de dados.");
   // Nao mova/troque a raiz enquanto uma escrita ainda usa o caminho antigo.
   if (_userDataFlushTimer) await _flushUserData();
-  await Promise.all([userStore.flush(), docStore.flush()]);
-  const result = await storage.setDataDir(newDir, opts);
+  await Promise.all([userStore.flush(), docStore.flush(), runtimeIncidentJournal.flush()]);
+  const result = await onlineVideo.withDataDirChange(() => storage.setDataDir(newDir, opts));
   if (result.ok) _userDataMain = userStore.read("user_data") || {};
   return result;
 });

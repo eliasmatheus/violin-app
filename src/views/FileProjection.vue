@@ -74,6 +74,15 @@ import { KEYS } from "@/constants/UserDataKeys";
 import { SETTINGS_TABLE } from "@/constants/DbTables";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
 import Telemetry from "@/helpers/Telemetry";
+import {
+  mediaElementDetails,
+  mediaSourceDetails,
+  mediaDiagnosticMessage,
+  mediaDiagnosticVideoId,
+  mediaBlobDetails,
+  mediaLibraryDetails,
+  mediaDiagnosticLog,
+} from "@/helpers/MediaDiagnostics";
 import { normalizeYouTubeError } from "@/helpers/YouTubeError";
 import { applyVideoState } from "@/helpers/VideoSync";
 import { VideoStateGate } from "@/helpers/VideoStateVersion";
@@ -123,6 +132,9 @@ let ytGeneration = 0;
 let ytAwaitingSync = false;
 let ytSyncFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 const ytFailed = ref(false);
+let videoSourceDiagnostics: Record<string, unknown> = {};
+let ytFirstStateLogged = false;
+let ytStateFailureLogged = false;
 
 const _YT_SYNC_INTERVAL = 500;
 
@@ -248,6 +260,15 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
     _destroyYoutube();
   }
   let resolvedBlobUrl: string | null = null;
+  let sourceDiagnostics: Record<string, unknown> = {
+    requested_source: {
+      ...mediaSourceDetails(p.url),
+      ...mediaLibraryDetails(p.libRef),
+      blob_mime: "unknown",
+      codec: "unknown",
+    },
+    blob_resolution: p.url?.startsWith("blob:") ? "no_library_reference" : "not_requested",
+  };
   // URLs blob só existem no documento que as criou — quando o payload traz
   // a referência da biblioteca, recria o objeto localmente lendo o IDB.
   if (p.libRef?.id && p.url?.startsWith("blob:")) {
@@ -256,12 +277,26 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
         p.libRef.table || DB_TABLE.MEDIA_LIBRARY,
         p.libRef.id
       );
+      sourceDiagnostics.blob_resolution = "library_record_missing";
       if (rec?.data && rec.mime) {
-        resolvedBlobUrl = URL.createObjectURL(new Blob([rec.data], { type: rec.mime }));
+        const blob = new Blob([rec.data], { type: rec.mime });
+        sourceDiagnostics = {
+          ...sourceDiagnostics,
+          blob_resolution: "resolved",
+          requested_source: {
+            ...(sourceDiagnostics.requested_source as Record<string, unknown>),
+            ...mediaBlobDetails(blob),
+          },
+        };
+        resolvedBlobUrl = URL.createObjectURL(blob);
         p = { ...p, url: resolvedBlobUrl };
       }
     } catch (e) {
-      console.warn("[FileProjection] libRef resolve falhou:", e);
+      sourceDiagnostics.blob_resolution = "library_read_failed";
+      console.warn(
+        "[FileProjection] libRef resolve falhou:",
+        mediaDiagnosticMessage(e instanceof Error ? e.message : String(e))
+      );
     }
   }
   if (generation !== activationGeneration) {
@@ -271,6 +306,7 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
   if (p.type !== "video" || !p.playback_id || p.playback_id !== fileProjection.playback_id) {
     latestVideoState = null;
   }
+  videoSourceDiagnostics = sourceDiagnostics;
   fileProjection.active = true;
   fileProjection.type = p.type || "image";
   fileProjection.url = p.url || "";
@@ -279,7 +315,7 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
   videoStateGate.begin(p.playback_id);
   videoFirstFrame.begin(p.type === "video" ? p.playback_id : null);
   Telemetry.setRuntimeContext({ playback_id: p.playback_id ?? null });
-  console.log("[FileProjection] Ativado:", p.type, p.url?.substring(0, 60));
+  console.log("[FileProjection] Ativado:", p.type, mediaSourceDetails(p.url));
   if (p.type === "video") {
     videoFailed.value = false;
     await nextTick();
@@ -287,6 +323,26 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
   }
   if (p.type === "youtube") nextTick(() => _initYoutube());
   if (p.type === "pdf") nextTick(() => loadPdf(p.url, p.page || 1, p.playback_id));
+}
+
+/** Capture identity before play(); the element may be reused before its promise rejects. */
+function _captureVideoDiagnostics(el: HTMLVideoElement): () => Record<string, unknown> {
+  const playbackId = fileProjection.playback_id;
+  const sourceUrl = fileProjection.url;
+  const generation = activationGeneration;
+  const source = { ...videoSourceDiagnostics };
+  return () => {
+    const stale =
+      generation !== activationGeneration ||
+      playbackId !== fileProjection.playback_id ||
+      sourceUrl !== fileProjection.url;
+    return {
+      ...source,
+      playback_id: playbackId,
+      stale_context: stale,
+      ...(stale ? { snapshot_omitted: "source_replaced" } : mediaElementDetails(el)),
+    };
+  };
 }
 
 function _prepareVideo(): void {
@@ -297,16 +353,18 @@ function _prepareVideo(): void {
   el.playsInline = true;
   videoFirstFrame.attach(el);
   el.load();
+  const diagnosticContext = _captureVideoDiagnostics(el);
   el.play().catch((error) => {
     // O erro de codec chega também pelo evento `error`; este log captura o
     // caso em que o Windows bloqueia autoplay ou o arquivo ainda não tem
     // metadata sem deixar a projeção totalmente preta e sem explicação.
     console.warn("[FileProjection] vídeo não iniciou:", error?.name || error);
-    Telemetry.log("warn", "file projection video play rejected", {
+    mediaDiagnosticLog("warn", "file projection video play rejected", {
+      ...diagnosticContext(),
+      window_role: "auxiliary",
+      phase: "initial_play",
       name: error?.name,
-      message: error?.message,
-      ready_state: el.readyState,
-      network_state: el.networkState,
+      message: mediaDiagnosticMessage(error?.message),
       source_type: "file_projection_video",
     });
   });
@@ -349,12 +407,15 @@ function onVideoReady(event: Event): void {
 function _applyVideoState(state: VideoMediaState): void {
   const el = videoRef.value;
   if (!el) return;
+  const diagnosticContext = _captureVideoDiagnostics(el);
   try {
     const syncAction = applyVideoState(el, state, (error) => {
-      Telemetry.log("warn", "file projection video sync play rejected", {
-        playback_id: fileProjection.playback_id,
+      mediaDiagnosticLog("warn", "file projection video sync play rejected", {
+        ...diagnosticContext(),
+        phase: "sync_play",
+        window_role: "auxiliary",
         name: error instanceof Error ? error.name : undefined,
-        message: error instanceof Error ? error.message : String(error),
+        message: mediaDiagnosticMessage(error instanceof Error ? error.message : String(error)),
       });
     });
     videoFrameConfirmation.observe(el, state, syncAction);
@@ -387,7 +448,7 @@ function onVideoBuffering(event: Event): void {
     ready_state: el?.readyState,
     network_state: el?.networkState,
   });
-  Telemetry.log("warn", "file projection video buffering", {
+  mediaDiagnosticLog("warn", "file projection video buffering", {
     playback_id: fileProjection.playback_id,
     trigger: event.type,
     current_time: el && Number.isFinite(el.currentTime) ? el.currentTime : 0,
@@ -403,21 +464,34 @@ function onVideoError(event: Event): void {
   const code = el?.error?.code;
   const reason = code === 3 ? "decode" : code === 4 ? "source_not_supported" : "unknown";
   const error = new Error(`File projection video ${reason}`);
+  const diagnostics = {
+    ...mediaElementDetails(el),
+    ...videoSourceDiagnostics,
+    window_role: "auxiliary",
+    phase: "media_element",
+  };
+  mediaDiagnosticLog("error", "file projection video failed", {
+    ...diagnostics,
+    playback_id: fileProjection.playback_id,
+    reason,
+  });
   Telemetry.captureException(error, {
+    ...diagnostics,
     playback_id: fileProjection.playback_id,
     operation: "file_projection_video",
     reason,
   });
   console.error("[FileProjection] vídeo local falhou:", error, {
     code,
-    message: el?.error?.message,
-    src: fileProjection.url?.substring(0, 100),
+    message: mediaDiagnosticMessage(el?.error?.message),
+    source: mediaSourceDetails(fileProjection.url),
   });
   Telemetry.track("file_projection_video_failed", {
+    ...diagnostics,
     playback_id: fileProjection.playback_id,
     reason,
     code,
-    message: el?.error?.message,
+    message: mediaDiagnosticMessage(el?.error?.message),
     ready_state: el?.readyState,
     network_state: el?.networkState,
   });
@@ -584,15 +658,28 @@ function _embedUrlToId(url: string): string | null {
 
 function _loadYtApi(cb: (YT: YTAPI) => void, isCurrent: () => boolean): void {
   ytFailed.value = false;
+  let phase = "iframe_api";
   loadYtApi()
     .then((YT) => {
+      phase = "player_construct";
       if (isCurrent()) cb(YT);
     })
     .catch((e: Error) => {
       if (!isCurrent()) return;
       _ytInitializing = false;
       ytFailed.value = true;
-      console.warn("[FileProjection] YouTube indisponível:", e?.message || e);
+      mediaDiagnosticLog("warn", "youtube iframe API failed", {
+        playback_id: fileProjection.playback_id,
+        video_id: mediaDiagnosticVideoId(fileProjection.url),
+        window_role: "auxiliary",
+        phase,
+        reason: phase === "iframe_api" ? "api_load_failed" : "player_constructor_failed",
+        message: mediaDiagnosticMessage(e?.message),
+      });
+      console.warn(
+        "[FileProjection] YouTube indisponível:",
+        mediaDiagnosticMessage(e?.message || String(e))
+      );
     });
 }
 
@@ -608,25 +695,45 @@ function _initYoutube(): void {
     fileProjection.type === "youtube" &&
     fileProjection.playback_id === playbackId;
   const id = _embedUrlToId(fileProjection.url);
+  const diagnostics = {
+    playback_id: playbackId,
+    video_id: mediaDiagnosticVideoId(fileProjection.url),
+    window_role: "auxiliary",
+  };
   console.log(
     "[FileProjection] _initYoutube - videoId:",
     id,
     "url:",
-    fileProjection.url?.substring(0, 60)
+    mediaSourceDetails(fileProjection.url)
   );
   if (!id) {
     _ytInitializing = false;
     console.warn("[FileProjection] ID do YouTube não extraído da URL");
+    mediaDiagnosticLog("warn", "youtube initialization failed", {
+      ...diagnostics,
+      phase: "iframe_init",
+      reason: "invalid_video_id",
+    });
     return;
   }
   if (!ytContainer.value) {
     _ytInitializing = false;
     console.warn("[FileProjection] Container YouTube não encontrado no DOM");
+    mediaDiagnosticLog("warn", "youtube initialization failed", {
+      ...diagnostics,
+      phase: "iframe_init",
+      reason: "container_missing",
+    });
     return;
   }
 
   _loadYtApi((YT: YTAPI) => {
     if (!isCurrent() || !ytContainer.value) return;
+    mediaDiagnosticLog("debug", "youtube iframe API ready", {
+      ...diagnostics,
+      phase: "player_construct",
+      container_present: true,
+    });
     ytPlayer = new YT.Player(ytContainer.value, {
       height: "100%",
       width: "100%",
@@ -646,9 +753,14 @@ function _initYoutube(): void {
           _ytInitializing = false;
           console.log("[FileProjection] YouTube player ready");
           Telemetry.track("music_youtube_player_ready", {
+            ...diagnostics,
             playback_id: fileProjection.playback_id,
             source_type: "youtube",
             window_role: "auxiliary",
+          });
+          mediaDiagnosticLog("debug", "youtube iframe player ready", {
+            ...diagnostics,
+            phase: "player_ready",
           });
           if (ytPlayer) ytPlayer.playVideo();
           setTimeout(() => {
@@ -677,6 +789,7 @@ function _initYoutube(): void {
         onStateChange: (e: { data: number }) => {
           if (!isCurrent()) return;
           Telemetry.track("music_youtube_state_changed", {
+            ...diagnostics,
             playback_id: fileProjection.playback_id,
             state: e.data,
             window_role: "auxiliary",
@@ -689,6 +802,7 @@ function _initYoutube(): void {
           const error = new Error(normalized.message);
           error.name = normalized.name;
           Telemetry.captureException(error, {
+            ...diagnostics,
             playback_id: fileProjection.playback_id,
             operation: "youtube_player",
             stage: "youtube_player",
@@ -700,6 +814,7 @@ function _initYoutube(): void {
             normalized.code
           );
           Telemetry.track("music_playback_failed", {
+            ...diagnostics,
             playback_id: fileProjection.playback_id,
             stage: "youtube_player",
             reason: normalized.kind,
@@ -718,6 +833,8 @@ function _initYoutube(): void {
 
 function _destroyYoutube(): void {
   ++ytGeneration;
+  ytFirstStateLogged = false;
+  ytStateFailureLogged = false;
   ytAwaitingSync = false;
   if (ytSyncFallbackTimer) clearTimeout(ytSyncFallbackTimer);
   ytSyncFallbackTimer = null;
@@ -739,10 +856,25 @@ function _destroyYoutube(): void {
 
 function _broadcastYtState(): void {
   if (ytAwaitingSync || !ytPlayer || !ytPlayer.getCurrentTime || !fileProjection.active) return;
+  const diagnostics = {
+    playback_id: fileProjection.playback_id,
+    video_id: mediaDiagnosticVideoId(fileProjection.url),
+    window_role: "auxiliary",
+    phase: "state_publish",
+  };
   const yt = getYT();
-  if (!yt) return;
+  if (!yt) {
+    if (!ytStateFailureLogged) {
+      ytStateFailureLogged = true;
+      mediaDiagnosticLog("warn", "youtube state publication failed", {
+        ...diagnostics,
+        reason: "api_runtime_missing",
+      });
+    }
+    return;
+  }
   try {
-    Broadcast.send(BROADCAST_TYPE.YOUTUBE_STATE, {
+    const delivery = Broadcast.send(BROADCAST_TYPE.YOUTUBE_STATE, {
       currentTime: ytPlayer.getCurrentTime(),
       isPaused: ytPlayer.getPlayerState() !== yt.PlayerState.PLAYING,
       duration: ytPlayer.getDuration() || 0,
@@ -750,8 +882,30 @@ function _broadcastYtState(): void {
       playback_id: fileProjection.playback_id,
       sampledAt: Date.now(),
     } as VideoMediaState);
-  } catch {
-    /* ignore */
+    if (delivery?.crossWindow === false && !ytStateFailureLogged) {
+      ytStateFailureLogged = true;
+      mediaDiagnosticLog("warn", "youtube state publication failed", {
+        ...diagnostics,
+        reason: "state_delivery_failed",
+        cross_window_enqueued: false,
+      });
+    }
+    if (delivery?.crossWindow !== false && !ytFirstStateLogged) {
+      ytFirstStateLogged = true;
+      mediaDiagnosticLog("debug", "youtube first state published", {
+        ...diagnostics,
+        cross_window_enqueued: delivery?.crossWindow ?? null,
+      });
+    }
+  } catch (error) {
+    if (!ytStateFailureLogged) {
+      ytStateFailureLogged = true;
+      mediaDiagnosticLog("warn", "youtube state publication failed", {
+        ...diagnostics,
+        reason: "state_read_or_send_failed",
+        message: mediaDiagnosticMessage(error instanceof Error ? error.message : String(error)),
+      });
+    }
   }
 }
 

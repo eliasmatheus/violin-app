@@ -120,6 +120,38 @@ describe("useAudioPlayback.play", () => {
     );
   });
 
+  it("retains original format and safe media state when an opaque blob source cannot be played", async () => {
+    const el = stubPlay(namedError("NotSupportedError", "unsupported"));
+    audio.setTelemetryContext({ playback_id: "p-unsupported", source_type: "http",
+      original_source: { source_scheme: "https", file_ext: "mov", source_transport: "network" } });
+    const onError = vi.fn();
+    audio.play(onError);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(Telemetry.log).toHaveBeenCalledWith("error", "music play promise rejected",
+      expect.objectContaining({ playback_id: "p-unsupported", stage: "play_promise", source_scheme: "blob",
+        original_source: { source_scheme: "https", file_ext: "mov", source_transport: "network" },
+        ready_state: el.readyState, network_state: el.networkState, paused: el.paused,
+        buffered_ranges: [], seekable_ranges: [] }));
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it("retains the old playback identity when a pending play rejects after source replacement", async () => {
+    const el = stubPlay(null);
+    let reject!: (_error: Error) => void;
+    el.play = vi.fn(() => new Promise<void>((_resolve, fail) => { reject = fail; }));
+    audio.setTelemetryContext({ playback_id: "old", original_source: { file_basename: "old.mov" } });
+    audio.play();
+    audio.setTelemetryContext({ playback_id: "new", original_source: { file_basename: "new.mp4" } });
+    el.setAttribute("src", "blob:new");
+    reject(namedError("NotSupportedError", "unsupported"));
+    await Promise.resolve(); await Promise.resolve();
+    const diagnostics = vi.mocked(Telemetry.log).mock.calls.find(([, message]) => message === "music play promise rejected")?.[2];
+    expect(diagnostics).toMatchObject({ playback_id: "old", stale_context: true,
+      snapshot_omitted: "source_replaced", original_source: { file_basename: "old.mov" } });
+    expect(diagnostics).not.toHaveProperty("ready_state");
+  });
+
   it("detecta quando o relógio do áudio fica travado durante a reprodução", async () => {
     vi.useFakeTimers();
     try {

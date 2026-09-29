@@ -81,24 +81,6 @@ function _injectBridge(html, token, initialHash) {
   return headContent + cleaned;
 }
 
-/**
- * Injeção mínima para clients locais (Electron projection windows).
- * Apenas força hash routing — NÃO abre EventSource SSE (o que causava
- * conflitos de roteamento e exibia Shell.vue em vez de FileProjection.vue).
- * A comunicação inter-window continua via BroadcastChannel.
- */
-function _injectMinimalBridge(html, initialHash) {
-  if (html.includes("window.LJ_SSE_BRIDGE_INJECTED")) return html;
-  const cleaned = _stripCspMeta(html);
-  const baseTag = '<base href="/">';
-  const script = `<script>${_initialRouteScript(initialHash)}</script>`;
-  const headContent = baseTag + script;
-  if (cleaned.includes("<head>")) {
-    return cleaned.replace("<head>", "<head>" + headContent);
-  }
-  return headContent + cleaned;
-}
-
 function _pathToHash(pathname) {
   const map = {
     "/obs": "/obs",
@@ -131,7 +113,7 @@ function _initialRouteScript(initialHash) {
 function _allowHttpRoot(getUserData) {
   try {
     const userData = typeof getUserData === "function" ? (getUserData() || {}) : {};
-    return !!userData?.options?.dev?.allow_http_root;
+    return userData?.options?.dev?.allow_http_root === true;
   } catch {
     return false;
   }
@@ -206,16 +188,12 @@ function _createStaticIndexHandler(distDir, getToken) {
       if (_cached === null) {
         _cached = fs.readFileSync(path.join(distDir, "index.html"), "utf8");
       }
-      // Clients locais (Electron projection windows) recebem injeção mínima
-      // (só LJ_HASH_ROUTING=true). Clients remotos (OBS, celular) recebem o
-      // bridge SSE completo (hash routing + EventSource + buffer replay).
-      const ip = req.ip || req.socket?.remoteAddress || "";
-      const isRemote = !_isLocalhost(ip);
+      // Todo cliente HTTP precisa do SSE, inclusive OBS/navegador em localhost:
+      // ele não compartilha o BroadcastChannel da origem louvorja://app usada
+      // pelas janelas nativas. O bridge preserva o hash antes de iniciar o Vue.
       const initialHash = _pathToHash(req.path);
       const token = typeof getToken === "function" ? getToken() : null;
-      const html = isRemote
-        ? _injectBridge(_cached, token, initialHash)
-        : _injectMinimalBridge(_cached, initialHash);
+      const html = _injectBridge(_cached, token, initialHash);
       res.set("Content-Type", "text/html; charset=utf-8");
       res.set("Cache-Control", "no-cache");
       res.send(html);
@@ -289,7 +267,7 @@ function _setupAliases(app) {
     }
     return res
       .status(404)
-      .send("Use /musica?transmissao (OBS) ou /musica?retorno (stage).");
+      .send("Use /musica?transmissao (OBS) ou /musica?retorno.");
   });
 
   app.get("/relogio", (req, res) => {
@@ -309,7 +287,7 @@ function _setupAliases(app) {
     }
     return res
       .status(404)
-      .send("Use /biblia?transmissao (OBS) ou /biblia?retorno (stage).");
+      .send("Use /biblia?transmissao (OBS) ou /biblia?retorno.");
   });
 
   app.get("/controle", (req, res) => {
@@ -356,10 +334,6 @@ function _setupStaticSpa(app, { distDir, getToken, apenasRemotos = false }) {
     if (req.method !== "GET") return next();
     if (req.path.startsWith("/api/") || req.path === "/events") return next();
     if (req.path === "/") {
-      const ip = req.ip || req.socket?.remoteAddress || "";
-      if (!_isLocalhost(ip)) {
-        return res.status(404).send("A rota raiz do servidor HTTP está desativada para clientes remotos.");
-      }
       return indexHandler(req, res);
     }
     if (!_isAllowedSpaPath(req.path)) {
@@ -376,6 +350,14 @@ function _setupStaticSpa(app, { distDir, getToken, apenasRemotos = false }) {
  * @param {{ isDev: boolean, distDir: string, getToken: () => string|null, getUserData?: () => Record<string, unknown>, serveDistToRemote?: boolean }} opts
  */
 function install(app, { isDev, distDir, getToken, getUserData, serveDistToRemote = false }) {
+  // Consulte o snapshot vivo antes do proxy ou do dist, em todos os modos.
+  // Assim a opção vale na próxima requisição, sem reiniciar o servidor.
+  app.use((req, res, next) => {
+    if (req.path === "/" && !_allowHttpRoot(getUserData)) {
+      return res.status(404).send("A rota raiz do servidor HTTP está desativada.");
+    }
+    return next();
+  });
   _setupAliases(app);
 
   if (isDev) {
@@ -396,9 +378,6 @@ function install(app, { isDev, distDir, getToken, getUserData, serveDistToRemote
     // acessar /@vite/client, /src/main.js, etc. para o Vue montar.
     app.use((req, res, next) => {
       if (req.path.startsWith("/api/") || req.path === "/events") return next();
-      if (req.path === "/" && !_allowHttpRoot(getUserData)) {
-        return res.status(404).send("A rota raiz do servidor HTTP está desativada em desenvolvimento.");
-      }
       return proxy(req, res);
     });
     return;

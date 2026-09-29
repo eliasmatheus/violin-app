@@ -140,7 +140,7 @@ a mesma session padrão aplica a política automaticamente.
 ### Vídeos online: binários baixados em tempo de execução
 
 O download de vídeos do YouTube (`electron/main/onlineVideo/`) executa dois binários que
-**não** vão no instalador e são baixados para `userData/bin/` no primeiro uso:
+**não** vão no instalador e são baixados para `<dados>/bin/` no primeiro uso:
 
 | Binário  | Origem                                             | Verificação                                                                                   |
 | -------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -167,7 +167,7 @@ O download de vídeos do YouTube (`electron/main/onlineVideo/`) executa dois bin
   só aceita o ID de formato fixo e essas duas trilhas. Os links do YouTube (`googlevideo.com`)
   **nunca chegam ao renderer**: o `yt-dlp -J` os entrega ao main, que só aceita `https` e
   hosts `*.googlevideo.com` (`runner.streamUrl`, conferido de novo ao abrir a sessão),
-  baixa com `Range` — sem seguir redirecionamentos — e grava em `online_videos/.stream/<id>/`,
+  baixa com `Range` — sem seguir redirecionamentos — e grava em `<dados>/Videos/.stream/<id>/`,
   com nomes fixos. Nenhuma janela abre conexão própria com o YouTube nesse caminho.
 - O yt-dlp é o único binário atualizado sem lançar uma versão do app, e só depois de uma falha
   que uma versão nova resolve (no máximo uma vez por hora). Trocar o ffmpeg exige trocar o

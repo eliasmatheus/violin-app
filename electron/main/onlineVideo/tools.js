@@ -398,7 +398,12 @@ function createTools(cfg) {
     };
   }
 
-  return { key, supported, paths, ready, ensure, refreshYtdlp, works, ffmpegWorks, reset, info };
+  /** Aguarda uma instalação em curso sem iniciar outra, antes de mover `bin/`. */
+  async function waitForIdle() {
+    await _ensuring?.catch(() => {});
+  }
+
+  return { key, supported, paths, ready, ensure, refreshYtdlp, works, ffmpegWorks, reset, info, waitForIdle };
 }
 
 module.exports = {

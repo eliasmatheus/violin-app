@@ -35,6 +35,18 @@ completa e os limites testados estão em
 
 ---
 
+## Armazenamento desktop
+
+No desktop, todos os dados persistentes ficam em uma raiz única, por padrão
+`Documentos/LouvorJA Violin`, ou na pasta definida em Armazenamento. `paths.dataDir()`
+resolve essa raiz: mídia em `files/`, vídeos baixados em `Videos/`, preferências em
+`storage/`, documentos em `library/`, cache do banco em `json_db/`, ferramentas em
+`bin/` e dados internos do Electron (IndexedDB, cookies, caches, logs) em `.electron/`.
+O endereço original de AppData/Application Support guarda a âncora `data-location.json`
+e o lock de instância única. Downloads e dados existentes são migrados sem sobrescrever
+destinos. Ao mover a raiz em Armazenamento, o perfil ainda aberto termina a migração no
+próximo boot; a tela indica que é preciso reiniciar.
+
 ## 🧠 Stack
 
 | Tecnologia   | Versão   | Uso                 |
@@ -438,7 +450,7 @@ A Bíblia são ~15 mil capítulos (13 versões × 1.189). Buscá-los um a um cus
 
 **Versões da Bíblia "baixadas"** (`helpers/BibleDownloads.ts`): detecção
 unificada por união — capítulos completos no IDB (`bible_chapters`) ∪ cache
-em disco legado (`userData/json_db`) ∪ flag manual
+em disco (`<dados>/json_db`) ∪ flag manual
 (`BIBLE_DOWNLOADED_VERSIONS`). Usada pelo select do módulo Bíblia, Controle
 Remoto, Sincronizar e StartupCheck.
 
@@ -934,7 +946,7 @@ Media.openYouTube(embedUrl, título)          ← único ponto de entrada (5 cha
        ├─ /operator               prévia do vídeo (abre se "Abrir operador" estiver ligado)
        └─ janela principal        único que toca o áudio; controla play/pausa/busca/volume
 
-  Quando as trilhas terminam: ffmpeg junta sem recodificar → userData/online_videos/<id>.mp4
+  Quando as trilhas terminam: ffmpeg junta sem recodificar → <dados>/Videos/<id>.mp4
   (a próxima vez toca do arquivo: `louvorja://onlinevideo/<id>.mp4`, os dois endereços iguais)
 ```
 
@@ -971,8 +983,10 @@ mesmas trilhas e não abre uma segunda conexão. Só um vídeo sem trilhas servi
   (`onlineVideo:prepare`, uma vez por sessão).
 - **Progresso** aparece em "Processos em segundo plano" (`useBackgroundTasks`, com botão de
   cancelar). Vídeo já em cache não pisca tarefa nenhuma.
-- **Cache** em `userData/online_videos/` (é cache, não documento: se sumir, baixa de novo;
-  por isso fica fora da pasta de dados, que costuma morar num OneDrive/iCloud). Cota de 6 GB,
+- **Vídeos baixados** em `<dados>/Videos/` (por padrão, `Documents/LouvorJA Violin/Videos`).
+  Downloads de versões anteriores em `userData/online_videos/` são movidos na inicialização,
+  preservando marcas de manter e parciais, sem sobrescrever o destino. A pasta acompanha a
+  mudança da raiz de dados. O cache automático mantém a cota de 6 GB,
   despeja o menos usado; "Apagar vídeos baixados" em Opções. Parciais com mais de 1 dia são
   varridos na abertura do app.
 - **Vídeos mantidos** (`<id>.keep` ao lado do arquivo): o que o operador baixou de propósito,
@@ -988,7 +1002,7 @@ mesmas trilhas e não abre uma segunda conexão. Só um vídeo sem trilhas servi
   já começa o download e guarda o vídeo, salvo com o download desligado nas opções.
 - **A cópia única** (`onlineVideo:stream`, `progressive.js`): o yt-dlp pede só os **links** das
   duas trilhas (`-J`, sem baixar) e o main as baixa **uma vez**, em pedaços de 2 MB, para
-  arquivos do tamanho final em `online_videos/.stream/<id>/` que vão sendo preenchidos.
+  arquivos do tamanho final em `Videos/.stream/<id>/` que vão sendo preenchidos.
   Projeção, retorno, operador e o player do app leem desses arquivos por `Range`, em
   `louvorja://onlinestream/<id>/video|audio` — o handler espera o trecho que ainda não chegou
   e, num salto, o baixador pula para lá. Começa em ~7 s. Ao terminar, o ffmpeg junta as trilhas

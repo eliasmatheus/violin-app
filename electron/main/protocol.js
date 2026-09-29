@@ -6,8 +6,8 @@
  * Hosts suportados:
  *   louvorja://app/<caminho>       — assets do build Vue em dist/ (substitui file://)
  *   louvorja://json_db/<arquivo>   — proxy com cache para <api>/json_db
- *   louvorja://files/<caminho>     — arquivos locais em userData/files/ (populado em D3 via HTTPS)
- *   louvorja://onlinevideo/<id>.mp4 — vídeos do YouTube baixados em userData/online_videos/
+ *   louvorja://files/<caminho>     — arquivos locais em <dados>/files/ (populado em D3 via HTTPS)
+ *   louvorja://onlinevideo/<id>.mp4 — vídeos do YouTube baixados em dataDir/Videos/
  *   louvorja://onlinestream/<id>/video|audio — o vídeo do YouTube que ainda está baixando
  *
  * O protocolo é marcado como standard + secure para que fetch() e XHR funcionem
@@ -292,7 +292,7 @@ function handle() {
 
       // ------------------------------------------------------------------
       // louvorja://json_db/<arquivo>
-      // Serve JSON com cache em userData/json_db/
+      // Serve JSON com cache em <dados>/json_db/
       // ------------------------------------------------------------------
       if (host === "json_db") {
         const headers = {
@@ -338,7 +338,7 @@ function handle() {
       // ------------------------------------------------------------------
       if (host === "onlinevideo") {
         const m = /^\/([A-Za-z0-9_-]{11})\.mp4$/.exec(pathname);
-        const file = m ? onlineVideo.fileFor(m[1]) : null;
+        const file = m ? await onlineVideo.fileFor(m[1]) : null;
         if (!file) return new Response("Not found", { status: 404 });
         return await _responderArquivo(file, request);
       }
@@ -361,7 +361,7 @@ function handle() {
 
       // ------------------------------------------------------------------
       // louvorja://files/<caminho>
-      // Serve arquivos locais de userData/files/. Se faltar, busca remoto
+      // Serve arquivos locais de <dados>/files/. Se faltar, busca remoto
       // E grava no disco em paralelo (auto-cache S1) — exceto para Range
       // requests (não cacheamos partials).
       // ------------------------------------------------------------------
