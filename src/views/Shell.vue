@@ -13,7 +13,9 @@
       :style="{ '--footer-height': footerHeight }"
     >
       <div class="shell-grid">
-        <ChatDrawer v-if="Platform.isDesktop && (isChatOpen || isPinned)" />
+        <Transition name="chat-drawer-slide">
+          <ChatDrawer v-if="Platform.isDesktop && (isChatOpen || isPinned)" />
+        </Transition>
 
         <div
           class="shell-center"

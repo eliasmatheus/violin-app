@@ -2,56 +2,70 @@
   <OverlayRenderer />
   <div class="fp-wallpaper" :style="fallbackStyle"></div>
   <div v-if="fileProjection.active" class="file-projection">
-    <img
-      v-if="fileProjection.type === 'image'"
-      :src="fileProjection.url"
-      class="file-projection__media"
-      alt=""
-    />
-    <template v-else-if="fileProjection.type === 'video'">
-      <video
-        v-show="!videoFailed"
-        ref="videoRef"
-        :src="fileProjection.url"
-        class="file-projection__media"
-        :style="{ backgroundColor: wpColor }"
-        autoplay
-        muted
-        playsinline
-        @loadedmetadata="onVideoReady"
-        @canplay="onVideoReady"
-        @seeked="onVideoSeeked"
-        @playing="onVideoPlaying"
-        @waiting="onVideoBuffering"
-        @stalled="onVideoBuffering"
-        @error="onVideoError"
-      />
-      <div v-if="videoFailed" class="video-unavailable">
-        <span class="video-unavailable__title">{{ $t("projection.video_unavailable") }}</span>
-        <span class="video-unavailable__hint">{{ $t("projection.video_unavailable_hint") }}</span>
-      </div>
-    </template>
-    <template v-else-if="fileProjection.type === 'youtube'">
-      <div v-show="!ytFailed" ref="ytContainer" class="file-projection__youtube" />
-      <div v-if="ytFailed" class="video-unavailable">
-        <span class="video-unavailable__title">{{ $t("projection.video_unavailable") }}</span>
-        <span class="video-unavailable__hint">{{ $t("projection.video_unavailable_hint") }}</span>
-      </div>
-    </template>
-    <canvas
-      v-else-if="fileProjection.type === 'pdf'"
-      ref="pdfCanvas"
-      class="file-projection__pdf"
-    />
+    <!-- Cena da transição: mídia anterior e nova se sobrepõem durante a animação -->
+    <div class="lj-tstage" :style="stageStyle">
+      <Transition :name="transitionName">
+        <div :key="mediaKey" class="lj-tslide">
+          <img
+            v-if="fileProjection.type === 'image'"
+            :src="fileProjection.url"
+            class="file-projection__media"
+            alt=""
+          />
+          <template v-else-if="fileProjection.type === 'video'">
+            <video
+              v-show="!videoFailed"
+              ref="videoRef"
+              :src="fileProjection.url"
+              class="file-projection__media"
+              :style="{ backgroundColor: wpColor }"
+              autoplay
+              muted
+              playsinline
+              @loadedmetadata="onVideoReady"
+              @canplay="onVideoReady"
+              @seeked="onVideoSeeked"
+              @playing="onVideoPlaying"
+              @waiting="onVideoBuffering"
+              @stalled="onVideoBuffering"
+              @error="onVideoError"
+            />
+            <div v-if="videoFailed" class="video-unavailable">
+              <span class="video-unavailable__title">{{ $t("projection.video_unavailable") }}</span>
+              <span class="video-unavailable__hint">
+                {{ $t("projection.video_unavailable_hint") }}
+              </span>
+            </div>
+          </template>
+          <template v-else-if="fileProjection.type === 'youtube'">
+            <div v-show="!ytFailed" ref="ytContainer" class="file-projection__youtube" />
+            <div v-if="ytFailed" class="video-unavailable">
+              <span class="video-unavailable__title">{{ $t("projection.video_unavailable") }}</span>
+              <span class="video-unavailable__hint">
+                {{ $t("projection.video_unavailable_hint") }}
+              </span>
+            </div>
+          </template>
+          <canvas
+            v-else-if="fileProjection.type === 'pdf'"
+            ref="pdfCanvas"
+            class="file-projection__pdf"
+          />
+        </div>
+      </Transition>
+    </div>
   </div>
   <div v-else class="file-projection__empty"></div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from "vue";
+import "@/assets/styles/transitions.css";
 import { estiloDeFundo } from "@/helpers/BackgroundStyle";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { useProjectionCloseNotice } from "@/composables/useProjectionCloseNotice";
+import { useTransitionStage } from "@/composables/useTransitionStage";
+import { createTransitionContext } from "@/config/Transitions";
 import { PROJECTION_TYPE } from "@/constants/Projection";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import Broadcast from "@/helpers/Broadcast";
@@ -104,6 +118,19 @@ const fileProjection = reactive<FileProjectionState>({
   page: 1,
   totalPages: 0,
 });
+
+/** Identidade da mídia na cena — a página do PDF fica de fora para re-render
+ * no mesmo canvas; playback_id novo conta como mídia nova. */
+const mediaKey = computed(
+  () => `${fileProjection.type}:${fileProjection.url}:${fileProjection.playback_id ?? ""}`
+);
+
+/** Nome da classe + variáveis da stage — configuração própria da Biblioteca de
+ * Mídia; `backward` (próximo/anterior) inverte o modo automático de direção. */
+const { transitionName, stageStyle } = useTransitionStage(
+  createTransitionContext(KEYS.MODULES.MEDIA_LIBRARY),
+  { isBackward: () => fileProjection.backward === true }
+);
 
 const videoRef = ref<HTMLVideoElement | null>(null);
 const videoFailed = ref(false);
@@ -312,6 +339,7 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
   fileProjection.url = p.url || "";
   fileProjection.title = p.title || "";
   fileProjection.playback_id = p.playback_id;
+  fileProjection.backward = p.backward === true;
   videoStateGate.begin(p.playback_id);
   videoFirstFrame.begin(p.type === "video" ? p.playback_id : null);
   Telemetry.setRuntimeContext({ playback_id: p.playback_id ?? null });
@@ -498,7 +526,12 @@ function onVideoError(event: Event): void {
 }
 
 watch(
-  () => [fileProjection.active, fileProjection.type, fileProjection.url],
+  () => [
+    fileProjection.active,
+    fileProjection.type,
+    fileProjection.url,
+    fileProjection.playback_id,
+  ],
   async ([active, type]) => {
     if (active && type === "video") {
       await nextTick();

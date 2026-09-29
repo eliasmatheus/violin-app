@@ -104,8 +104,8 @@ describe("AnnouncementsProjection transitions", () => {
     control("next");
     await nextTick();
 
-    expect(wrapper!.find(".ann-fade-enter-active").exists()).toBe(true);
-    expect(wrapper!.find(".ann-fade-leave-active").exists()).toBe(true);
+    expect(wrapper!.find(".lj-t-fade-enter-active").exists()).toBe(true);
+    expect(wrapper!.find(".lj-t-fade-leave-active").exists()).toBe(true);
     // Durante a animação os dois slides coexistem (saída + entrada).
     const texts = wrapper!.findAll(".ann-text").map((n) => n.text());
     expect(texts.join(" ")).toContain("Slide A");
@@ -116,13 +116,13 @@ describe("AnnouncementsProjection transitions", () => {
     setOption(KEY_TYPE, "slide");
     start(1);
     await nextTick();
-    const before = wrapper!.find(".ann-stage").attributes("style") ?? "";
+    const before = wrapper!.find(".lj-tstage").attributes("style") ?? "";
     expect(before).toContain("--ent-x: 100%");
 
     control("prev");
     await nextTick();
 
-    const style = wrapper!.find(".ann-stage").attributes("style") ?? "";
+    const style = wrapper!.find(".lj-tstage").attributes("style") ?? "";
     expect(style).toContain("--ent-x: -100%");
     expect(style).toContain("--lv-x: 100%");
   });
@@ -133,7 +133,7 @@ describe("AnnouncementsProjection transitions", () => {
     start(0);
     await nextTick();
 
-    const style = wrapper!.find(".ann-stage").attributes("style") ?? "";
+    const style = wrapper!.find(".lj-tstage").attributes("style") ?? "";
     expect(style).toContain("--ent-y: 100%");
     expect(style).toContain("--lv-y: -100%");
     expect(style).toContain("--ent-x: 0%");
@@ -144,11 +144,11 @@ describe("AnnouncementsProjection transitions", () => {
     setOption(`${OPT}.fade_style`, "blur");
     start(0);
     await nextTick();
-    expect(wrapper!.find(".ann-stage").attributes("style")).toContain("--fade-blur: 12px");
+    expect(wrapper!.find(".lj-tstage").attributes("style")).toContain("--fade-blur: 12px");
 
     setOption(`${OPT}.fade_style`, "through_bg");
     await nextTick();
-    expect(wrapper!.find(".ann-stage").attributes("style")).toContain("--fade-delay: 500ms");
+    expect(wrapper!.find(".lj-tstage").attributes("style")).toContain("--fade-delay: 500ms");
   });
 
   it("starts zoom growing from the configured scale and origin", async () => {
@@ -158,7 +158,7 @@ describe("AnnouncementsProjection transitions", () => {
     start(0);
     await nextTick();
 
-    const style = wrapper!.find(".ann-stage").attributes("style") ?? "";
+    const style = wrapper!.find(".lj-tstage").attributes("style") ?? "";
     expect(style).toContain("--zoom-from: 0.94");
     expect(style).toContain("--zoom-origin: 50% 0%");
   });
@@ -168,19 +168,19 @@ describe("AnnouncementsProjection transitions", () => {
     setOption(`${OPT}.ease`, "ease-in");
     start(0);
     await nextTick();
-    expect(wrapper!.find(".ann-stage").attributes("style")).toContain("--trans-ease: ease-in");
+    expect(wrapper!.find(".lj-tstage").attributes("style")).toContain("--trans-ease: ease-in");
 
     setOption(`${OPT}.ease`, "not-a-curve");
     await nextTick();
-    const fallback = wrapper!.find(".ann-stage").attributes("style") ?? "";
+    const fallback = wrapper!.find(".lj-tstage").attributes("style") ?? "";
     expect(fallback).toContain("--trans-ease: ease");
     expect(fallback).not.toContain("ease-in");
   });
 
   it.each([
-    ["flip", ".ann-flip-enter-active", ".ann-flip-leave-active"],
-    ["circle", ".ann-circle-enter-active", ".ann-circle-leave-active"],
-    ["split", ".ann-split-enter-active", ".ann-split-leave-active"],
+    ["flip", ".lj-t-flip-enter-active", ".lj-t-flip-leave-active"],
+    ["circle", ".lj-t-circle-enter-active", ".lj-t-circle-leave-active"],
+    ["split", ".lj-t-split-enter-active", ".lj-t-split-leave-active"],
   ])("applies the %s transition classes while a slide changes", async (type, enterSel, leaveSel) => {
     setOption(KEY_TYPE, type);
     start(0);
@@ -198,7 +198,7 @@ describe("AnnouncementsProjection transitions", () => {
     start(0);
     await nextTick();
 
-    expect(wrapper!.find(".ann-stage").attributes("style")).toContain("--trans-dur: 800ms");
+    expect(wrapper!.find(".lj-tstage").attributes("style")).toContain("--trans-dur: 800ms");
   });
 
   it("falls back to contain-like defaults when the type is unknown", async () => {
@@ -209,8 +209,8 @@ describe("AnnouncementsProjection transitions", () => {
     control("next");
     await nextTick();
 
-    expect(wrapper!.find(".ann-none-enter-active").exists()).toBe(true);
-    expect(wrapper!.find(".ann-none-leave-active").exists()).toBe(true);
+    expect(wrapper!.find(".lj-t-none-enter-active").exists()).toBe(true);
+    expect(wrapper!.find(".lj-t-none-leave-active").exists()).toBe(true);
   });
 
   it("keeps each slide's own background while the transition runs", async () => {
@@ -226,7 +226,7 @@ describe("AnnouncementsProjection transitions", () => {
 
     // Saindo e entrando coexistem: cada um carrega o próprio fundo.
     const backgrounds = wrapper!
-      .findAll(".ann-slide")
+      .findAll(".lj-tslide")
       .map((s) => (s.element as HTMLElement).style.backgroundColor);
     expect(backgrounds).toHaveLength(2);
     expect(new Set(backgrounds)).toEqual(new Set(["rgb(1, 2, 3)", "rgb(4, 5, 6)"]));

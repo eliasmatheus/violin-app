@@ -5,18 +5,24 @@ import {
   createTransitionContext,
   TRANSITION_TYPE_OPTIONS,
 } from "@/config/Transitions";
-import type { RibbonButton } from "@/types/Ribbon";
+import type { RibbonButton, RibbonPage } from "@/types/Ribbon";
 
-const ctx = createTransitionContext(KEYS.MODULES.ANNOUNCEMENTS);
+const ctx = createTransitionContext(KEYS.MODULES.MEDIA_LIBRARY);
 const TYPE_PATH = ctx.typeKey;
 
+/** O grupo de transições é o único da página cujo id termina em `_transitions`. */
 function buttons(): RibbonButton[] {
-  return (contextualPages[0].groups[0].buttons ?? []) as RibbonButton[];
+  const page = contextualPages.find((p: RibbonPage) =>
+    p.groups.some((g) => g.id.endsWith("_transitions")),
+  );
+  const group = page?.groups.find((g) => g.id.endsWith("_transitions"));
+  return (group?.buttons ?? []) as RibbonButton[];
 }
 
-describe("announcements ribbon transition page", () => {
+describe("media library ribbon transition page", () => {
   it("declares exactly one conditional select per effect, coherent with the table", () => {
     const list = buttons();
+    expect(list.length).toBeGreaterThan(0);
     for (const [effect, p] of Object.entries(ctx.params)) {
       const matches = list.filter((b) => b.optionKey === p.key);
       expect(matches, `efeito ${effect}`).toHaveLength(1);
@@ -52,5 +58,13 @@ describe("announcements ribbon transition page", () => {
 
   it("has no custom component buttons in the contextual page", () => {
     expect(buttons().some((b) => !!b.customButton)).toBe(false);
+  });
+
+  it("uses the module's own storage keys, independent from announcements", () => {
+    expect(TYPE_PATH).toBe(KEYS.MODULES.MEDIA_LIBRARY.TRANSITION_TYPE);
+    expect(TYPE_PATH).not.toBe(KEYS.MODULES.ANNOUNCEMENTS.TRANSITION_TYPE);
+    for (const p of Object.values(ctx.params)) {
+      expect(p.key.startsWith(KEYS.MODULES.MEDIA_LIBRARY.TRANSITION_OPTIONS.ROOT)).toBe(true);
+    }
   });
 });

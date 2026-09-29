@@ -54,6 +54,8 @@ export interface FileProjectionState {
   stage_epoch?: number;
   page?: number;
   totalPages?: number;
+  /** Navegação veio do "anterior" — inverte o modo automático de direção. */
+  backward?: boolean;
   /** Referência para re-resolver URLs blob via IndexedDB na janela alvo. */
   libRef?: { table?: string; id: string };
 }

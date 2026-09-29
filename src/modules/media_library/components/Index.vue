@@ -1016,6 +1016,8 @@ async function playIndex(index: number): Promise<void> {
   if (!item) return;
   if (currentIndex.value === index && isPlaying.value) return;
   const generation = ++playIndexGeneration;
+  // Direção da navegação para o modo automático de transição da projeção.
+  const backward = index < currentIndex.value;
 
   currentIndex.value = index;
   isPlaying.value = true;
@@ -1028,6 +1030,7 @@ async function playIndex(index: number): Promise<void> {
   const isVideo = item.type === "video";
 
   const payload: Record<string, unknown> = { url, type: item.type, title: item.name };
+  payload.backward = backward;
   if (item.type === "pdf") {
     payload.page = 1;
     payload.playback_id = currentPdfPlaybackId;

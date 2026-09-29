@@ -150,6 +150,21 @@ export const KEYS = {
     },
     MEDIA_LIBRARY: {
       IS_PLAYING: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.is_playing`,
+      TRANSITION_TYPE: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_type`,
+      TRANSITION_DURATION: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_duration`,
+      /** Parâmetros da transição — folhas por efeito (via tabela) + `EASE` compartilhado. */
+      TRANSITION_OPTIONS: {
+        ROOT: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_options`,
+        EASE: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_options.ease`,
+        FADE_STYLE: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_options.fade_style`,
+        DIR: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_options.dir`,
+        ZOOM: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_options.zoom`,
+        ZOOM_ORIGIN: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_options.zoom_origin`,
+        WIPE_DIR: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_options.wipe_dir`,
+        SPLIT_DIR: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_options.split_dir`,
+        FLIP_AXIS: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_options.flip_axis`,
+        CIRCLE_ORIGIN: `${MODULES}.${ModuleEnum.MEDIA_LIBRARY}.transition_options.circle_origin`,
+      },
     },
     NAME_DRAW: {
       RUNNING: `${MODULES}.${ModuleEnum.NAME_DRAW}.running`,
