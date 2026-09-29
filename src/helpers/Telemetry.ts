@@ -19,6 +19,11 @@ import { BROADCAST_TYPE, type TelemetrySessionPayload } from "@/helpers/Broadcas
 import Platform from "@/helpers/Platform";
 import { normalizeAppVersion } from "@/helpers/AppVersion.js";
 import { normalizeOwnProtocolExceptionFrames } from "@/helpers/ExceptionFrames";
+import { cpuProfileLogSummary } from "@/helpers/CpuProfileDiagnostic";
+import {
+  animationFrameDiagnostic,
+  createResponsivenessContext,
+} from "@/helpers/ResponsivenessContext";
 import $userdata from "@/helpers/UserData";
 import { setNetworkTimingReporter } from "@/helpers/Http";
 import { setDatabaseTimingReporter } from "@/helpers/Database";
@@ -46,10 +51,16 @@ const _pendingExceptions: Array<{ error: unknown; properties?: Record<string, un
 const _pendingEvents: Array<{ event: string; properties: Record<string, unknown> }> = [];
 const _pendingMetrics: Array<{ name: string; value: number; attributes: MetricAttributes }> = [];
 const _pendingRuntimeLogs: Array<{
-  level: "warn" | "error" | "fatal";
+  level: "info" | "warn" | "error" | "fatal";
+  attributes: Record<string, unknown>;
+}> = [];
+const _pendingFailureLogs: Array<{
+  level: LogLevel;
+  message: string;
   attributes: Record<string, unknown>;
 }> = [];
 const _pendingSpans = new Map<string, PerformanceSpan>();
+const _responsivenessContext = createResponsivenessContext();
 const _breadcrumbs: Array<{ at: string; event: string; properties?: Record<string, unknown> }> = [];
 const _explicitErrors = new WeakMap<object, number>();
 const DUPLICATE_CAPTURE_WINDOW_MS = 5_000;
@@ -641,6 +652,13 @@ export function markEnd(
 
 /** Discards an interrupted operation without reporting a completed duration. */
 export function markCancel(name: string, key: string): void {
+  const span = _pendingSpans.get(`${name}:${key}`);
+  if (span && isEnabled())
+    _responsivenessContext.record(
+      span,
+      typeof performance !== "undefined" ? performance.now() : Date.now(),
+      "cancelled"
+    );
   _pendingSpans.delete(`${name}:${key}`);
 }
 
@@ -651,6 +669,7 @@ export function finishPerformance(
 ): number {
   const now = typeof performance !== "undefined" ? performance.now() : Date.now();
   const durationMs = Math.max(0, Math.round(now - span.startedAt));
+  if (isEnabled()) _responsivenessContext.record(span, now);
   track("performance_measurement", {
     measurement: span.name,
     duration_ms: durationMs,
@@ -836,11 +855,46 @@ const RUNTIME_INCIDENT_KEYS = new Set([
   "main_loop_p99_ms",
   "main_loop_max_ms",
   "main_cpu_percent",
+  "main_sample_started_at_ms",
+  "main_sample_ended_at_ms",
   "sample_window_ms",
   "critical_budget_ms",
   "entry_type",
   "entry_name",
   "start_time_ms",
+  "renderer_overlapping_operations",
+  "renderer_script_attribution_supported",
+  "renderer_animation_frame",
+  "main_synchronous_operations",
+  "main_operation_coverage",
+  "download_worker_id",
+  "download_job_id",
+  "download_worker_pid",
+  "download_worker_duration_ms",
+  "download_worker_exit_code",
+  "download_worker_phase",
+  "download_worker_termination_phase",
+  "download_worker_termination_intent",
+  "download_worker_termination_reason",
+  "download_worker_kill_result",
+  "download_worker_exit_observed",
+  "cpu_profile_id",
+  "cpu_profile_trigger_incident_id",
+  "cpu_profile_target",
+  "cpu_profile_relation",
+  "cpu_profile_timing_basis",
+  "cpu_profile_status",
+  "cpu_profile_reason",
+  "cpu_profile_sampling_interval_us",
+  "cpu_profile_requested_duration_ms",
+  "cpu_profile_requested_at_ms",
+  "cpu_profile_activation_ms",
+  "cpu_profile_started_at_ms",
+  "cpu_profile_ended_at_ms",
+  "cpu_profile_duration_ms",
+  "cpu_profile_observed_incident_ids",
+  "cpu_profile_observations",
+  "cpu_profile_summary",
 ]);
 
 const STREAM_FAILURE_ENUMS = {
@@ -886,10 +940,21 @@ export function reportRuntimeIncident(payload: unknown): void {
   if ("last_stream_failure" in attributes) {
     attributes.last_stream_failure = safeStreamFailureDiagnostic(attributes.last_stream_failure);
   }
+  if ("cpu_profile_summary" in attributes) {
+    const summary = cpuProfileLogSummary(attributes.cpu_profile_summary);
+    if (summary) attributes.cpu_profile_summary = summary;
+    else delete attributes.cpu_profile_summary;
+  }
   if (typeof attributes.incident_type !== "string" || !attributes.incident_type) return;
   const rawSeverity = attributes.severity;
-  const level: "warn" | "error" | "fatal" =
-    rawSeverity === "fatal" ? "fatal" : rawSeverity === "error" ? "error" : "warn";
+  const level: "info" | "warn" | "error" | "fatal" =
+    attributes.incident_type === "cpu_profile_window" && rawSeverity === "info"
+      ? "info"
+      : rawSeverity === "fatal"
+        ? "fatal"
+        : rawSeverity === "error"
+          ? "error"
+          : "warn";
   const enriched = {
     source: "electron.runtime_health",
     ...attributes,
@@ -912,10 +977,14 @@ function startResponsivenessMonitor(): void {
   }
 
   const cleanups: Array<() => void> = [];
+  const monitoredFrom = performance.now();
+  let monitorActive = true;
   let heartbeatAggregate = emptyJankAggregate();
   let remoteAggregate = emptyJankAggregate();
   let lastCriticalIncidentAt = 0;
   let longTaskObserved = false;
+  let scriptAttributionSupported = false;
+  let lastScriptIncidentAt = -Infinity;
 
   const activeOperations = () =>
     [..._pendingSpans.keys()]
@@ -992,14 +1061,67 @@ function startResponsivenessMonitor(): void {
       entry_name: entry?.name,
       start_time_ms: entry ? Math.round(entry.startTime) : undefined,
       renderer_active_operations: activeOperations(),
+      renderer_script_attribution_supported: scriptAttributionSupported,
+      renderer_overlapping_operations: entry
+        ? _responsivenessContext.overlapping(
+            entry.startTime,
+            entry.duration,
+            _pendingSpans.values()
+          )
+        : [],
       ..._runtimeContext,
     });
   };
 
   if (typeof PerformanceObserver === "function") {
+    if (PerformanceObserver.supportedEntryTypes?.includes("long-animation-frame")) {
+      try {
+        const observer = new PerformanceObserver((list) => {
+          if (!monitorActive || !isEnabled()) return;
+          for (const entry of list.getEntries()) {
+            // Buffered entries can precede initialization or an opt-in. Do not
+            // collect frames that began outside this consented monitor window.
+            if (entry.startTime < monitoredFrom || entry.duration < UI_JANK_BUDGET.critical)
+              continue;
+            const now = Date.now();
+            if (now - lastScriptIncidentAt < RUNTIME_CRITICAL_COOLDOWN_MS) continue;
+            const frame = animationFrameDiagnostic(entry);
+            if (!frame) continue;
+            lastScriptIncidentAt = now;
+            reportRuntimeIncident({
+              diagnostic_schema_version: 1,
+              incident_id: runtimeIncidentId(),
+              incident_type: "renderer_long_animation_frame",
+              incident_status: "detected",
+              severity: "error",
+              observed_at: new Date(now).toISOString(),
+              window_role: windowRole(),
+              feature: windowFeature(),
+              duration_ms: Math.round(entry.duration),
+              start_time_ms: Math.round(entry.startTime),
+              renderer_script_attribution_supported: true,
+              renderer_animation_frame: frame,
+              renderer_overlapping_operations: _responsivenessContext.overlapping(
+                entry.startTime,
+                entry.duration,
+                _pendingSpans.values()
+              ),
+              ..._runtimeContext,
+            });
+          }
+        });
+        observer.observe({ type: "long-animation-frame", buffered: true });
+        scriptAttributionSupported = true;
+        cleanups.push(() => observer.disconnect());
+      } catch {
+        /* Other responsiveness signals continue on older engines. */
+      }
+    }
     try {
       const observer = new PerformanceObserver((list) => {
+        if (!monitorActive || !isEnabled()) return;
         for (const entry of list.getEntries()) {
+          if (entry.startTime < monitoredFrom) continue;
           const durationMs = Math.round(entry.duration);
           recordJank(durationMs, "renderer_long_task", entry);
         }
@@ -1051,6 +1173,7 @@ function startResponsivenessMonitor(): void {
   cleanups.push(() => window.clearInterval(aggregateTimer));
 
   _responsivenessCleanup = () => {
+    monitorActive = false;
     sendHeartbeat();
     flushRemoteAggregate();
     for (const cleanup of cleanups.splice(0)) cleanup();
@@ -1074,16 +1197,37 @@ export function log(
   const safeMessage = sanitizeString(message);
   const attributes = { ...baseContext(), ...serializableProperties(properties) };
   const ph = _ph as PostHogWithLogs | null;
-  const logger = ph?.logger?.[level];
-  if (logger) {
-    logger(safeMessage, attributes);
+  if (!ph) {
+    if (["warn", "error", "fatal"].includes(level) && _pendingFailureLogs.length < 20) {
+      _pendingFailureLogs.push({
+        level,
+        message: safeMessage,
+        attributes: {
+          ...serializableProperties(properties),
+          window_role: attributes.window_role,
+          window_feature: attributes.window_feature,
+          route: attributes.route,
+          diagnostic_recorded_at: new Date().toISOString(),
+        },
+      });
+    }
     return;
   }
-  if (ph?.captureLog) {
-    ph.captureLog({ body: safeMessage, level, attributes });
-    return;
+  try {
+    const logger = ph.logger?.[level];
+    if (logger) {
+      logger(safeMessage, attributes);
+      return;
+    }
+    if (ph.captureLog) {
+      ph.captureLog({ body: safeMessage, level, attributes });
+      return;
+    }
+    ph.capture("telemetry_log", { level, message: safeMessage, ...attributes });
+  } catch {
+    // A diagnostic must not interrupt playback or SDK initialization. Logging
+    // this failure through the same SDK would create a recursive error path.
   }
-  ph?.capture("telemetry_log", { level, message: safeMessage, ...attributes });
 }
 
 /**
@@ -1310,7 +1454,9 @@ export function setEnabled(enabled: boolean): void {
     _pendingEvents.length = 0;
     _pendingMetrics.length = 0;
     _pendingRuntimeLogs.length = 0;
+    _pendingFailureLogs.length = 0;
     _pendingSpans.clear();
+    _responsivenessContext.clear();
     _responsivenessCleanup?.();
     stopErrorReplay();
     _ph?.opt_out_capturing();
@@ -1632,6 +1778,9 @@ async function _init(): Promise<void> {
     diagnostic("debug", "incidentes de runtime pendentes enviados após init", {
       count: pendingRuntimeLogs.length,
     });
+  }
+  for (const pending of _pendingFailureLogs.splice(0)) {
+    log(pending.level, pending.message, pending.attributes);
   }
   const appOpened = posthog.capture(
     "app_opened",

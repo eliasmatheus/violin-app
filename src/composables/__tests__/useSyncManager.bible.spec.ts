@@ -24,6 +24,7 @@ vi.mock("@/helpers/BundleInstaller", () => ({ default: { install: vi.fn() } }));
 vi.mock("@/helpers/IndexedDB", () => ({ default: { del: vi.fn(async () => {}) } }));
 vi.mock("@/helpers/Database", () => ({
   default: { get: dbGet, getStoredIdsForPrefix: storedIds },
+  setDatabaseTimingReporter: vi.fn(),
 }));
 
 // O módulo guarda o estado (Bíblia pronta, última falha) fora do componente,

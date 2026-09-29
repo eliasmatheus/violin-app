@@ -106,10 +106,226 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("Telemetry", () => {
+  it("logs CPU follow-up summaries as information, preserves callers and rejects unsafe profiles", async () => {
+    const Telemetry = await loadTelemetry();
+    const frames = Array.from({ length: 6 }, (_, index) => ({
+      function: `caller${index}`,
+      source: "electron/main.cjs",
+      line: index + 1,
+      column: 1,
+    }));
+    const summary = {
+      sample_count: 2,
+      sampled_duration_ms: 40,
+      idle_ms: 0,
+      gc_ms: 0,
+      program_ms: 0,
+      unattributed_ms: 0,
+      top_frames: [{ ...frames[5], sample_count: 2, self_sample_ms: 40 }],
+      top_stacks: [{ sample_count: 2, sampled_ms: 40, frames }],
+    };
+    Telemetry.reportRuntimeIncident({
+      incident_type: "cpu_profile_window",
+      severity: "info",
+      cpu_profile_summary: summary,
+      cpu_profile_relation: "followup_window",
+    });
+    await Telemetry.init();
+    expect(posthog.logger.info).toHaveBeenCalledWith(
+      "runtime incident",
+      expect.objectContaining({
+        cpu_profile_summary: expect.objectContaining({
+          top_stacks: [
+            {
+              sample_count: 2,
+              sampled_ms: 40,
+              frames: frames.map((frame) => `${frame.function} (${frame.source}:${frame.line}:1)`),
+            },
+          ],
+        }),
+      })
+    );
+    Telemetry.reportRuntimeIncident({
+      incident_type: "cpu_profile_window",
+      severity: "info",
+      cpu_profile_summary: {
+        ...summary,
+        top_frames: [{ ...summary.top_frames[0], source: "file:///Users/private/secret.js" }],
+      },
+    });
+    expect(posthog.logger.info.mock.lastCall?.[1]).not.toHaveProperty("cpu_profile_summary");
+    expect(posthog.captureException).not.toHaveBeenCalled();
+    expect(posthog.logger.warn).not.toHaveBeenCalledWith("runtime incident", expect.anything());
+    state["options.telemetry"] = false;
+    const count = posthog.logger.info.mock.calls.length;
+    Telemetry.reportRuntimeIncident({
+      incident_type: "cpu_profile_window",
+      severity: "info",
+      cpu_profile_summary: summary,
+    });
+    expect(posthog.logger.info.mock.calls).toHaveLength(count);
+  });
+
+  it("keeps a bounded snapshot of failure logs before SDK initialization, without collecting success logs", async () => {
+    const Telemetry = await loadTelemetry();
+    const context = { request_id: "request-1", nested: { phase: "original", token: "secret" } };
+    Telemetry.log("warn", "libras translation failed", context);
+    context.nested.phase = "later";
+    Telemetry.log("debug", "success detail", {});
+    for (let i = 0; i < 30; i++) Telemetry.log("error", `failure-${i}`);
+    expect(posthog.logger.warn).not.toHaveBeenCalled();
+    await Telemetry.init();
+    expect(posthog.logger.warn).toHaveBeenCalledWith(
+      "libras translation failed",
+      expect.objectContaining({
+        request_id: "request-1",
+        nested: { phase: "original" },
+        diagnostic_recorded_at: expect.any(String),
+      })
+    );
+    expect(posthog.logger.error).toHaveBeenCalledTimes(19);
+    expect(posthog.logger.debug).not.toHaveBeenCalledWith("success detail", expect.anything());
+  });
+
+  it("clears pending failure logs on opt-out even if capture is enabled again before initialization", async () => {
+    const Telemetry = await loadTelemetry();
+    Telemetry.log("warn", "discard-on-optout");
+    Telemetry.setEnabled(false);
+    state["options.telemetry"] = true;
+    await Telemetry.init();
+    expect(posthog.logger.warn).not.toHaveBeenCalledWith("discard-on-optout", expect.anything());
+  });
+
+  it("continues initialization and later logging when the SDK rejects a diagnostic", async () => {
+    const Telemetry = await loadTelemetry();
+    Telemetry.log("warn", "early-failure");
+    Telemetry.log("warn", "later-failure");
+    posthog.logger.warn.mockImplementationOnce(() => {
+      throw new Error("logger unavailable");
+    });
+    await expect(Telemetry.init()).resolves.toBeUndefined();
+    expect(posthog.logger.warn).toHaveBeenCalledWith("later-failure", expect.anything());
+    posthog.logger.error.mockImplementationOnce(() => {
+      throw new Error("logger unavailable");
+    });
+    expect(() => Telemetry.log("error", "playback-failure")).not.toThrow();
+  });
+
+  it("sends actual observer attribution and operations already completed before callback, with cooldown and opt-out", async () => {
+    const observers: Array<{
+      type: string;
+      deliver: (_entries: PerformanceEntry[]) => void;
+      disconnect: () => void;
+    }> = [];
+    class Observer {
+      static supportedEntryTypes = ["longtask", "long-animation-frame"];
+      type = "";
+      disconnect = vi.fn();
+      constructor(private _callback: (_list: { getEntries: () => PerformanceEntry[] }) => void) {
+        observers.push(this);
+      }
+      observe(options: { type: string }) {
+        this.type = options.type;
+      }
+      deliver(entries: PerformanceEntry[]) {
+        this._callback({ getEntries: () => entries });
+      }
+    }
+    vi.stubGlobal("PerformanceObserver", Observer);
+    vi.stubEnv("MODE", "production");
+    let time = 100;
+    vi.spyOn(performance, "now").mockImplementation(() => time);
+    const Telemetry = await loadTelemetry();
+    await Telemetry.init();
+    Telemetry.markStart("module.open", "music", { module_id: "music" });
+    time = 1500;
+    Telemetry.markEnd("module.open", "music");
+    const longTask = {
+      entryType: "longtask",
+      name: "self",
+      startTime: 200,
+      duration: 1100,
+    } as PerformanceEntry;
+    observers.find((observer) => observer.type === "longtask")?.deliver([longTask]);
+    expect(posthog.logger.error).toHaveBeenCalledWith(
+      "runtime incident",
+      expect.objectContaining({
+        incident_type: "renderer_long_task",
+        renderer_script_attribution_supported: true,
+        renderer_overlapping_operations: [
+          expect.objectContaining({
+            operation: "module.open",
+            module_id: "music",
+            status: "completed",
+            overlap_ms: 1100,
+          }),
+        ],
+      })
+    );
+    const frame = {
+      entryType: "long-animation-frame",
+      startTime: 200,
+      duration: 1200,
+      scripts: [
+        {
+          sourceURL: "louvorja://app/assets/main.js?token=secret",
+          sourceFunctionName: "onSlide",
+          sourceCharPosition: 42,
+          duration: 1100,
+        },
+      ],
+    } as unknown as PerformanceEntry;
+    const loaf = observers.find((observer) => observer.type === "long-animation-frame");
+    loaf?.deliver([frame, frame]);
+    const scriptLogs = posthog.logger.error.mock.calls.filter(
+      ([, attributes]) => attributes.incident_type === "renderer_long_animation_frame"
+    );
+    expect(scriptLogs).toHaveLength(1);
+    expect(scriptLogs[0][1].renderer_animation_frame).toMatchObject({
+      scripts: [
+        {
+          source_function: "onSlide",
+          source_char_position: 42,
+          source_url: "louvorja://app/assets/main.js",
+        },
+      ],
+    });
+    Telemetry.setEnabled(false);
+    const before = posthog.logger.error.mock.calls.length;
+    loaf?.deliver([frame]);
+    expect(posthog.logger.error.mock.calls).toHaveLength(before);
+    expect(
+      observers.every((observer) => vi.mocked(observer.disconnect).mock.calls.length === 1)
+    ).toBe(true);
+    time = 4000;
+    Telemetry.setEnabled(true);
+    const reactivatedLoaf = observers
+      .filter((observer) => observer.type === "long-animation-frame")
+      .at(-1);
+    const reactivatedTask = observers.filter((observer) => observer.type === "longtask").at(-1);
+    const optedOutFrame = { ...frame, startTime: 3500 } as PerformanceEntry;
+    reactivatedLoaf?.deliver([frame, optedOutFrame]);
+    reactivatedTask?.deliver([{ ...longTask, startTime: 3500 } as PerformanceEntry]);
+    expect(posthog.logger.error.mock.calls).toHaveLength(before);
+    const currentFrame = { ...frame, startTime: 4100 } as PerformanceEntry;
+    // A queued callback from the disconnected observer remains inactive even
+    // if capture was subsequently re-enabled.
+    loaf?.deliver([currentFrame]);
+    observers
+      .find((observer) => observer.type === "longtask")
+      ?.deliver([{ ...longTask, startTime: 4100 } as PerformanceEntry]);
+    expect(posthog.logger.error.mock.calls).toHaveLength(before);
+    reactivatedLoaf?.deliver([currentFrame]);
+    reactivatedTask?.deliver([{ ...longTask, startTime: 4100 } as PerformanceEntry]);
+    expect(posthog.logger.error.mock.calls).toHaveLength(before + 2);
+    Telemetry.setEnabled(false);
+  });
+
   it("discards cancelled measurements without emitting success and preserves other pending measurements", async () => {
     const Telemetry = await loadTelemetry();
     await Telemetry.init();
@@ -997,8 +1213,14 @@ describe("Telemetry", () => {
       severity: "error",
       feature: "online_video",
       last_stream_failure: {
-        kind: "network", track: "video", phase: "downloading", elapsed_bucket: "lt_10s", age_bucket: "lt_10s",
-        id: "aaaaaaaaaaa", url: "https://secret.example", message: "private",
+        kind: "network",
+        track: "video",
+        phase: "downloading",
+        elapsed_bucket: "lt_10s",
+        age_bucket: "lt_10s",
+        id: "aaaaaaaaaaa",
+        url: "https://secret.example",
+        message: "private",
       },
     });
 
@@ -1006,7 +1228,11 @@ describe("Telemetry", () => {
     expect(attributes).toMatchObject({
       incident_type: "online_video_progressive_failure",
       last_stream_failure: {
-        kind: "network", track: "video", phase: "downloading", elapsed_bucket: "lt_10s", age_bucket: "lt_10s",
+        kind: "network",
+        track: "video",
+        phase: "downloading",
+        elapsed_bucket: "lt_10s",
+        age_bucket: "lt_10s",
       },
     });
     expect(JSON.stringify(attributes)).not.toMatch(/secret|private|aaaaaaaaaaa/);

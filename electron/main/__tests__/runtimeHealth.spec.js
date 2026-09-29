@@ -37,6 +37,7 @@ function makeMonitor(options = {}) {
     loopDelayMonitor: options.loopDelayMonitor || fakeLoopDelay(),
     emitIncident: (incident) => incidents.push(incident),
     getRuntimeSnapshot: () => options.runtimeSnapshot || ({ download_active: true }),
+    onEventLoopSample: options.onEventLoopSample,
     sampleIntervalMs: 60_000,
     criticalDelayMs: 1_000,
     incidentCooldownMs: 60_000,
@@ -182,6 +183,23 @@ describe("runtimeHealth", () => {
       critical_budget_ms: 1_000,
     }));
     expect(loopDelayMonitor.reset).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps diagnostic sample windows during cooldown and isolates a failed observer", () => {
+    const onEventLoopSample = vi.fn();
+    const state = makeMonitor({ loopDelayMonitor: fakeLoopDelay({ max: 1500e6 }), onEventLoopSample });
+    state.monitor.sampleEventLoop();
+    state.advanceWall(15000); state.advanceMonotonic(15000);
+    onEventLoopSample.mockImplementationOnce(() => { throw new Error("diagnostic unavailable"); });
+    expect(() => state.monitor.sampleEventLoop()).not.toThrow();
+    expect(onEventLoopSample).toHaveBeenCalledTimes(2);
+    expect(onEventLoopSample.mock.lastCall[0]).toMatchObject({
+      main_sample_started_at_ms: 1000, main_sample_ended_at_ms: 16000, main_loop_max_ms: 1500,
+    });
+    expect(state.incidents).toHaveLength(1);
+    state.advanceWall(60000); state.advanceMonotonic(60000);
+    state.monitor.sampleEventLoop();
+    expect(state.incidents).toHaveLength(2);
   });
 
   it("ignora a amostra artificial criada por suspend/resume do sistema", () => {

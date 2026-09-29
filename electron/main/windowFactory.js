@@ -29,6 +29,11 @@ let _mainWindow = null;
 let _httpPort = null;
 let _windowObserver = null;
 let _presentationActivityObserver = null;
+let _operationMeasurer = (_operation, _details, run) => run();
+
+function setOperationMeasurer(measurer) {
+  _operationMeasurer = typeof measurer === "function" ? measurer : (_operation, _details, run) => run();
+}
 
 /**
  * Permite ao main observar lifecycle/crash das janelas sem acoplar a factory
@@ -293,7 +298,7 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
     },
   };
 
-  const win = new BrowserWindow(winOpts);
+  const win = _operationMeasurer("window.construct", { feature }, () => new BrowserWindow(winOpts));
   if (isWin) {
     // O título do HTML é igual em todas as rotas. Preserve no preview da
     // taskbar o papel de cada janela, mesmo após o renderer atualizar <title>.
@@ -390,16 +395,16 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
     try {
       // Reforça posição/tamanho ANTES do fullscreen — alguns drivers de
       // projetor mexem nos bounds entre a criação e o primeiro paint.
-      win.setBounds({
+      _operationMeasurer("window.position", { feature }, () => win.setBounds({
         x: bounds.x,
         y: bounds.y,
         width: bounds.width,
         height: bounds.height,
-      });
+      }));
       win.setMenuBarVisibility(false);
       // setFullScreen(true) no Windows = borderless windowed cobrindo o monitor
       // (incluindo a taskbar). Mais previsível que mudar resolução.
-      if (!win.isFullScreen()) win.setFullScreen(true);
+      if (!win.isFullScreen()) _operationMeasurer("window.fullscreen", { feature }, () => win.setFullScreen(true));
     } catch (e) {
       console.warn(`[windowFactory] applyDeferredFullscreen ${feature}:`, e?.message || e);
     }
@@ -412,7 +417,7 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
   const showOnce = () => {
     if (_shown || win.isDestroyed()) return;
     _shown = true;
-    win.showInactive();
+    _operationMeasurer("window.show", { feature }, () => win.showInactive());
     _syncAuxBackgroundThrottling(win);
     _syncMainBackgroundThrottling();
     _applyDeferredFullscreen();
@@ -508,7 +513,7 @@ function openOnMonitor(options) {
   return _windowCloseGate.beforeOpen(options.feature).then((closed) => {
     // A timeout is not permission to reuse a window that may still be closing.
     // Fail this attempt; once `closed` arrives a later owner can open cleanly.
-    return closed ? _openOnMonitor(options) : { refused: "window-close-pending" };
+    return closed ? _operationMeasurer("window.open", { feature: options.feature }, () => _openOnMonitor(options)) : { refused: "window-close-pending" };
   });
 }
 
@@ -739,6 +744,7 @@ module.exports = {
   getWindow,
   setMainWindow,
   setWindowObserver,
+  setOperationMeasurer,
   setPresentationActivityObserver,
   setHttpPort,
   setTaskbarVisibility,

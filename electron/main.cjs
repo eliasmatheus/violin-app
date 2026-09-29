@@ -86,6 +86,8 @@ const classicLibrary = require("./main/classicLibrary.js");
 const netHealth = require("./main/netHealth.js");
 const telemetryErrorQueue = require("./main/telemetryErrorQueue.js");
 const { createRuntimeHealthMonitor } = require("./main/runtimeHealth.js");
+const { createRuntimeWorkDiagnostics } = require("./main/runtimeWorkDiagnostics.js");
+const { createCpuProfileCapture } = require("./main/cpuProfileCapture.js");
 const { createRuntimeIncidentJournal } = require("./main/runtimeIncidentJournal.js");
 const { migrateLegacyData } = require("./main/dataMigration.js");
 const { createPresentationActivity } = require("./main/presentationActivity.js");
@@ -337,6 +339,13 @@ const runtimeIncidentJournal = createRuntimeIncidentJournal({
 // Consentimento só é conhecido após carregar user_data. Até lá, o journal não
 // persiste incidentes; a fila em memória ainda pode entregá-los ao renderer.
 let runtimeJournalConsent = false;
+const runtimeWorkDiagnostics = createRuntimeWorkDiagnostics({ enabled: () => runtimeJournalConsent });
+windowFactory.setOperationMeasurer(runtimeWorkDiagnostics.measure);
+const cpuProfileCapture = createCpuProfileCapture({
+  enabled: () => runtimeJournalConsent && !isQuitting,
+  appRoot: path.resolve(__dirname, ".."),
+  onResult: (incident) => _emitRuntimeIncident(incident),
+});
 
 const mainErrorQueuePath = () => path.join(paths.dataDir(), "telemetry-main-errors.json");
 
@@ -348,7 +357,7 @@ function _ackMainError(id) {
   return telemetryErrorQueue.acknowledge(mainErrorQueuePath(), id);
 }
 
-function _compactRuntimeSnapshot() {
+function _compactRuntimeSnapshot(details = {}) {
   let appMetrics = [];
   let gpuFeatureStatus = {};
   let windows = [];
@@ -400,6 +409,8 @@ function _compactRuntimeSnapshot() {
     windows,
     process_metrics: appMetrics,
     gpu_feature_status: gpuFeatureStatus,
+    main_synchronous_operations: runtimeWorkDiagnostics.snapshot(details.main_sample_started_at_ms, details.main_sample_ended_at_ms),
+    main_operation_coverage: "instrumented_window_calls",
     ...onlineVideoDiagnostics,
   };
 }
@@ -437,9 +448,10 @@ function _flushPendingRuntimeIncidents(preferredTarget = null) {
 }
 
 function _emitRuntimeIncident(incident) {
+  incident = { ...incident, ...cpuProfileCapture.handleIncident(incident) };
   const level = incident?.severity === "fatal" || incident?.severity === "error"
     ? "error"
-    : "warn";
+    : incident?.incident_type === "cpu_profile_window" ? "info" : "warn";
   console[level]("[runtime-health]", {
     incident_type: incident?.incident_type,
     incident_status: incident?.incident_status,
@@ -464,6 +476,8 @@ function _emitRuntimeIncident(incident) {
 const runtimeHealth = createRuntimeHealthMonitor({
   emitIncident: _emitRuntimeIncident,
   getRuntimeSnapshot: _compactRuntimeSnapshot,
+  getChildProcessContext: (details) => downloader.getChildProcessContext(details),
+  onEventLoopSample: (sample) => cpuProfileCapture.observeEventLoopSample(sample),
 });
 onlineVideo.setStreamFailureReporter((failure) => {
   _emitRuntimeIncident({
@@ -479,7 +493,10 @@ onlineVideo.setStreamFailureReporter((failure) => {
     last_stream_failure: failure,
   });
 });
-const handleSystemResume = () => runtimeHealth.noteSystemResume();
+const handleSystemResume = () => {
+  cpuProfileCapture.cancel();
+  runtimeHealth.noteSystemResume();
+};
 windowFactory.setWindowObserver((win, context) => runtimeHealth.watchWindow(win, context));
 runtimeHealth.watchApp(app);
 runtimeHealth.start();
@@ -583,6 +600,7 @@ function createAppTray() {
 
 function quitApplication() {
   isQuitting = true;
+  cpuProfileCapture.cancel();
   console.info("[lifecycle] Encerramento solicitado pela bandeja.");
   try { windowFactory.closeAll(); } catch (error) {
     console.warn("[lifecycle] Falha ao fechar projeções antes de sair:", error?.message || error);
@@ -610,7 +628,7 @@ function createWindow() {
     console.log("[LouvorJA] userData:", paths.userData());
   }
 
-  mainWindow = createMainWindow(DEV_URL, prodHtmlPath, preloadPath);
+  mainWindow = runtimeWorkDiagnostics.measure("main_window.construct", { feature: "main" }, () => createMainWindow(DEV_URL, prodHtmlPath, preloadPath));
   runtimeHealth.watchWindow(mainWindow, { window_role: "main", feature: "main", route: "/" });
 
   // Fechar a janela principal durante uma projeção não pode destruir a fonte
@@ -1033,6 +1051,7 @@ app.on("before-quit", (event) => {
   // O listener de close da janela principal usa esta flag para diferenciar um
   // encerramento explícito de um clique acidental no X durante projeção.
   isQuitting = true;
+  cpuProfileCapture.cancel();
 
   if (quitFlushComplete) return;
   event.preventDefault();
@@ -1106,6 +1125,7 @@ app.on("before-quit", (event) => {
 app.on("will-quit", () => {
   powerMonitor.removeListener("resume", handleSystemResume);
   runtimeHealth.stop();
+  cpuProfileCapture.cancel();
   shortcuts.disable();
   powerBlocker.stop();
   if (appTray) {
@@ -1316,6 +1336,7 @@ function _walkSet(obj, path, value) {
 let _userDataMain = userStore.read("user_data") || {};
 httpServer.setUserDataProvider(() => _userDataMain);
 runtimeJournalConsent = _userDataMain?.options?.telemetry !== false;
+downloader.setWorkerDiagnosticsEnabled(runtimeJournalConsent);
 if (!runtimeJournalConsent) {
   void runtimeIncidentJournal.clear().catch((error) => {
     console.warn("[runtime-health] limpeza do journal falhou:", error?.message || error);
@@ -1372,7 +1393,10 @@ ipcMain.handle("userdata:patch", (event, payload) => {
     _walkSet(_userDataMain, payload.path, payload.value);
     if (payload.path === "options.telemetry" && typeof payload.value === "boolean") {
       runtimeJournalConsent = payload.value;
+      downloader.setWorkerDiagnosticsEnabled(runtimeJournalConsent);
       if (!runtimeJournalConsent) {
+        cpuProfileCapture.cancel();
+        runtimeWorkDiagnostics.clear();
         void runtimeIncidentJournal.clear().catch((error) => {
           console.warn("[runtime-health] limpeza do journal falhou:", error?.message || error);
         });

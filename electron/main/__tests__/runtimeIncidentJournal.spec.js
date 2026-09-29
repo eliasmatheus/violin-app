@@ -31,6 +31,33 @@ beforeEach(async () => {
 afterEach(async () => { vi.restoreAllMocks(); await fs.remove(dir); });
 
 describe("runtime incident journal", () => {
+  it("preserves bounded CPU evidence after restart and discards arbitrary profile paths", async () => {
+    const frame = { function: "knownBurn", source: "electron/main.cjs", line: 8, column: 1 };
+    const summary = { sample_count: 2, sampled_duration_ms: 40, idle_ms: 0, gc_ms: 0,
+      program_ms: 0, unattributed_ms: 0,
+      top_frames: [{ ...frame, sample_count: 2, self_sample_ms: 40 }],
+      top_stacks: [{ sample_count: 2, sampled_ms: 40, frames: [frame] }] };
+    await journal().append(incident(1, { incident_type: "cpu_profile_window", severity: "info",
+      cpu_profile_id: id(2), cpu_profile_trigger_incident_id: id(3), cpu_profile_target: "main",
+      cpu_profile_relation: "followup_window", cpu_profile_status: "completed",
+      cpu_profile_timing_basis: "sampled_elapsed_time",
+      cpu_profile_observed_incident_ids: [id(4)], cpu_profile_summary: summary,
+      cpu_profile_observations: [{ sample_started_at_ms: 100, sample_ended_at_ms: 15100,
+        max_delay_ms: 1500, main_cpu_percent: 95, sample_window_ms: 15000, token: "private" }] }));
+    await journal().append(incident(2, { incident_type: "cpu_profile_window",
+      cpu_profile_summary: { ...summary, top_frames: [{ ...summary.top_frames[0],
+        source: "file:///Users/private/secret.js" }] }, raw_profile: "private" }));
+    const records = await journal().read();
+    expect(records[0]).toMatchObject({ cpu_profile_id: id(2), cpu_profile_trigger_incident_id: id(3),
+      cpu_profile_timing_basis: "sampled_elapsed_time",
+      cpu_profile_summary: summary, cpu_profile_observed_incident_ids: [id(4)],
+      cpu_profile_observations: [{ sample_started_at_ms: 100, sample_ended_at_ms: 15100,
+        max_delay_ms: 1500, main_cpu_percent: 95, sample_window_ms: 15000 }] });
+    expect(records[1]).not.toHaveProperty("cpu_profile_summary");
+    expect(await fs.readFile(file, "utf8")).not.toMatch(/private|secret|file:\/\//);
+    expect((await fs.stat(file)).size).toBeLessThanOrEqual(MAX_FILE_BYTES);
+  });
+
   it("grava no novo diretório após a mudança da pasta de dados", async () => {
     let destination = file;
     const queue = createRuntimeIncidentJournal({ file: () => destination, now: () => clock });
@@ -43,6 +70,24 @@ describe("runtime incident journal", () => {
     await queue.clear();
     expect(await fs.pathExists(destination)).toBe(false);
   });
+  it("preserves worker kill intent and synchronous-call evidence across a renderer restart without free text", async () => {
+    await journal().append(incident(1, {
+      incident_type: "child_process_gone", download_worker_id: id(2), download_job_id: id(3),
+      download_worker_pid: 345, download_worker_duration_ms: 8500, download_worker_exit_code: -15,
+      download_worker_termination_intent: "completed", download_worker_termination_reason: "queue_done",
+      download_worker_kill_result: "accepted", download_worker_exit_observed: true,
+      main_operation_coverage: "instrumented_window_calls", main_synchronous_operations: [
+        { operation: "window.construct", status: "completed", duration_ms: 1600, cpu_user_ms: 900, source: "private secret" },
+        { operation: "https://private/secret", status: "completed" },
+      ],
+    }));
+    const records = await journal().read();
+    expect(records[0]).toMatchObject({ download_worker_id: id(2), download_job_id: id(3), download_worker_exit_code: -15,
+      download_worker_termination_intent: "completed", download_worker_kill_result: "accepted",
+      main_synchronous_operations: [{ operation: "window.construct", duration_ms: 1600, cpu_user_ms: 900 }] });
+    expect(JSON.stringify(records)).not.toMatch(/private|secret|https/);
+  });
+
   it("recupera incidente confirmado após reinício e preserva detecção e recuperação", async () => {
     const first = journal();
     await first.append(incident());

@@ -17,18 +17,93 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-function fixture() {
+function fixture(options = {}) {
   const child = new EventEmitter();
   child.postMessage = vi.fn();
   child.kill = vi.fn();
   const root = path.join(os.tmpdir(), "utility-test");
-  const queue = new UtilityQueue({ filesDir: root, baseUrl: "https://example.test", fork: () => child });
+  const queue = new UtilityQueue({ filesDir: root, baseUrl: "https://example.test", fork: () => child, ...options });
   queue.add([{ remote: "/a", local: "a", actualSize: 0 }]);
   const emit = (type, data, jobId = queue.jobId) => child.emit("message", { version: 1, jobId, type, data });
   return { queue, child, emit, root };
 }
 
 describe("download utility process", () => {
+  it("records worker identity and completion intent before invoking kill", async () => {
+    let elapsed = 0;
+    const diagnostics = [];
+    const { queue, child, emit } = fixture({ monotonicNow: () => elapsed,
+      reportDiagnostic: (record) => diagnostics.push(record) });
+    child.pid = 4321;
+    const completion = queue.start();
+    child.emit("spawn");
+    emit("ready");
+    emit("started");
+    elapsed = 250;
+    child.kill.mockImplementation(() => {
+      expect(diagnostics.at(-1)).toMatchObject({ download_worker_id: queue.jobId,
+        download_job_id: queue.jobId, download_worker_pid: 4321, download_worker_duration_ms: 250,
+        download_worker_phase: "finishing", download_worker_termination_phase: "downloading",
+        download_worker_termination_intent: "completed", download_worker_kill_result: "pending",
+        download_worker_exit_observed: false });
+      child.emit("exit", 15);
+      return true;
+    });
+    emit("queue-done", { downloaded: 1, failed: 0 });
+    await completion;
+    expect(diagnostics.at(-1)).toMatchObject({ download_worker_phase: "exited",
+      download_worker_exit_code: 15, download_worker_termination_intent: "completed",
+      download_worker_kill_result: "accepted" });
+  });
+
+  it("keeps an unexpected exit distinct from a later cleanup kill", async () => {
+    const diagnostics = [];
+    const { queue, child, emit } = fixture({ reportDiagnostic: (record) => diagnostics.push(record) });
+    const completion = queue.start();
+    emit("ready");
+    emit("started");
+    child.kill.mockReturnValue(false);
+    child.emit("exit", 1);
+    await completion;
+    expect(diagnostics.at(-1)).toMatchObject({ download_worker_termination_intent: "none",
+      download_worker_termination_reason: "download_worker_exited", download_worker_exit_observed: true,
+      download_worker_termination_phase: "downloading", download_worker_exit_code: 1,
+      download_worker_kill_result: "rejected" });
+  });
+
+  it("distinguishes cancellation deadlines and failure cleanup without changing terminal results", async () => {
+    vi.useFakeTimers();
+    const cancelRecords = [];
+    const cancelled = fixture({ reportDiagnostic: (record) => cancelRecords.push(record) });
+    const completion = cancelled.queue.start();
+    cancelled.emit("ready");
+    cancelled.emit("started");
+    cancelled.queue.cancel();
+    await vi.advanceTimersByTimeAsync(2000);
+    await completion;
+    expect(cancelRecords.at(-1)).toMatchObject({ download_worker_termination_intent: "cancelled",
+      download_worker_termination_reason: "cancel_deadline", download_worker_termination_phase: "cancelling" });
+
+    const failureRecords = [];
+    const failed = fixture({ reportDiagnostic: (record) => failureRecords.push(record) });
+    const failure = failed.queue.start();
+    await vi.advanceTimersByTimeAsync(10000);
+    await failure;
+    expect(failureRecords.at(-1)).toMatchObject({ download_worker_termination_intent: "failed",
+      download_worker_termination_reason: "download_worker_start_timeout", download_worker_termination_phase: "starting" });
+  });
+
+  it("finishes and kills normally if diagnostic reporting throws", async () => {
+    const { queue, child, emit } = fixture({ reportDiagnostic: () => { throw new Error("unavailable"); } });
+    const completion = queue.start();
+    emit("ready");
+    emit("started");
+    emit("queue-done", { downloaded: 1, failed: 0 });
+    await completion;
+    expect(queue.running).toBe(false);
+    expect(child.kill).toHaveBeenCalledOnce();
+  });
+
   it("configures the worker's Windows trust store before loading HTTPS downloads", () => {
     const source = readFileSync(require.resolve("../download/utilityWorker.cjs"), "utf8");
     expect(source.indexOf("configureSystemCertificates()")).toBeGreaterThan(0);
