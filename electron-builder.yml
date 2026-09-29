@@ -185,7 +185,11 @@ mac:
   # O que não serve é um desenho que deixe transparência DENTRO da placa (o
   # icon-512.png é um círculo): aí o macOS 26+ mostra o cinza dele por baixo.
   # Windows e Linux seguem com o icon-512.png.
-  icon: build/icon-mac.png
+  # O .icns é gerado a partir de icon-mac.png com sips + iconutil, incluindo
+  # os tamanhos normais e Retina. Usá-lo pronto evita o conversor de PNG do
+  # electron-builder, cujas entradas de 16 e 32 px são lidas incorretamente
+  # pelo macOS (faixas coloridas em ícones pequenos).
+  icon: build/icon-mac.icns
   category: public.app-category.music
   # Assinatura + notarização (certificado Developer ID + credenciais Apple
   # fornecidas via env no CI: CSC_LINK/CSC_KEY_PASSWORD + APPLE_ID/
