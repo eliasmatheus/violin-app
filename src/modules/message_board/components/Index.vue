@@ -267,7 +267,7 @@ function close() {
   width: 100%;
   height: 100%;
   font-size: var(--lj-text-lg);
-  opacity: 0.4;
+  color: var(--lj-text-on-navy-muted);
 }
 
 /* Barra de ferramentas do cabeçalho do módulo */

@@ -33,9 +33,11 @@
   --lj-color-operator-line: #524752;
   --lj-color-list-bg: #232323;
   --lj-color-splash-bg: #f7fafd;
-  /* Área inicial vazia da janela principal: azul do logo em superfícies claras. */
-  --lj-home-bg: #b8dcf2;
-  --lj-home-text: var(--lj-text-muted);
+  /* A área inicial e a barra superior compartilham a mesma cor. */
+  --lj-home-bg: #2e74aa;
+  --lj-home-text: #ffffff;
+  --lj-shell-chrome-color: #ffffff;
+  --lj-shell-chrome-hover: rgba(255, 255, 255, 0.12);
   --lj-home-action-bg: var(--lj-navy);
   --lj-home-action-hover: var(--lj-navy-dark);
   --lj-home-action-text: var(--lj-white);
@@ -113,8 +115,9 @@
 
   /* Tabs contextuais (laranja) */
   --lj-tabs-ctx-bg: var(--lj-orange);
-  --lj-tabs-ctx-color: #ffffff;
+  --lj-tabs-ctx-color: #1b2a41;
   --lj-tabs-ctx-hover-bg: #f8a849;
+  --lj-tabs-ctx-active-color: #9c4e06;
   --lj-tabs-ctx-active-bg: linear-gradient(180deg, var(--lj-orange) 0%, var(--lj-orange-dark) 100%);
 
   /* TitleBar (acima das tabs) */
@@ -196,11 +199,11 @@
   --lj-popup-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 10px 24px rgba(0, 0, 0, 0.12);
 
   /* App Menu sidebar (Sobre/Opções) */
-  --lj-appmenu-sidebar-bg: var(--lj-navy);
-  --lj-appmenu-sidebar-color: var(--lj-text-on-navy-muted);
+  --lj-appmenu-sidebar-bg: var(--lj-home-bg);
+  --lj-appmenu-sidebar-color: #ffffff;
   --lj-appmenu-sidebar-hover-bg: rgba(255, 255, 255, 0.08);
   --lj-appmenu-sidebar-active-bg: var(--lj-orange);
-  --lj-appmenu-sidebar-active-color: #ffffff;
+  --lj-appmenu-sidebar-active-color: #1b2a41;
 
   /* Link e kbd badge */
   --lj-link-color: var(--lj-navy);
@@ -353,8 +356,10 @@
 /* [data-theme] fica no <html>: é de lá que o conteúdo teleportado para o
    <body> (AppMenu, diálogos, menus) herda as superfícies escuras. */
 [data-theme="dark"] {
-  --lj-home-bg: #204f78;
-  --lj-home-text: var(--lj-text-on-navy-muted);
+  --lj-home-bg: #153653;
+  --lj-home-text: #edf5fc;
+  --lj-shell-chrome-color: #edf5fc;
+  --lj-shell-chrome-hover: rgba(255, 255, 255, 0.12);
   --lj-home-action-bg: var(--lj-orange);
   --lj-home-action-hover: var(--lj-orange-dark);
   --lj-home-action-text: var(--lj-gray-900);
@@ -377,6 +382,7 @@
   --lj-tabs-bg: var(--lj-navy-darker);
   --lj-tabs-active-bg: #243248;
   --lj-tabs-active-color: #ffffff;
+  --lj-tabs-ctx-active-color: #ffba66;
 
   --lj-titlebar-bg: var(--lj-navy-darker);
 
@@ -462,6 +468,7 @@
 }
 
 [data-theme="black"] {
+  --lj-home-bg: #2e2e2e;
   --lj-navy: #2e2e2e;
   --lj-navy-dark: #1f1f1f;
   --lj-navy-darker: #131313;
@@ -486,6 +493,7 @@
 }
 
 [data-theme="green"] {
+  --lj-home-bg: #077568;
   --lj-navy: #077568;
   --lj-navy-dark: #055a51;
   --lj-navy-darker: #04453d;
@@ -494,6 +502,7 @@
 }
 
 [data-theme="orange"] {
+  --lj-home-bg: #b13a1f;
   --lj-navy: #d24726;
   --lj-navy-dark: #b13a1f;
   --lj-navy-darker: #8e2e18;
@@ -502,6 +511,7 @@
 }
 
 [data-theme="purple"] {
+  --lj-home-bg: #80397b;
   --lj-navy: #80397b;
   --lj-navy-dark: #672e63;
   --lj-navy-darker: #4e224a;
@@ -510,6 +520,7 @@
 }
 
 [data-theme="pink"] {
+  --lj-home-bg: #c2185b;
   --lj-navy: #e91e63;
   --lj-navy-dark: #c2185b;
   --lj-navy-darker: #9c1452;
@@ -518,6 +529,7 @@
 }
 
 [data-theme="terracota"] {
+  --lj-home-bg: #722f37;
   --lj-navy: #722f37;
   --lj-navy-dark: #5a232b;
   --lj-navy-darker: #431a20;

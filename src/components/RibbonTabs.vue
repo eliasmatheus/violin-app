@@ -57,7 +57,7 @@ const store = useRibbonStore();
   font-size: var(--rtab-font-size, 13px);
   font-weight: var(--rtab-font-weight, 500);
   cursor: pointer;
-  color: var(--lj-tabs-color);
+  color: var(--lj-shell-chrome-color);
   transition:
     background var(--lj-transition-fast),
     color var(--lj-transition-fast);
@@ -68,8 +68,8 @@ const store = useRibbonStore();
   font-family: inherit;
 }
 .rtab:hover:not(.rtab--active) {
-  background: var(--lj-tabs-hover-bg);
-  color: var(--lj-tabs-color-hover);
+  background: var(--lj-shell-chrome-hover);
+  color: var(--lj-shell-chrome-color);
 }
 .rtab--active {
   background: var(--lj-tabs-active-bg);
@@ -86,7 +86,7 @@ const store = useRibbonStore();
 }
 .rtab--ctx.rtab--ctx-active {
   background: var(--lj-tabs-active-bg);
-  color: var(--lj-orange-darker);
+  color: var(--lj-tabs-ctx-active-color);
   font-weight: var(--lj-weight-bold);
 }
 .rtab--ctx-active::before {

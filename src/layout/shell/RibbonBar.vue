@@ -801,7 +801,7 @@ useBroadcastListener(BROADCAST_TYPE.RIBBON_SELECT_PAGE, (payload: unknown) => {
   display: flex;
   align-items: stretch;
   height: var(--lj-tab-height);
-  background: var(--lj-tabs-bg);
+  background: var(--lj-home-bg);
   position: relative;
   z-index: 2;
 }
@@ -823,13 +823,24 @@ useBroadcastListener(BROADCAST_TYPE.RIBBON_SELECT_PAGE, (payload: unknown) => {
   display: flex;
   align-items: stretch;
 }
-.ribbon-tools-web .shell-tool {
-  height: 100%;
-  color: var(--lj-tabs-color);
-}
-.ribbon-tools-web .shell-tool:hover {
-  background: var(--lj-tabs-hover-bg);
-  color: var(--lj-tabs-color-hover);
+
+@media (max-width: 700px) {
+  .ribbon-tabs-row {
+    height: auto;
+    flex-wrap: wrap;
+  }
+
+  .ribbon-app-menu,
+  .ribbon-tabs-wrap {
+    height: var(--lj-tab-height);
+  }
+
+  .ribbon-tools {
+    width: 100%;
+    height: var(--lj-tab-height);
+    justify-content: flex-end;
+    padding-right: var(--lj-space-2);
+  }
 }
 
 /* ============ Body ============ */

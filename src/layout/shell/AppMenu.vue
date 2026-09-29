@@ -481,8 +481,8 @@ function onOpenOptions(e) {
   justify-content: center;
   padding: 0;
   border: none;
-  background: var(--lj-tabs-bg);
-  color: var(--lj-white);
+  background: transparent;
+  color: var(--lj-shell-chrome-color);
   cursor: pointer;
   user-select: none;
   transition: background var(--lj-transition-fast);
@@ -490,11 +490,11 @@ function onOpenOptions(e) {
 }
 
 .app-menu-btn:hover {
-  background: var(--lj-navy-active);
+  background: var(--lj-shell-chrome-hover);
 }
 
 .app-menu-btn--open {
-  background: var(--lj-navy-darker);
+  background: var(--lj-shell-chrome-hover);
 }
 
 /* Painel fullscreen */
@@ -527,8 +527,8 @@ function onOpenOptions(e) {
   gap: var(--lj-space-5);
   height: var(--lj-appmenu-header-height);
   padding: 0 var(--lj-space-6);
-  background: var(--lj-tabs-bg);
-  color: var(--lj-white);
+  background: var(--lj-home-bg);
+  color: var(--lj-shell-chrome-color);
   flex-shrink: 0;
   /* A janela não tem barra de título nativa em nenhuma plataforma e este
      painel cobre a systembar, que é a única região de arrasto do app. Sem esta
@@ -556,8 +556,8 @@ function onOpenOptions(e) {
   /* Em % o raio vira elipse (10% da largura × 10% da altura). */
   border-radius: var(--lj-radius-sm);
   border: none;
-  background: var(--lj-navy-active);
-  color: var(--lj-white);
+  background: var(--lj-shell-chrome-hover);
+  color: var(--lj-shell-chrome-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -567,7 +567,7 @@ function onOpenOptions(e) {
 }
 
 .app-menu-back:hover {
-  background: var(--lj-white-alpha-25);
+  background: var(--lj-shell-chrome-hover);
 }
 
 .app-menu-header-title {
@@ -645,8 +645,7 @@ function onOpenOptions(e) {
 /* Abertura do painel: o backdrop dissolve e a superfície sobe um pouco.
    Trocar de tela é só um fade — deslizar sugeriria navegação lateral. */
 /* A entrada é uma cortina, não um fade. O painel já nasce ocupando a faixa da
-   systembar — mesma altura e mesma cor, porque `--lj-titlebar-bg` e
-   `--lj-tabs-bg` são o mesmo navy — e desce revelando o resto da tela.
+   systembar — ambos usam `--lj-home-bg` — e desce revelando o resto da tela.
    Nada fica translúcido em nenhum instante, e é isso que importa: com o
    cross-fade anterior as abas da ribbon e o cabeçalho do painel ficavam
    legíveis ao mesmo tempo, e os semáforos desciam sobre uma faixa que ainda

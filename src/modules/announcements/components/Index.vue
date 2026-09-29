@@ -882,7 +882,7 @@ function close(): void {
   pointer-events: none;
 }
 .an-preview-empty {
-  color: var(--lj-white-alpha-25);
+  color: var(--lj-text-on-navy-muted);
   font-size: var(--lj-text-md);
 }
 

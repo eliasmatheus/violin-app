@@ -1,5 +1,5 @@
 <template>
-  <aside class="liturgy-panel" :class="{ 'liturgy-panel--collapsed': collapsed }">
+  <aside class="liturgy-panel" :class="{ 'liturgy-panel--collapsed': effectiveCollapsed }">
     <div class="liturgy-panel-header">
       <button
         type="button"
@@ -8,15 +8,15 @@
         :aria-label="$t('shell.toggle_liturgy')"
         @click="toggleCollapsed"
       >
-        <LjIcon :icon="collapsed ? ICONS.UI.BACK : ICONS.UI.CHEVRON_RIGHT" size="16" />
+        <LjIcon :icon="effectiveCollapsed ? ICONS.UI.BACK : ICONS.UI.CHEVRON_RIGHT" size="16" />
       </button>
       <LjIcon :icon="ICONS.LITURGY.SCRIPT" size="14" class="liturgy-header-icon" />
       <span class="liturgy-header-title lj-u-truncate">{{ $t("shell.liturgy_title") }}</span>
-      <span v-if="!collapsed && totals.count > 0" class="liturgy-totals">
+      <span v-if="!effectiveCollapsed && totals.count > 0" class="liturgy-totals">
         {{ totals.count }} · {{ totals.duration }}
       </span>
       <button
-        v-if="!collapsed"
+        v-if="!effectiveCollapsed"
         type="button"
         class="liturgy-icon-btn"
         :title="$t('shell.edit_liturgy')"
@@ -27,7 +27,7 @@
       </button>
     </div>
 
-    <div v-if="!collapsed" class="liturgy-panel-body">
+    <div v-if="!effectiveCollapsed" class="liturgy-panel-body">
       <LjEmpty
         v-if="items.length === 0"
         :icon="ICONS.CALENDAR.BLANK"
@@ -91,7 +91,7 @@
 <script setup>
 import { LjButton, LjEmpty, LjIcon } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import MusicSpotlight from "@/components/MusicSpotlight.vue";
 import $liturgy from "@/helpers/Liturgy";
@@ -101,6 +101,7 @@ import { KEYS } from "@/constants/UserDataKeys";
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
 import { useLiturgyExecution } from "@/modules/liturgy/composables/useLiturgyExecution";
 import { prepararAgenda } from "@/modules/liturgy/agenda";
+import { useViewport } from "@/composables/useViewport";
 
 const { t } = useI18n();
 
@@ -114,6 +115,13 @@ const { t } = useI18n();
 const { executeItem, playMusic } = useLiturgyExecution();
 
 const collapsed = ref(false);
+const mobileOpen = ref(false);
+const { width } = useViewport();
+const isCompact = computed(() => width.value > 0 && width.value <= 700);
+const effectiveCollapsed = computed(() => (isCompact.value ? !mobileOpen.value : collapsed.value));
+watch(isCompact, () => {
+  mobileOpen.value = false;
+});
 const escolhaAberta = ref(false);
 const itemEmEscolha = ref(null);
 
@@ -135,6 +143,10 @@ const totals = computed(() => {
 });
 
 function toggleCollapsed() {
+  if (isCompact.value) {
+    mobileOpen.value = !mobileOpen.value;
+    return;
+  }
   collapsed.value = !collapsed.value;
   $userdata.set(KEYS.SHELL.LITURGY_COLLAPSED, collapsed.value);
 }
@@ -223,6 +235,37 @@ onMounted(() => {
 
 .liturgy-panel--collapsed {
   width: var(--lj-sidebar-collapsed);
+}
+
+@media (max-width: 700px) {
+  .liturgy-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    width: min(var(--lj-sidebar-width), calc(100vw - 48px));
+    box-shadow: -8px 0 20px rgba(0, 0, 0, 0.12);
+  }
+
+  .liturgy-panel--collapsed {
+    width: var(--lj-sidebar-collapsed);
+    box-shadow: none;
+  }
+}
+
+.liturgy-panel--collapsed .liturgy-panel-header {
+  padding: 0;
+}
+
+.liturgy-panel--collapsed .liturgy-icon-btn {
+  width: var(--lj-sidebar-collapsed);
+  flex-shrink: 0;
+}
+
+.liturgy-panel--collapsed .liturgy-header-icon,
+.liturgy-panel--collapsed .liturgy-header-title {
+  display: none;
 }
 
 /* Header */

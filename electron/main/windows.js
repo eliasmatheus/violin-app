@@ -30,7 +30,7 @@ const TRAFFIC_LIGHT_POSITION = { x: 10, y: 11 };
  * alcança. E ela precisa nascer transparente: o Electron não aplica alfa em
  * `setTitleBarOverlay` chamado depois de a janela existir.
  *
- * O símbolo é branco em todos os temas (`--lj-titlebar-color`). A altura espelha
+ * O símbolo é branco sobre a barra superior em todos os temas. A altura espelha
  * `--lj-systembar-height` (tokens.css); `SystemBar.spec.ts` confere que casam.
  */
 const TITLEBAR_OVERLAY = { color: "#00000000", symbolColor: "#ffffff", height: 35 };

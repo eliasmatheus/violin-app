@@ -12,7 +12,7 @@
       :class="{ 'shell-main--active': footerActive }"
       :style="{ '--footer-height': footerHeight }"
     >
-      <div class="shell-grid">
+      <div class="shell-grid" :class="{ 'shell-grid--with-sidebar': !liturgyModuleOpen }">
         <Transition name="chat-drawer-slide">
           <ChatDrawer v-if="Platform.isDesktop && (isChatOpen || isPinned)" />
         </Transition>
@@ -31,6 +31,7 @@
             <AppAlert />
             <AppSnackbar />
             <DesktopDownloadPrompt v-if="showDesktopDownload" />
+            <HomeStart v-if="showHome" />
             <AppModules />
           </div>
         </div>
@@ -98,6 +99,7 @@ const UpdateAvailableDialog = defineAsyncComponent(
   () => import("@/components/UpdateAvailableDialog.vue")
 );
 import DesktopDownloadPrompt from "@/components/DesktopDownloadPrompt.vue";
+import HomeStart from "@/layout/shell/HomeStart.vue";
 import packageJson from "@root/package.json";
 import $appdata from "@/helpers/AppData";
 import $userdata from "@/helpers/UserData";
@@ -151,6 +153,13 @@ const showDesktopDownload = computed(() => {
     !$appdata.get<string | null>("active_module", null)
   );
 });
+
+const showHome = computed(
+  () =>
+    !showDesktopDownload.value &&
+    !$appdata.get<string | null>("active_module", null) &&
+    $appdata.get<boolean>("import_modules", false)
+);
 
 const liturgyModuleOpen = computed(() => {
   return $appdata.get<boolean>(KEYS.MODULES.LITURGY.SHOW, false) === true;
@@ -795,23 +804,13 @@ onBeforeUnmount(() => {
   color: var(--lj-home-text);
 }
 
-.shell-content::before {
-  /* Logo nítido e discreto no centro. */
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url("/ico/favicon-180x180.png");
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-size: clamp(140px, 12vw, 180px) auto;
-  pointer-events: none;
-  transition: opacity 120ms ease-out;
-}
-
-.shell-content--desktop-download::before {
-  opacity: 0;
-}
 .shell-sidebar {
   flex-shrink: 0;
+}
+
+@media (max-width: 700px) {
+  .shell-grid--with-sidebar .shell-center {
+    margin-right: var(--lj-sidebar-collapsed);
+  }
 }
 </style>

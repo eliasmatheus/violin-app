@@ -31,7 +31,7 @@
       <button type="button" class="shell-tool" @click="toggleBackgroundProjection">
         <LjIcon
           :icon="!isBgPlaying ? ICONS.PROJECTION.START : ICONS.PROJECTION.STOP"
-          :color="!isBgPlaying ? COLORS.SURFACE : COLORS.DANGER"
+          :color="isBgPlaying ? COLORS.DANGER : undefined"
           :size="sizeIcon"
         />
       </button>
@@ -357,13 +357,14 @@ function toggleLibras() {
   outline: none;
   font-family: inherit;
   opacity: 0.8;
-  color: var(--lj-white);
+  color: var(--lj-shell-chrome-color);
   transition:
     background var(--lj-transition-fast),
     opacity var(--lj-transition-fast);
 }
 .shell-tool:hover {
   opacity: 1;
+  background: var(--lj-shell-chrome-hover);
 }
 
 .shell-tool--update {
