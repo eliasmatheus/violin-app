@@ -383,6 +383,8 @@ export const ICONS = {
     THEME_LIGHT: "sun",
     THEME_LIGHT_DARK: "sun-moon",
     TOOLS: "tools",
+    TRENDING_DOWN: "trending-down",
+    TRENDING_UP: "trending-up",
     TRANSLATE: "language",
     TUNE: "adjustments-horizontal",
     VIEW_GRID: "layout-grid-filled",

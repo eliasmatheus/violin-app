@@ -38,6 +38,12 @@
      qualquer tema; a área em volta dos painéis acompanha o tema. */
   --lj-live-stage-bg: #0b0f17;
   --lj-live-area-bg: var(--lj-surface-border);
+  --lj-live-active-bg: rgba(243, 156, 18, 0.12);
+  --lj-live-sunken-bg: rgba(0, 0, 0, 0.04);
+  /* Texto de atrasado/adiantado: o tom claro do handoff some no fundo claro. */
+  --lj-live-late-text: var(--lj-danger-dark);
+  --lj-live-early-text: var(--lj-success);
+  --lj-live-early-border: rgba(22, 163, 74, 0.3);
   --lj-color-favorites-line: #e8e8e8;
 
   /* Cores funcionais */
@@ -361,6 +367,9 @@
   --lj-surface-border-strong: #3a4654;
   --lj-surface-divider: #2a3441;
   --lj-live-area-bg: #101826;
+  --lj-live-sunken-bg: rgba(0, 0, 0, 0.28);
+  --lj-live-late-text: var(--lj-danger-light);
+  --lj-live-early-text: #6ee7a0;
 
   /* Texto */
   --lj-text: #e5e7eb;

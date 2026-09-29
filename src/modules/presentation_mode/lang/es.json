@@ -36,7 +36,7 @@
     "outputs": "Salidas"
   },
   "empty": {
-    "program": "El programa del culto aparece aquí.",
+    "program": "No hay ítems en el programa de este día.",
     "stage": "Nada al aire.",
     "library": "Archivos, músicas, Biblia y videos para enviar a la pantalla.",
     "outputs": "Pantalla principal y retorno de escenario."
@@ -44,5 +44,91 @@
   "actions": {
     "expand": "Expandir módulo",
     "collapse": "Contraer módulo"
+  },
+  "program": {
+    "date": "Fecha del programa",
+    "change_date": "Cambiar la fecha",
+    "today": "Hoy",
+    "settings": "Configurar programa",
+    "now": "Ahora",
+    "forecast_end": "Fin previsto",
+    "late": "+{minutes}m de retraso",
+    "early": "−{minutes}m adelantado",
+    "on_time": "a tiempo",
+    "live_started": "ítem en vivo empezó {time}",
+    "sessions_count": "{n} sesión | {n} sesiones",
+    "items_count": "{n} ítem | {n} ítems",
+    "live": "EN VIVO",
+    "done": "Concluido",
+    "untitled": "(sin título)",
+    "expand": "Mostrar subítems",
+    "collapse": "Ocultar subítems",
+    "edit_item": "Editar ítem",
+    "edit_session": "Editar sesión",
+    "default_session": "General",
+    "save_default_name": "Programa {date}"
+  },
+  "kinds": {
+    "music": "Música",
+    "video": "Video",
+    "online_video": "Video en línea",
+    "image": "Imagen",
+    "audio": "Audio",
+    "file": "Archivo",
+    "presentation": "Presentación",
+    "bible": "Biblia",
+    "announcements": "Anuncios",
+    "note": "Anotación",
+    "site": "Sitio",
+    "overlay": "Superposición",
+    "scheduled": "Ítem programado"
+  },
+  "item_dialog": {
+    "new_title": "Nuevo ítem",
+    "edit_title": "Editar ítem",
+    "kind": "Tipo",
+    "music": "Música",
+    "verse": "Versículo",
+    "file": "Archivo",
+    "url": "Dirección del video",
+    "none": "Nada elegido",
+    "choose_music": "Elegir música",
+    "choose_verse": "Elegir versículo",
+    "choose_file": "Elegir archivo",
+    "file_desktop_only": "Elegir archivo solo funciona en la aplicación de escritorio.",
+    "title": "Título",
+    "subtitle": "Subtítulo",
+    "note_text": "Texto de la anotación",
+    "duration": "Duración (min)",
+    "session": "Sesión",
+    "missing_music": "Elija la música.",
+    "missing_verse": "Elija el versículo.",
+    "missing_file": "Elija el archivo.",
+    "missing_url": "Informe una dirección que empiece con http:// o https://.",
+    "missing_title": "Informe el título."
+  },
+  "session_dialog": {
+    "new_title": "Nueva sesión",
+    "edit_title": "Editar sesión",
+    "label": "Nombre de la sesión"
+  },
+  "settings_dialog": {
+    "title": "Configurar programa",
+    "planned_start": "Inicio previsto",
+    "planned_start_hint": "Los horarios de los ítems se cuentan a partir de aquí."
+  },
+  "alerts": {
+    "remove_item_title": "Eliminar ítem",
+    "remove_item": "¿Eliminar este ítem del programa?",
+    "remove_session_title": "Eliminar sesión",
+    "remove_session": "¿Eliminar esta sesión?",
+    "remove_session_items": "¿Eliminar esta sesión y todos sus ítems?",
+    "liturgy_empty": "La liturgia de este día de la semana está vacía.",
+    "import_title": "Importar liturgia",
+    "import_replace": "El programa actual será reemplazado por la liturgia de este día de la semana. ¿Continuar?",
+    "program_empty": "El programa está vacío.",
+    "save_title": "Nombre de la liturgia",
+    "saved": "Programa guardado en la biblioteca de liturgias.",
+    "save_failed": "No fue posible guardar el programa como liturgia."
   }
 }

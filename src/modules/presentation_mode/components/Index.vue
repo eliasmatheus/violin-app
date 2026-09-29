@@ -1,15 +1,14 @@
 <template>
   <ModuleContainer :manifest="manifest">
     <div class="pm-area" :class="{ 'pm-area--library-wide': libraryFullWidth }">
-      <aside class="pm-program" data-testid="pm-program">
-        <header class="pm-bar pm-bar--soft">
-          <LjIcon :icon="ICONS.LITURGY.SCRIPT" :size="14" class="pm-bar__accent" />
-          <span class="pm-bar__title">{{ tm("panels.program") }}</span>
-        </header>
-        <div class="pm-panel-body">
-          <LjEmpty :icon="ICONS.LITURGY.SCRIPT" :title="tm('empty.program')" />
-        </div>
-      </aside>
+      <ProgramPanel
+        @activate="activate"
+        @edit-item="openEditItem"
+        @edit-session="openEditSession"
+        @new-item="openNewItem"
+        @import="importFromLiturgy"
+        @settings="settingsDialogOpen = true"
+      />
 
       <section class="pm-stage" data-testid="pm-stage">
         <header class="pm-bar">
@@ -50,23 +49,83 @@
         </div>
       </aside>
     </div>
+
+    <ProgramItemDialog
+      v-model="itemDialogOpen"
+      :item="editingItem"
+      :session-id="editingSessionId"
+      :sessions="program.sessions"
+      @save="onSaveItem"
+      @remove="confirmRemoveItem(editingItem?.id ?? null)"
+    />
+    <ProgramSessionDialog
+      v-model="sessionDialogOpen"
+      :initial-label="editingSession?.label ?? null"
+      @save="onSaveSession"
+      @remove="confirmRemoveSession"
+    />
+    <ProgramSettingsDialog
+      v-model="settingsDialogOpen"
+      :planned-start="program.plannedStart"
+      @save="setPlannedStart"
+    />
   </ModuleContainer>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { LjButton, LjEmpty, LjIcon } from "@/components/ui";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
+import { DB_TABLE } from "@/constants/DbTables";
+import $alert from "@/helpers/Alert";
+import $idb from "@/helpers/IndexedDB";
+import $liturgy from "@/helpers/Liturgy";
+import Telemetry from "@/helpers/Telemetry";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import { isModuleExpanded, toggleModuleExpanded } from "@/composables/useModuleExpanded";
+import { useLiturgyLibrary } from "@/modules/liturgy/composables/useLiturgyLibrary";
+import type { ProgramItem, ProgramSession } from "@/types/Presentation";
+import ProgramPanel from "./ProgramPanel.vue";
+import ProgramItemDialog from "./ProgramItemDialog.vue";
+import ProgramSessionDialog from "./ProgramSessionDialog.vue";
+import ProgramSettingsDialog from "./ProgramSettingsDialog.vue";
+import { newId, useProgram } from "../composables/useProgram";
+import { useProgramExecution } from "../composables/useProgramExecution";
+import { importLiturgy, programToLiturgy } from "../program/liturgy";
 import { module as manifest } from "../manifest";
 
 const moduleId = ModuleEnum.PRESENTATION_MODE;
 const { tm } = useModuleI18n(moduleId);
+/** O `$alert` traduz na hora de pintar: recebe a chave, não o texto. */
+const alertKey = (key: string) => `modules.${moduleId}.${key}`;
+
+const {
+  date,
+  program,
+  selectedItemId,
+  ensureLoaded,
+  setSessions,
+  setPlannedStart,
+  addSession,
+  updateSession,
+  removeSession,
+  addItem,
+  updateItem,
+  duplicateItem,
+  removeItem,
+  sessionOf,
+  goLive,
+  toggleOpen,
+} = useProgram();
+const { execute } = useProgramExecution();
+
+onMounted(() => {
+  void ensureLoaded();
+});
 
 const expanded = computed(() => isModuleExpanded(moduleId));
 // A biblioteca em largura total ganha botão próprio na F5; o grid já prevê o arranjo.
@@ -76,10 +135,185 @@ function toggleExpand(): void {
   toggleModuleExpanded(moduleId);
 }
 
+/* ─── Ao vivo ─── */
+
+function findItem(itemId: string): ProgramItem | null {
+  for (const session of program.value.sessions) {
+    const item = session.items.find((i) => i.id === itemId);
+    if (item) return item;
+  }
+  return null;
+}
+
+/**
+ * Duplo clique: o item entra no ar e é executado. Item com sub-itens só abre
+ * a lista e espera o operador escolher — nada vai para a tela.
+ */
+function activate(itemId: string): void {
+  const item = findItem(itemId);
+  if (!item) return;
+  if (item.children?.length) {
+    toggleOpen(item.id, true);
+    return;
+  }
+  goLive(item.id);
+  execute(item);
+  Telemetry.track("presentation_item_live", { kind: item.kind });
+}
+
+/* ─── Itens ─── */
+
+const itemDialogOpen = ref(false);
+const editingItem = ref<ProgramItem | null>(null);
+const editingSessionId = ref<string | null>(null);
+
+/** Garante uma sessão para receber o item: programa vazio ganha a sessão padrão. */
+function ensureSession(): string {
+  const selected = selectedItemId.value ? sessionOf(selectedItemId.value) : null;
+  if (selected) return selected.id;
+  const last = program.value.sessions.at(-1);
+  return last ? last.id : addSession(tm("program.default_session")).id;
+}
+
+function openNewItem(): void {
+  editingItem.value = null;
+  editingSessionId.value = ensureSession();
+  itemDialogOpen.value = true;
+}
+
+function openEditItem(itemId: string): void {
+  const item = findItem(itemId);
+  if (!item) return;
+  editingItem.value = item;
+  editingSessionId.value = sessionOf(itemId)?.id ?? null;
+  itemDialogOpen.value = true;
+}
+
+function onSaveItem({ item, sessionId }: { item: ProgramItem; sessionId: string }): void {
+  if (editingItem.value) updateItem(item.id, item, sessionId);
+  else addItem(item, sessionId);
+}
+
+function confirmRemoveItem(itemId: string | null): void {
+  const item = itemId ? findItem(itemId) : null;
+  if (!item) return;
+  $alert.yesno({ title: alertKey("alerts.remove_item_title"), text: alertKey("alerts.remove_item") }, (resp?: string) => {
+    if (resp !== "yes") return;
+    removeItem(item.id);
+    itemDialogOpen.value = false;
+  });
+}
+
+function duplicateSelected(): void {
+  if (selectedItemId.value) duplicateItem(selectedItemId.value);
+}
+
+/* ─── Sessões ─── */
+
+const sessionDialogOpen = ref(false);
+const editingSession = ref<ProgramSession | null>(null);
+
+function openNewSession(): void {
+  editingSession.value = null;
+  sessionDialogOpen.value = true;
+}
+
+function openEditSession(sessionId: string): void {
+  editingSession.value = program.value.sessions.find((s) => s.id === sessionId) ?? null;
+  sessionDialogOpen.value = !!editingSession.value;
+}
+
+function onSaveSession(label: string): void {
+  if (editingSession.value) updateSession(editingSession.value.id, { label });
+  else addSession(label);
+}
+
+function confirmRemoveSession(): void {
+  const session = editingSession.value;
+  if (!session) return;
+  const text = session.items.length ? "alerts.remove_session_items" : "alerts.remove_session";
+  $alert.yesno({ title: alertKey("alerts.remove_session_title"), text: alertKey(text) }, (resp?: string) => {
+    if (resp !== "yes") return;
+    removeSession(session.id);
+    sessionDialogOpen.value = false;
+  });
+}
+
+/* ─── Programa ─── */
+
+const settingsDialogOpen = ref(false);
+
+async function loadAnnouncements(): Promise<{ id: string; title: string }[]> {
+  try {
+    const all = await $idb.getAll<{ id: string | number; nome: string; ordem: number }>(DB_TABLE.ANNOUNCEMENTS);
+    return all.sort((a, b) => a.ordem - b.ordem).map((a) => ({ id: String(a.id), title: a.nome }));
+  } catch (e) {
+    Telemetry.captureException(e, { source: "presentation_mode.load_announcements" });
+    return [];
+  }
+}
+
+/** Liturgia do dia da semana da data do programa, copiada para o programa. */
+function importFromLiturgy(): void {
+  const [y, m, d] = date.value.split("-").map(Number);
+  const liturgy = $liturgy.list(new Date(y, m - 1, d).getDay());
+  if (!liturgy.length) {
+    $alert.info({ text: alertKey("alerts.liturgy_empty") });
+    return;
+  }
+
+  const apply = async (): Promise<void> => {
+    const imported = importLiturgy(liturgy, {
+      newId,
+      defaultSessionLabel: tm("program.default_session"),
+      announcements: await loadAnnouncements(),
+    });
+    setSessions(imported.sessions);
+    if (imported.plannedStart) setPlannedStart(imported.plannedStart);
+    Telemetry.track("presentation_liturgy_imported", { items: liturgy.length });
+  };
+
+  if (!program.value.sessions.length) {
+    void apply();
+    return;
+  }
+  $alert.yesno({ title: alertKey("alerts.import_title"), text: alertKey("alerts.import_replace") }, (resp?: string) => {
+    if (resp === "yes") void apply();
+  });
+}
+
+/** O programa do dia grava sozinho; "Salvar" guarda uma cópia como liturgia reutilizável. */
+function saveAsLiturgy(): void {
+  if (!program.value.sessions.length) {
+    $alert.info({ text: alertKey("alerts.program_empty") });
+    return;
+  }
+  const [y, m, d] = date.value.split("-");
+  $alert.prompt(
+    { title: alertKey("alerts.save_title"), input_default: tm("program.save_default_name", { date: `${d}/${m}/${y}` }) },
+    (name: string | null) => {
+      if (!name?.trim()) return;
+      void useLiturgyLibrary()
+        .save({ name: name.trim(), items: programToLiturgy(program.value, newId), binding: null })
+        .then(() => $alert.info({ text: alertKey("alerts.saved") }))
+        .catch((e: unknown) => {
+          Telemetry.captureException(e, { source: "presentation_mode.save_as_liturgy" });
+          $alert.error({ text: alertKey("alerts.save_failed") });
+        });
+    }
+  );
+}
+
 // Todas as ações do ribbon contextual chegam aqui. As que ainda não têm
 // handler são ignoradas até a fase que as implementa.
 const RIBBON_HANDLERS: Record<string, () => void> = {
   toggle_expand: toggleExpand,
+  new_session: openNewSession,
+  new_item: openNewItem,
+  duplicate: duplicateSelected,
+  delete_item: () => confirmRemoveItem(selectedItemId.value),
+  import_liturgy: importFromLiturgy,
+  save_program: saveAsLiturgy,
 };
 
 useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {

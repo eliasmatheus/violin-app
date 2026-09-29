@@ -8,8 +8,9 @@ export const DB_NAME = "louvorja-violin";
  * Para testes, use `indexedDB.deleteDatabase("louvorja")` no console do navegador para resetar o banco
  *
  * v1 → v2: adicionada tabela "devices" (dispositivos autorizados)
+ * v2 → v3: adicionada tabela "presentation_mode.programs" (programas do culto no navegador)
  */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 /**
  * Nomes de todas as tabelas do banco IndexedDB unificado `louvorja`.
@@ -70,6 +71,8 @@ export const DB_TABLE = {
   LIBRAS_BUNDLES: "libras.bundles",
   // ─── Dispositivos autorizados ───
   DEVICES: "devices",
+  // ─── Modo apresentação: um programa do culto por data (DocStore) ───
+  PRESENTATION_PROGRAMS: ModuleEnum.PRESENTATION_MODE + ".programs",
   // ─── Chat ───
   CHAT_MESSAGES: "chat.messages",
 } as const;
