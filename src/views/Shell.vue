@@ -44,7 +44,7 @@
 
     <CommandPalette v-if="cmdPaletteOpen" v-model="cmdPaletteOpen" />
     <MusicSpotlight v-if="musicSearchOpen" v-model="musicSearchOpen" />
-    <BibleSpotlight v-if="bibleSearchOpen" v-model="bibleSearchOpen" @select="onBibleSelect" />
+    <BibleSpotlight v-if="bibleSearchOpen" v-model="bibleSearchOpen" />
     <HotkeysCheatsheet v-if="hotkeysOpen" v-model="hotkeysOpen" />
     <ReleaseNotesDialog
       v-if="releaseNotesOpen"
@@ -106,7 +106,6 @@ import { KEYS } from "@/constants/UserDataKeys";
 import $popup from "@/helpers/Popup";
 import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
-import type { BibleSearchResult } from "@/types/Bible";
 
 import { registerShell } from "@/composables/useShell";
 import { useAppTheme } from "@/composables/useAppTheme";
@@ -540,14 +539,6 @@ function onUpdateDialogClose() {
 
 // Registra ações do shell no composable (substitui `$appdata.set("shell._ref")`)
 registerShell({ openCommandPalette, openHotkeysCheatsheet, openMusicSearch, openBibleSearch });
-
-function onBibleSelect(res: BibleSearchResult) {
-  Broadcast.send(BROADCAST_TYPE.BIBLE_VERSE_INTENT, {
-    text: res.text,
-    reference: res.reference,
-    active: true,
-  });
-}
 
 onMounted(() => {
   // Re-registra no mount (importante após HMR)

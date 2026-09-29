@@ -10,7 +10,7 @@
           :placeholder="tm('version')"
           :aria-label="tm('version')"
           @click="refreshDownloadedVersions"
-          @update:model-value="selVersion(Number($event))"
+          @update:model-value="changeVersion(Number($event))"
         />
 
         <LjCheckbox
@@ -79,7 +79,11 @@
       />
     </div>
 
-    <BibleSpotlight v-model="bibleSpotlightOpen" :initial-buffer="spotlightInitialBuffer" />
+    <BibleSpotlight
+      v-model="bibleSpotlightOpen"
+      :initial-buffer="spotlightInitialBuffer"
+      :version-id="bible.id_bible_version"
+    />
 
     <div v-if="!compact" class="bible-layout">
       <ModuleFormatDrawer v-model="show_format" :module-id="moduleId" :manifest="manifest" />
@@ -525,6 +529,7 @@ watch(show, async (val) => {
     versions.value = [];
     books.value = [];
     verses.value = {};
+    last_bible_file.value = null;
     Object.assign(bible, {
       id_bible_version: null,
       id_bible_book: null,
@@ -714,6 +719,7 @@ async function loadData(): Promise<void> {
   const bible_file = `bible_${bible.id_bible_version}_${bible.id_bible_book}_${bible.chapter}`;
   if (bible_file !== last_bible_file.value) {
     loading_verses.value = true;
+    last_bible_file.value = null;
     verses.value = {};
     const loadedVerses = await Database.get(bible_file);
     if (
@@ -738,7 +744,7 @@ async function loadData(): Promise<void> {
     select_bible.chapter === bible.chapter &&
     select_bible.id_bible_version === bible.id_bible_version
   ) {
-    bible.verses = select_bible.verses;
+    bible.verses = [...select_bible.verses];
   }
 
   lang.value = locale.value;
@@ -748,9 +754,31 @@ async function loadData(): Promise<void> {
 async function selVersion(id_bible_version: number | null): Promise<void> {
   if (id_bible_version) bible.id_bible_version = id_bible_version;
   bible.version = version.value?.abbreviation ?? null;
+  AppData.set(KEYS.MODULES.BIBLE.DATA.ID_BIBLE_VERSION, bible.id_bible_version);
   bible.verses = [];
   last_verse.value = 1;
   await loadData();
+}
+
+async function changeVersion(id: number): Promise<void> {
+  if (!versions.value.some((version) => version.id_bible_version === id)) return;
+  if (id === bible.id_bible_version) return;
+  const projected = { ...select_bible, verses: [...select_bible.verses] };
+  await selVersion(id);
+  if (
+    bible.id_bible_version !== id ||
+    loading_verses.value ||
+    projected.id_bible_book !== bible.id_bible_book ||
+    projected.chapter !== bible.chapter ||
+    projected.id_bible_version !== select_bible.id_bible_version ||
+    projected.text !== select_bible.text
+  )
+    return;
+  const available = projected.verses.filter((num) => typeof verses.value[String(num)] === "string");
+  if (!available.length) return;
+  bible.verses = available;
+  last_verse.value = available[available.length - 1];
+  publishSelection();
 }
 
 async function selBook(id_bible_book: number): Promise<void> {
@@ -788,7 +816,8 @@ async function selVerse(event: MouseEvent | null, num: number | string): Promise
   }
 
   num = parseInt(String(num), 10);
-  if (isNaN(num)) return;
+  if (!Number.isSafeInteger(num) || num < 1 || typeof verses.value[String(num)] !== "string")
+    return;
 
   if (event?.ctrlKey) {
     const index = bible.verses.indexOf(num);
@@ -812,13 +841,18 @@ async function selVerse(event: MouseEvent | null, num: number | string): Promise
 
   last_verse.value = num;
   bible.verses.sort((a, b) => a - b);
-  Object.assign(select_bible, bible);
+  publishSelection();
+}
+
+function publishSelection(): void {
+  Object.assign(select_bible, bible, { verses: [...bible.verses] });
   select_bible.scriptural_reference = scripturalReference(select_bible);
   select_bible.text = getSelectedVerses(select_bible.verses);
 
   let next_text = "";
   let next_reference = "";
 
+  const num = last_verse.value;
   const max_v = Math.max(0, ...Object.keys(verses.value).map(Number));
   if (num < max_v) {
     const next_v = num + 1;
@@ -909,7 +943,6 @@ function truncate(text: string | null | undefined, n: number): string {
 }
 
 async function prevVerse(): Promise<void> {
-  if (select_bible?.id_bible_version) await selVersion(select_bible.id_bible_version);
   if (select_bible?.id_bible_book) await selBook(select_bible.id_bible_book);
   if (select_bible?.chapter) await selChapter(select_bible.chapter);
   if (select_bible?.verses && select_bible.verses.length > 0) {
@@ -945,7 +978,6 @@ async function prevVerse(): Promise<void> {
 }
 
 async function nextVerse(): Promise<void> {
-  if (select_bible?.id_bible_version) await selVersion(select_bible.id_bible_version);
   if (select_bible?.id_bible_book) await selBook(select_bible.id_bible_book);
   if (select_bible?.chapter) await selChapter(select_bible.chapter);
   if (select_bible?.verses && select_bible.verses.length > 0) {
@@ -1176,19 +1208,22 @@ useBroadcastListener(BROADCAST_TYPE.BIBLE_VERSE, async (payload: any) => {
 
   // Navegar até o livro/capítulo/versículo quando vindo de fora (bible_search, spotlight)
   if (payload.book_id && payload.chapter) {
+    const changedVersion = payload.version_id && payload.version_id !== bible.id_bible_version;
     const changedBook = payload.book_id !== bible.id_bible_book;
     const changedChap = payload.chapter !== bible.chapter;
 
+    if (changedVersion) await selVersion(payload.version_id);
+    if (generation !== bibleSelectionGeneration) return;
     if (changedBook) await selBook(payload.book_id);
     if (generation !== bibleSelectionGeneration) return;
     if (changedChap || changedBook) await selChapter(payload.chapter);
     if (generation !== bibleSelectionGeneration) return;
 
     if (payload.verses?.length) {
-      bible.verses = payload.verses;
+      bible.verses = [...payload.verses];
       last_verse.value = payload.verses[payload.verses.length - 1];
       bible.verses.sort((a, b) => a - b);
-      Object.assign(select_bible, bible);
+      Object.assign(select_bible, bible, { verses: [...bible.verses] });
       select_bible.scriptural_reference = scripturalReference(select_bible);
       select_bible.text = getSelectedVerses(select_bible.verses);
       nextTick(() => scrollToElement(document.getElementById(`listVerse_${last_verse.value}`)));
