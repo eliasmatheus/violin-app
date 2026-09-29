@@ -81,24 +81,6 @@ function _injectBridge(html, token, initialHash) {
   return headContent + cleaned;
 }
 
-/**
- * Injeção mínima para clients locais (Electron projection windows).
- * Apenas força hash routing — NÃO abre EventSource SSE (o que causava
- * conflitos de roteamento e exibia Shell.vue em vez de FileProjection.vue).
- * A comunicação inter-window continua via BroadcastChannel.
- */
-function _injectMinimalBridge(html, initialHash) {
-  if (html.includes("window.LJ_SSE_BRIDGE_INJECTED")) return html;
-  const cleaned = _stripCspMeta(html);
-  const baseTag = '<base href="/">';
-  const script = `<script>${_initialRouteScript(initialHash)}</script>`;
-  const headContent = baseTag + script;
-  if (cleaned.includes("<head>")) {
-    return cleaned.replace("<head>", "<head>" + headContent);
-  }
-  return headContent + cleaned;
-}
-
 function _pathToHash(pathname) {
   const map = {
     "/obs": "/obs",
@@ -206,16 +188,12 @@ function _createStaticIndexHandler(distDir, getToken) {
       if (_cached === null) {
         _cached = fs.readFileSync(path.join(distDir, "index.html"), "utf8");
       }
-      // Clients locais (Electron projection windows) recebem injeção mínima
-      // (só LJ_HASH_ROUTING=true). Clients remotos (OBS, celular) recebem o
-      // bridge SSE completo (hash routing + EventSource + buffer replay).
-      const ip = req.ip || req.socket?.remoteAddress || "";
-      const isRemote = !_isLocalhost(ip);
+      // Todo cliente HTTP precisa do SSE, inclusive OBS/navegador em localhost:
+      // ele não compartilha o BroadcastChannel da origem louvorja://app usada
+      // pelas janelas nativas. O bridge preserva o hash antes de iniciar o Vue.
       const initialHash = _pathToHash(req.path);
       const token = typeof getToken === "function" ? getToken() : null;
-      const html = isRemote
-        ? _injectBridge(_cached, token, initialHash)
-        : _injectMinimalBridge(_cached, initialHash);
+      const html = _injectBridge(_cached, token, initialHash);
       res.set("Content-Type", "text/html; charset=utf-8");
       res.set("Cache-Control", "no-cache");
       res.send(html);
