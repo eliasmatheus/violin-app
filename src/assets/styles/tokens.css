@@ -447,8 +447,8 @@
 }
 
 /* =====================================================================
- * Temas coloridos — só sobrescrevem a paleta navy*. Os tokens derivados
- * (titlebar, tabs, ribbon header, etc.) referenciam --lj-navy* e seguem
+ * Temas coloridos — ajustam a paleta navy* e, quando necessário, o fundo
+ * inicial. Os tokens derivados (titlebar, tabs, ribbon header, etc.) seguem
  * automaticamente. Ativados via [data-theme="<id>"] no <html>, aplicado
  * em Shell.vue (boot) e AppMenuOpcoes.vue (mudança).
  * ===================================================================== */
@@ -479,19 +479,21 @@
 }
 
 [data-theme="blue"] {
-  --lj-navy: #0b3d62;
-  --lj-navy-dark: #08304e;
-  --lj-navy-darker: #06243a;
-  --lj-navy-active: #1257a3;
-  --lj-navy-ch: 11 61 98;
+  --lj-navy: #155b8a;
+  --lj-navy-dark: #10496e;
+  --lj-navy-darker: #0b3754;
+  --lj-navy-active: #1f6fa5;
+  --lj-navy-ch: 21 91 138;
+  --lj-home-bg: var(--lj-navy);
 }
 
 [data-theme="darkblue"] {
   --lj-navy: #1b2a41;
-  --lj-navy-dark: #08304e;
-  --lj-navy-darker: #06243a;
-  --lj-navy-active: #1257a3;
-  --lj-navy-ch: 11 61 98;
+  --lj-navy-dark: #142135;
+  --lj-navy-darker: #0f1929;
+  --lj-navy-active: #304766;
+  --lj-navy-ch: 27 42 65;
+  --lj-home-bg: var(--lj-navy);
 }
 
 [data-theme="green"] {

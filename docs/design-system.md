@@ -73,8 +73,8 @@ cores fixas do app Delphi original.
 | `--lj-color-cover-gold-dark` | `#c89500`                | Capa no player dark                         |
 | `--lj-gold-alpha-60`         | `rgba(239, 180, 0, 0.6)` | Overlay gold semi-transparente              |
 
-Na área inicial da janela principal, `--lj-home-bg` é azul sólido
-(`#2e74aa`) nos temas claros de paleta azul. No tema escuro, usa o mesmo
+Na área inicial da janela principal, `--lj-home-bg` usa `#2e74aa` no tema
+Claro, `#155b8a` no Azul e `#1b2a41` no Azul-escuro. No tema escuro, usa o mesmo
 `--lj-body-bg` da ribbon (`#1f2937`), enquanto a barra superior permanece
 azul (`#153653`). Os demais temas coloridos usam um tom da própria paleta.
 `--lj-shell-chrome-bg` controla a barra superior e a lateral do menu.
