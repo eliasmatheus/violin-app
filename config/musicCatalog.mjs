@@ -3,7 +3,7 @@ export const HYMNAL_ALBUM_IDS = { current: 712, legacy: 629 };
 const musicNames = new Intl.Collator("pt-BR", { sensitivity: "base" });
 
 /** @typedef {{ id_album: number|string, name?: string, year?: number|string, subtitle?: string, order?: number, type?: string, pivot?: { track?: number|string } }} CatalogAlbum */
-/** @typedef {{ name?: string, albums?: CatalogAlbum[]|null, albums_names?: string, album?: string, custom_song_id?: string }} CatalogMusic */
+/** @typedef {{ name?: string, albums?: CatalogAlbum[]|null, albums_names?: string, album?: string, custom_song_id?: string, custom_collection_names?: string[] }} CatalogMusic */
 
 /** @param {unknown} value */
 function yearIn(value) {
@@ -125,7 +125,8 @@ export function albumLabel(album) {
 
 /** @param {CatalogMusic} music @param {string} customLabel */
 export function musicAlbumLabel(music, customLabel = "") {
-  if (music.custom_song_id) return customLabel;
+  if (music.custom_song_id)
+    return [customLabel, ...(music.custom_collection_names || [])].filter(Boolean).join(" · ");
   if (Array.isArray(music.albums) && music.albums.length)
     return music.albums.map(albumLabel).filter(Boolean).join(", ");
   return music.albums_names || music.album || "";

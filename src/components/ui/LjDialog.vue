@@ -69,7 +69,10 @@ const props = withDefaults(
   { size: "md" }
 );
 
-const emit = defineEmits<{ "update:modelValue": [value: boolean] }>();
+const emit = defineEmits<{
+  "update:modelValue": [value: boolean];
+  openAutoFocus: [event: Event];
+}>();
 
 const open = computed({
   get: () => !!props.modelValue,
@@ -80,6 +83,8 @@ const open = computed({
 // o que atrapalha em diálogos de confirmação. O contêiner recebe o foco e a
 // navegação por Tab segue funcionando.
 function onOpenAutoFocus(event: Event): void {
+  emit("openAutoFocus", event);
+  if (event.defaultPrevented) return;
   event.preventDefault();
   (event.currentTarget as HTMLElement | null)?.focus?.();
 }

@@ -1,5 +1,11 @@
 <template>
-  <LjDialog v-model="open" size="lg" :title="t('title')" :icon="ICONS.MODULES.MUSIC_SEARCH">
+  <LjDialog
+    v-model="open"
+    size="lg"
+    :title="t('title')"
+    :icon="ICONS.MODULES.MUSIC_SEARCH"
+    @open-auto-focus="focusSearch"
+  >
     <div ref="searchBar" class="music-search__bar">
       <LjInput
         v-model="search"
@@ -16,7 +22,7 @@
     </div>
 
     <div class="music-search__results">
-      <div v-if="loading" class="music-search__state">
+      <div v-if="loading && !filteredMusics.length" class="music-search__state">
         <LjSpinner :size="24" />
       </div>
 
@@ -38,7 +44,7 @@
           <tbody>
             <tr
               v-for="item in filteredMusics"
-              :key="item.id_music"
+              :key="item.custom_song_id || item.id_music"
               :class="{ 'music-search__row--pick': mode === 'pick' }"
               @click="mode === 'pick' && pickMusic(item)"
               @dblclick="pickMusic(item)"
@@ -97,15 +103,25 @@
                       @click.stop="handleMusicAction(item, MusicActionEnum.PLAYBACK_ONLY)"
                     />
                   </template>
+                  <LjButton
+                    v-else-if="item.custom_song_id && mode !== 'pick'"
+                    size="sm"
+                    variant="ghost"
+                    icon-only
+                    :icon="ICONS.PLAYER.PLAY_OUTLINE"
+                    :title="i18nT('components.music_menu.execute')"
+                    :aria-label="i18nT('components.music_menu.execute')"
+                    @click.stop="executeCustomMusic(item)"
+                  />
                   <l-music-menu-table
-                    v-else-if="!Platform.isRemote"
+                    v-else-if="!Platform.isRemote && !item.custom_song_id"
                     :id_music="Number(item.id_music)"
                     :music-subtitle="musicTitle(item, 'Música')"
                     :name="item.name"
                     :has_instrumental_music="item.has_instrumental_music ?? false"
                   />
                   <LjButton
-                    v-else
+                    v-else-if="Platform.isRemote"
                     size="sm"
                     variant="ghost"
                     icon-only
@@ -130,11 +146,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, provide, ref, watch } from "vue";
+import { computed, onScopeDispose, provide, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import LMusicMenuTable from "@/components/MusicMenuTable.vue";
 import { LjButton, LjDialog, LjEmpty, LjInput, LjSpinner } from "@/components/ui";
 import Database from "@/helpers/Database";
+import { loadCustomMusicCatalog } from "@/helpers/CustomMusicCatalog";
+import { getSong } from "@/helpers/CustomSongs";
+import Media from "@/composables/useMedia";
 import Strings from "@/helpers/Strings";
 import { isHymnalTrack } from "@/helpers/Hymnal";
 import { useMusicCatalog } from "@/composables/useMusicCatalog";
@@ -169,6 +188,9 @@ const searchBar = ref<HTMLElement | null>(null);
 const loading = ref<boolean>(false);
 const loadedLocale = ref<string | null>(null);
 const musics = ref<SearchMusicItem[]>([]);
+const customMusics = ref<SearchMusicItem[]>([]);
+let loadRevision = 0;
+onScopeDispose(() => loadRevision++);
 
 const open = computed({
   get: () => props.modelValue,
@@ -180,7 +202,7 @@ provide("close-spotlight", () => {
 });
 
 const { musics: sourceMusics } = useMusicCatalog(() =>
-  Array.isArray(props.musicsList) ? props.musicsList : musics.value
+  Array.isArray(props.musicsList) ? props.musicsList : [...musics.value, ...customMusics.value]
 );
 
 const filteredMusics = computed<SearchMusicItem[]>(() => {
@@ -238,23 +260,47 @@ function albumLabel(music: SearchMusicItem): string {
   return musicAlbumLabel(music, t("custom_album"));
 }
 
+function focusSearch(event: Event): void {
+  event.preventDefault();
+  searchBar.value?.querySelector("input")?.focus();
+}
+
 async function loadMusics(): Promise<void> {
   if (Array.isArray(props.musicsList)) return;
-  if (loading.value || loadedLocale.value === locale.value) return;
-
+  const revision = ++loadRevision;
+  const language = locale.value;
   loading.value = true;
   try {
-    const data = await Database.get<SearchMusicItem[]>(`${locale.value}_musics`);
-    if (Array.isArray(data)) {
-      musics.value = data;
-      loadedLocale.value = locale.value;
-    } else {
-      musics.value = [];
-    }
-  } catch {
-    musics.value = [];
+    await Promise.all([
+      (async () => {
+        if (loadedLocale.value === language) return;
+        const data = await Database.get<SearchMusicItem[]>(`${language}_musics`).catch(() => null);
+        if (revision !== loadRevision) return;
+        musics.value = Array.isArray(data) ? data : [];
+        if (Array.isArray(data)) loadedLocale.value = language;
+      })(),
+      (async () => {
+        // Os seletores de timer e do painel de liturgia ainda recebem IDs do catálogo.
+        const data =
+          !Platform.isRemote && props.mode !== "pick" && !props.onMusicAction
+            ? await loadCustomMusicCatalog()
+            : [];
+        if (revision === loadRevision) customMusics.value = data;
+      })(),
+    ]);
   } finally {
-    loading.value = false;
+    if (revision === loadRevision) loading.value = false;
+  }
+}
+
+async function executeCustomMusic(music: SearchMusicItem): Promise<void> {
+  if (!music.custom_song_id) return;
+  open.value = false;
+  try {
+    const song = await getSong(music.custom_song_id);
+    if (song) await Media.openCustomSong(song);
+  } catch (error) {
+    console.error("[MusicSpotlight] Falha ao executar música personalizada:", error);
   }
 }
 
@@ -276,12 +322,10 @@ function handleMusicAction(music: SearchMusicItem, action: MusicActionEnum): voi
 
 watch(
   open,
-  async (value: boolean) => {
+  (value: boolean) => {
     if (!value) return;
     search.value = "";
-    await loadMusics();
-    await nextTick();
-    searchBar.value?.querySelector("input")?.focus();
+    void loadMusics();
   },
   { immediate: true }
 );
@@ -292,6 +336,7 @@ watch(
     if (!Array.isArray(props.musicsList)) {
       musics.value = [];
       loadedLocale.value = null;
+      if (open.value) void loadMusics();
     }
   }
 );

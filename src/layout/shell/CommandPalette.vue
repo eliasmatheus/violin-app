@@ -1,109 +1,126 @@
 <template>
-  <Teleport to="body">
-    <Transition name="cmd">
-      <div v-if="open" class="cmd-overlay" @click.self="close" @keydown.escape.stop="close">
-        <div class="cmd-palette" role="dialog" aria-modal="true">
-          <!-- Input de busca -->
-          <div class="cmd-search">
-            <LjIcon :icon="ICONS.ACTIONS.SEARCH" size="22" class="cmd-search-icon" />
-            <input
-              ref="searchInput"
-              v-model="query"
-              :aria-label="$t('shell.search_placeholder')"
-              :placeholder="$t('shell.search_placeholder')"
-              class="cmd-input"
-              autocomplete="off"
-              spellcheck="false"
-              @keydown.down.prevent="moveDown"
-              @keydown.up.prevent="moveUp"
-              @keydown.enter.prevent="executeSelected"
-              @keydown.escape.prevent="close"
-            />
-            <kbd v-if="!query" class="cmd-kbd cmd-kbd--hint">Esc</kbd>
-            <LjButton
-              v-else
-              variant="ghost"
-              size="sm"
-              :icon="ICONS.ACTIONS.CLOSE"
-              :aria-label="$t('alert.close')"
-              icon-only
-              @click="query = ''"
-            />
-          </div>
-
-          <LjDivider />
-
-          <!-- Lista de resultados -->
-          <div ref="resultsContainer" class="cmd-results">
-            <div v-if="!loading && results.length === 0" class="cmd-empty">
-              <LjIcon :icon="ICONS.ACTIONS.SEARCH" size="36" class="cmd-empty-icon lj-u-faded" />
-              <div>{{ $t("shell.no_results") }}</div>
+  <DialogRoot v-model:open="open">
+    <DialogPortal>
+      <Transition name="cmd">
+        <DialogOverlay v-if="open" class="cmd-overlay" @click.self="close">
+          <DialogContent
+            class="cmd-palette"
+            :aria-describedby="undefined"
+            @open-auto-focus="focusSearch"
+          >
+            <VisuallyHidden>
+              <DialogTitle>{{ t("shell.search_placeholder") }}</DialogTitle>
+            </VisuallyHidden>
+            <!-- Input de busca -->
+            <div class="cmd-search">
+              <LjIcon :icon="ICONS.ACTIONS.SEARCH" size="22" class="cmd-search-icon" />
+              <input
+                ref="searchInput"
+                v-model="query"
+                :aria-label="$t('shell.search_placeholder')"
+                :placeholder="$t('shell.search_placeholder')"
+                class="cmd-input"
+                autocomplete="off"
+                spellcheck="false"
+                @keydown.down.prevent="moveDown"
+                @keydown.up.prevent="moveUp"
+                @keydown.enter.prevent="executeSelected"
+                @keydown.escape.prevent="close"
+              />
+              <kbd v-if="!query" class="cmd-kbd cmd-kbd--hint">Esc</kbd>
+              <LjButton
+                v-else
+                variant="ghost"
+                size="sm"
+                :icon="ICONS.ACTIONS.CLOSE"
+                :aria-label="$t('alert.close')"
+                icon-only
+                @click="query = ''"
+              />
             </div>
 
-            <div v-if="loading" class="cmd-loading">
-              <LjSpinner :size="24" />
-            </div>
+            <LjDivider />
 
-            <template v-for="(group, gkey) in groupedResults" :key="gkey">
-              <div class="cmd-group-label">{{ groupLabel(gkey) }}</div>
-              <button
-                v-for="item in group"
-                :key="item.id"
-                class="cmd-item"
-                :class="{ 'cmd-item--active': isSelected(item) }"
-                @click="execute(item)"
-                @mouseenter="setActive(item)"
-              >
-                <LjIcon :icon="item.icon" size="18" class="cmd-item-icon" />
-                <div class="cmd-item-body">
-                  <div class="cmd-item-title lj-u-truncate">
-                    <template v-for="(part, i) in highlightParts(item.title)" :key="i">
-                      <mark v-if="part.mark">{{ part.text }}</mark>
-                      <span v-else>{{ part.text }}</span>
-                    </template>
+            <!-- Lista de resultados -->
+            <div ref="resultsContainer" class="cmd-results">
+              <div v-if="!loading && results.length === 0" class="cmd-empty">
+                <LjIcon :icon="ICONS.ACTIONS.SEARCH" size="36" class="cmd-empty-icon lj-u-faded" />
+                <div>{{ $t("shell.no_results") }}</div>
+              </div>
+
+              <div v-if="loading" class="cmd-loading">
+                <LjSpinner :size="24" />
+              </div>
+
+              <template v-for="(group, gkey) in groupedResults" :key="gkey">
+                <div class="cmd-group-label">{{ groupLabel(gkey) }}</div>
+                <button
+                  v-for="item in group"
+                  :key="item.id"
+                  class="cmd-item"
+                  :class="{ 'cmd-item--active': isSelected(item) }"
+                  @click="execute(item)"
+                  @mouseenter="setActive(item)"
+                >
+                  <LjIcon :icon="item.icon" size="18" class="cmd-item-icon" />
+                  <div class="cmd-item-body">
+                    <div class="cmd-item-title lj-u-truncate">
+                      <template v-for="(part, i) in highlightParts(item.title)" :key="i">
+                        <mark v-if="part.mark">{{ part.text }}</mark>
+                        <span v-else>{{ part.text }}</span>
+                      </template>
+                    </div>
+                    <div v-if="item.subtitle" class="cmd-item-subtitle">{{ item.subtitle }}</div>
                   </div>
-                  <div v-if="item.subtitle" class="cmd-item-subtitle">{{ item.subtitle }}</div>
-                </div>
-                <kbd v-if="item.shortcut" class="cmd-kbd">{{ item.shortcut }}</kbd>
+                  <kbd v-if="item.shortcut" class="cmd-kbd">{{ item.shortcut }}</kbd>
+                </button>
+              </template>
+
+              <button v-if="hasMore" class="cmd-load-more" @click="loadMore">
+                {{ $t("shell.load_more") }}
               </button>
-            </template>
+            </div>
 
-            <button v-if="hasMore" class="cmd-load-more" @click="loadMore">
-              {{ $t("shell.load_more") }}
-            </button>
-          </div>
-
-          <!-- Footer com hints -->
-          <LjDivider />
-          <div class="cmd-footer">
-            <span>
-              <kbd>↑</kbd>
-              <kbd>↓</kbd>
-              {{ $t("shell.navigate") }}
-            </span>
-            <span>
-              <kbd>Enter</kbd>
-              {{ $t("shell.execute") }}
-            </span>
-            <span>
-              <kbd>Esc</kbd>
-              {{ $t("shell.close") }}
-            </span>
-            <div class="lj-u-spacer" />
-            <span class="lj-u-caption lj-u-faded">
-              {{ results.length }}{{ hasMore ? "+" : "" }} {{ $t("shell.results") }}
-            </span>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+            <!-- Footer com hints -->
+            <LjDivider />
+            <div class="cmd-footer">
+              <span>
+                <kbd>↑</kbd>
+                <kbd>↓</kbd>
+                {{ $t("shell.navigate") }}
+              </span>
+              <span>
+                <kbd>Enter</kbd>
+                {{ $t("shell.execute") }}
+              </span>
+              <span>
+                <kbd>Esc</kbd>
+                {{ $t("shell.close") }}
+              </span>
+              <div class="lj-u-spacer" />
+              <span class="lj-u-caption lj-u-faded">
+                {{ results.length }}{{ hasMore ? "+" : "" }} {{ $t("shell.results") }}
+              </span>
+            </div>
+          </DialogContent>
+        </DialogOverlay>
+      </Transition>
+    </DialogPortal>
+  </DialogRoot>
 </template>
 
 <script setup>
 import { LjButton, LjDivider, LjIcon, LjSpinner } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ref, computed, watch, nextTick } from "vue";
+import {
+  DialogContent,
+  DialogOverlay,
+  DialogPortal,
+  DialogRoot,
+  DialogTitle,
+  VisuallyHidden,
+} from "reka-ui";
 import { useI18n } from "vue-i18n";
 import { useAppTheme } from "@/composables/useAppTheme";
 import CommandRegistry from "@/helpers/CommandRegistry";
@@ -146,6 +163,11 @@ const open = computed({
   get: () => props.modelValue,
   set: (v) => emit("update:modelValue", v),
 });
+
+function focusSearch(event) {
+  event.preventDefault();
+  searchInput.value?.focus();
+}
 
 /** Resultados brutos: aplica Fuse ou filtro por categoria */
 const _rawResults = computed(() => {
@@ -220,22 +242,6 @@ watch(selectedIndex, () => {
 });
 
 async function loadCommands() {
-  // Lazy: pula se os comandos já estão em memória
-  if (CommandRegistry.isLoaded()) {
-    if (!allCommands.value.length) {
-      const tFn = (key) => {
-        try {
-          return t(key);
-        } catch {
-          return key;
-        }
-      };
-      allCommands.value = await CommandRegistry.getAll(Database, UserData, tFn);
-      _patchThemeCmd();
-    }
-    return;
-  }
-
   if (loading.value) return;
   loading.value = true;
   const myLoadId = ++_loadId;
@@ -293,13 +299,13 @@ function executeSelected() {
   if (activeItem.value) execute(activeItem.value);
 }
 
-function execute(item) {
+async function execute(item) {
+  close();
   try {
-    item.run();
+    await item.run();
   } catch (e) {
     console.error("[CommandPalette] Erro ao executar comando:", item.id, e);
   }
-  close();
 }
 
 function close() {
