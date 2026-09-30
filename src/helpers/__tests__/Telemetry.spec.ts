@@ -40,6 +40,7 @@ const posthog = {
 };
 
 const databaseReporters: Array<(timing: unknown) => void> = [];
+const animationFrameCallbacks: FrameRequestCallback[] = [];
 
 vi.mock("posthog-js", () => ({ default: posthog }));
 // Barramento em memória: o BroadcastChannel real entrega mensagens a instâncias
@@ -98,6 +99,14 @@ beforeEach(() => {
   platform.updater = undefined;
   for (const key of Object.keys(state)) delete state[key];
   bus.listeners.clear();
+  animationFrameCallbacks.length = 0;
+  vi.stubGlobal(
+    "requestAnimationFrame",
+    vi.fn((callback: FrameRequestCallback) => {
+      animationFrameCallbacks.push(callback);
+      return animationFrameCallbacks.length;
+    })
+  );
   vi.clearAllMocks();
   vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -413,6 +422,21 @@ describe("Telemetry", () => {
 
     expect(posthog.init).not.toHaveBeenCalled();
     expect(posthog.capture).not.toHaveBeenCalled();
+  });
+
+  it("não envia diagnóstico do DOM se a telemetria for desligada antes do segundo frame", async () => {
+    const Telemetry = await loadTelemetry();
+    await Telemetry.init();
+    const capturesBeforeOptOut = posthog.capture.mock.calls.length;
+
+    expect(animationFrameCallbacks).toHaveLength(1);
+    animationFrameCallbacks.shift()?.(0);
+    expect(animationFrameCallbacks).toHaveLength(1);
+
+    Telemetry.setEnabled(false);
+    animationFrameCallbacks.shift()?.(0);
+
+    expect(posthog.capture).toHaveBeenCalledTimes(capturesBeforeOptOut);
   });
 
   it("inicializa os recursos de observabilidade do PostHog", async () => {
