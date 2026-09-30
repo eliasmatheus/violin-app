@@ -37,7 +37,7 @@
         data-testid="pm-video-forward"
         @click="Media.advanceTime(10)"
       />
-      <span class="pm-video__time" data-testid="pm-video-current">{{ clock(shownTime) }}</span>
+      <span class="pm-video__time" data-testid="pm-video-current">{{ DateTime.shortTime(shownTime) }}</span>
 
       <div
         class="pm-video__timeline"
@@ -48,7 +48,7 @@
         :aria-valuemin="0"
         :aria-valuemax="Math.round(duration)"
         :aria-valuenow="Math.round(shownTime)"
-        :aria-valuetext="clock(shownTime)"
+        :aria-valuetext="DateTime.shortTime(shownTime)"
         data-testid="pm-video-timeline"
         @pointerdown="startSeek"
         @keydown.left.prevent="!locked && Media.advanceTime(-5)"
@@ -59,7 +59,7 @@
         <span class="pm-video__thumb" :style="{ left: `${shownPercent}%` }" />
       </div>
 
-      <span class="pm-video__time">{{ clock(duration) }}</span>
+      <span class="pm-video__time">{{ DateTime.shortTime(duration) }}</span>
 
       <div class="pm-video__volume">
         <LjIcon :icon="volumeIcon" :size="16" class="pm-video__volume-icon" />
@@ -95,6 +95,7 @@
 </template>
 
 <script setup lang="ts">
+import DateTime from "@/helpers/DateTime";
 import { computed, ref } from "vue";
 import { LjButton, LjIcon, LjSlider } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
@@ -186,13 +187,6 @@ function stop(): void {
   Media.close(true, false, true);
 }
 
-function clock(seconds: number): string {
-  const s = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const rest = String(s % 60).padStart(2, "0");
-  return h ? `${h}:${String(m).padStart(2, "0")}:${rest}` : `${m}:${rest}`;
-}
 </script>
 
 <style scoped>

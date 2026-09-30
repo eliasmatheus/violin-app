@@ -62,6 +62,7 @@
 </template>
 
 <script setup lang="ts">
+import DateTime from "@/helpers/DateTime";
 import { computed } from "vue";
 import { LjContextMenu, LjIcon, LjMenu, LjTooltip, type LjMenuItem } from "@/components/ui";
 import { modesFor, type MusicMode } from "../program/musicModes";
@@ -101,11 +102,8 @@ const menu = computed<LjMenuItem[]>(() => {
 
 /** "00:03:39" → "3:39". */
 const shortDuration = computed(() => {
-  const parts = (props.song.duration ?? "").split(":").map(Number);
-  if (parts.length !== 3 || parts.some(Number.isNaN)) return "";
-  const [h, m, s] = parts;
-  const total = h * 60 + m;
-  return `${total}:${String(s).padStart(2, "0")}`;
+  const seconds = DateTime.toNumber(props.song.duration);
+  return seconds > 0 ? DateTime.shortTime(seconds) : "";
 });
 </script>
 

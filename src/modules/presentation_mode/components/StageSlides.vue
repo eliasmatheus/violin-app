@@ -24,11 +24,11 @@
         <span v-if="subtitle" class="pm-slides__subtitle">{{ subtitle }}</span>
       </div>
       <template v-if="hasAudio">
-        <span class="pm-slides__time">{{ clock(audio.currentTime.value) }}</span>
+        <span class="pm-slides__time">{{ DateTime.shortTime(audio.currentTime.value) }}</span>
         <div class="pm-slides__progress" role="presentation">
           <span :style="{ width: `${audio.progress.value}%` }" />
         </div>
-        <span class="pm-slides__time">{{ clock(audio.duration.value) }}</span>
+        <span class="pm-slides__time">{{ DateTime.shortTime(audio.duration.value) }}</span>
       </template>
       <div class="pm-slides__pager">
         <LjButton
@@ -54,6 +54,7 @@
 </template>
 
 <script setup lang="ts">
+import DateTime from "@/helpers/DateTime";
 import { computed, nextTick, watch } from "vue";
 import { LjButton } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
@@ -96,10 +97,6 @@ function togglePlay(): void {
   else Media.pause(true);
 }
 
-function clock(seconds: number): string {
-  const s = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
 
 // O slide no ar fica sempre à vista, mesmo quando a música avança sozinha.
 watch(index, async (i) => {

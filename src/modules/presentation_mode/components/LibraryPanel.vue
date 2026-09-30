@@ -4,10 +4,13 @@
       class="pm-library__resize"
       role="separator"
       aria-orientation="horizontal"
+      tabindex="0"
       :aria-label="tm('library.resize')"
       :title="tm('library.resize')"
       data-testid="pm-library-resize"
-      @pointerdown="startResize"
+      @pointerdown="resize.start"
+      @keydown.up.prevent="resize.step(1)"
+      @keydown.down.prevent="resize.step(-1)"
       @dblclick="emit('toggle-height')"
     />
     <header class="pm-library__tabs">
@@ -237,7 +240,7 @@
           </template>
           <template v-if="detailsMeta?.duration">
             <dt>{{ tm("library.duration") }}</dt>
-            <dd>{{ clock(detailsMeta.duration) }}</dd>
+            <dd>{{ DateTime.shortTime(detailsMeta.duration) }}</dd>
           </template>
           <dt>{{ tm("library.modified") }}</dt>
           <dd>{{ formatDate(details.mtimeMs) }}</dd>
@@ -256,6 +259,7 @@
 </template>
 
 <script setup lang="ts">
+import DateTime from "@/helpers/DateTime";
 import { computed, onMounted, ref, watch } from "vue";
 import draggable from "vuedraggable";
 import LibraryMusic from "./LibraryMusic.vue";
@@ -267,6 +271,7 @@ import { ModuleEnum } from "@/enums/ModuleEnum";
 import $alert from "@/helpers/Alert";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import { ALL, FAVORITES, fileKind, useFileLibrary, type LibraryEntry } from "../composables/useFileLibrary";
+import { useVerticalResize } from "../composables/useVerticalResize";
 import { useMediaMeta, type MediaMeta } from "../composables/useMediaMeta";
 
 const props = defineProps<{
@@ -305,37 +310,14 @@ const TABS = [
 /** Controlada de fora: o ribbon também troca a aba. */
 const tab = defineModel<(typeof TABS)[number]["id"]>("tab", { default: "files" });
 
-/* ─── Altura por arraste da borda de cima ─── */
-
-const MIN_HEIGHT = 120;
-/** O palco acima nunca fica menor que isso. */
-const MIN_STAGE = 150;
 const root = ref<HTMLElement | null>(null);
+const resize = useVerticalResize({
+  root,
+  height: () => props.height,
+  onResize: (h) => emit("resize", h),
+  onEnd: (h) => emit("resize-end", h),
+});
 
-function startResize(event: PointerEvent): void {
-  const handle = event.currentTarget as HTMLElement;
-  const area = root.value?.parentElement;
-  if (!area) return;
-  handle.setPointerCapture(event.pointerId);
-  const startY = event.clientY;
-  const startHeight = props.height;
-  const max = Math.max(MIN_HEIGHT, area.clientHeight - MIN_STAGE);
-  let current = startHeight;
-
-  const move = (e: PointerEvent) => {
-    current = Math.min(max, Math.max(MIN_HEIGHT, startHeight + (startY - e.clientY)));
-    emit("resize", current);
-  };
-  const end = () => {
-    handle.removeEventListener("pointermove", move);
-    handle.removeEventListener("pointerup", end);
-    handle.removeEventListener("pointercancel", end);
-    emit("resize-end", current);
-  };
-  handle.addEventListener("pointermove", move);
-  handle.addEventListener("pointerup", end);
-  handle.addEventListener("pointercancel", end);
-}
 const lib = useFileLibrary();
 const { meta, request } = useMediaMeta();
 
@@ -419,17 +401,10 @@ function thumbOf(entry: LibraryEntry): string | undefined {
   return entry.isDir ? undefined : meta.get(entry.path)?.thumb;
 }
 
-function clock(seconds: number): string {
-  const s = Math.max(0, Math.round(seconds));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const rest = String(s % 60).padStart(2, "0");
-  return h ? `${h}:${String(m).padStart(2, "0")}:${rest}` : `${m}:${rest}`;
-}
 
 function durationOf(entry: LibraryEntry): string {
   const d = meta.get(entry.path)?.duration;
-  return d ? clock(d) : "";
+  return d ? DateTime.shortTime(d) : "";
 }
 
 function formatSize(bytes: number): string {
@@ -509,7 +484,8 @@ const emptyMessage = computed(() => {
 }
 
 .pm-library__resize:hover,
-.pm-library__resize:active {
+.pm-library__resize:active,
+.pm-library__resize:focus-visible {
   background: linear-gradient(var(--lj-orange), var(--lj-orange)) top / 100% 2px no-repeat;
 }
 

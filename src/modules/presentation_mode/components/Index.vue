@@ -2,8 +2,8 @@
   <ModuleContainer :manifest="manifest">
     <div
       class="pm-area"
-      :class="{ 'pm-area--library-wide': libraryFullWidth }"
-      :style="{ '--pm-library-h': `${libraryHeight}px` }"
+      :class="{ 'pm-area--library-wide': libraryLayout.fullWidth.value }"
+      :style="{ '--pm-library-h': `${libraryLayout.height.value}px` }"
     >
       <ProgramPanel
         @activate="activate"
@@ -69,9 +69,9 @@
 
       <LibraryPanel
         v-model:tab="libraryTab"
-        :full-width="libraryFullWidth"
-        :tall="libraryHeight > LIBRARY_DEFAULT_HEIGHT"
-        :height="libraryHeight"
+        :full-width="libraryLayout.fullWidth.value"
+        :tall="libraryLayout.tall.value"
+        :height="libraryLayout.height.value"
         :live-path="libraryLivePath"
         :return-path="returnOverride?.path ?? null"
         @show-on-return="onShowOnReturn"
@@ -80,10 +80,10 @@
         @preview-song="(s: LibrarySong) => stage.show({ type: 'song', id_music: s.id_music, title: s.name, subtitle: s.album })"
         @play-song="(s: LibrarySong, m: MusicMode) => playSong(s.id_music, s.name, s.album, 0, m)"
         @add-song="addSongToProgram"
-        @toggle-width="toggleLibraryWidth"
-        @toggle-height="toggleLibraryHeight"
-        @resize="(h: number) => (draggingHeight = h)"
-        @resize-end="saveLibraryHeight"
+        @toggle-width="libraryLayout.toggleWidth"
+        @toggle-height="libraryLayout.toggleHeight"
+        @resize="libraryLayout.drag"
+        @resize-end="libraryLayout.saveHeight"
         @project="projectFile"
         @add-to-program="addFileToProgram"
       />
@@ -133,16 +133,12 @@ import { LjButton, LjIcon } from "@/components/ui";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
-import { DB_TABLE } from "@/constants/DbTables";
 import $alert from "@/helpers/Alert";
-import $idb from "@/helpers/IndexedDB";
-import $liturgy from "@/helpers/Liturgy";
 import Telemetry from "@/helpers/Telemetry";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import { isModuleExpanded, toggleModuleExpanded } from "@/composables/useModuleExpanded";
-import { useLiturgyLibrary } from "@/modules/liturgy/composables/useLiturgyLibrary";
 import type { ProgramItem, ProgramSession } from "@/types/Presentation";
 import ProgramPanel from "./ProgramPanel.vue";
 import ProgramItemDialog from "./ProgramItemDialog.vue";
@@ -152,17 +148,13 @@ import OutputsPanel from "./OutputsPanel.vue";
 import StageSlides from "./StageSlides.vue";
 import StageVideo from "./StageVideo.vue";
 import type { LibrarySong } from "./LibrarySongRow.vue";
-import DateTime from "@/helpers/DateTime";
-import StagePreview, { type PreviewView } from "./StagePreview.vue";
+import StagePreview from "./StagePreview.vue";
 import { useStage } from "../composables/useStage";
 import { expectationOf, isOnAir, samePlayable, type Playable } from "../program/playable";
-import $path from "@/helpers/Path";
 import LibraryPanel from "./LibraryPanel.vue";
 import LiveMirror from "./LiveMirror.vue";
-import $userdata from "@/helpers/UserData";
 import $appdata from "@/helpers/AppData";
 import { KEYS } from "@/constants/UserDataKeys";
-import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
 import { useFileLibrary, type LibraryEntry } from "../composables/useFileLibrary";
 import type { MediaMeta } from "../composables/useMediaMeta";
 import { KIND_ICONS } from "../program/kinds";
@@ -178,10 +170,15 @@ import {
   stopOutputs,
 } from "../composables/useOutputs";
 import { formatHHMM, plannedStarts } from "../program/time";
-import { newId, useProgram } from "../composables/useProgram";
+import { useProgram } from "../composables/useProgram";
 import { playMusicInMode, useProgramExecution } from "../composables/useProgramExecution";
 import { MUSIC_MODES, type MusicMode } from "../program/musicModes";
-import { importLiturgy, kindFromPath, liturgyItem, programToLiturgy } from "../program/liturgy";
+import $path from "@/helpers/Path";
+import { kindFromPath } from "../program/liturgy";
+import { fileItem, songItem } from "../program/items";
+import { previewViewOf } from "../program/previewView";
+import { useLibraryLayout } from "../composables/useLibraryLayout";
+import { useProgramLiturgy } from "../composables/useProgramLiturgy";
 import { module as manifest } from "../manifest";
 
 const moduleId = ModuleEnum.PRESENTATION_MODE;
@@ -190,11 +187,9 @@ const { tm } = useModuleI18n(moduleId);
 const alertKey = (key: string) => `modules.${moduleId}.${key}`;
 
 const {
-  date,
   program,
   selectedItemId,
   ensureLoaded,
-  setSessions,
   setPlannedStart,
   addSession,
   updateSession,
@@ -213,6 +208,7 @@ const {
   prepare,
 } = useProgram();
 const { execute, projectPath } = useProgramExecution();
+const { importFromLiturgy, saveAsLiturgy } = useProgramLiturgy();
 const stage = useStage();
 onBeforeUnmount(stage.reset);
 
@@ -225,37 +221,7 @@ onMounted(() => {
 const expanded = computed(() => isModuleExpanded(moduleId));
 /* ─── Biblioteca ─── */
 
-const libraryFullWidth = computed(
-  () => $userdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_FULL_WIDTH, false) === true
-);
-const LIBRARY_DEFAULT_HEIGHT = 244;
-const LIBRARY_TALL_HEIGHT = 340;
-
-/** Durante o arraste a altura é local; só vai para as preferências ao soltar. */
-const draggingHeight = ref<number | null>(null);
-const libraryHeight = computed(
-  () =>
-    draggingHeight.value ??
-    $userdata.get<number>(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_HEIGHT, LIBRARY_DEFAULT_HEIGHT) ??
-    LIBRARY_DEFAULT_HEIGHT
-);
-
-function saveLibraryHeight(height: number): void {
-  $userdata.set(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_HEIGHT, Math.round(height));
-  draggingHeight.value = null;
-}
-
-function toggleLibraryWidth(): void {
-  $userdata.set(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_FULL_WIDTH, !libraryFullWidth.value);
-}
-
-function toggleLibraryHeight(): void {
-  saveLibraryHeight(libraryHeight.value > LIBRARY_DEFAULT_HEIGHT ? LIBRARY_DEFAULT_HEIGHT : LIBRARY_TALL_HEIGHT);
-}
-
-function fileTitle(entry: LibraryEntry): string {
-  return entry.name.replace(/\.[^.]+$/, "");
-}
+const libraryLayout = useLibraryLayout();
 
 /** Duplo clique ou "Enviar": vai para a tela principal pelo mesmo caminho da liturgia. */
 function projectFile(entry: LibraryEntry): void {
@@ -263,47 +229,14 @@ function projectFile(entry: LibraryEntry): void {
 }
 
 function addSongToProgram(song: LibrarySong, mode: MusicMode = "sung"): void {
-  const seconds = DateTime.toNumber(song.duration);
   // O formato aparece no subtítulo quando não é o de sempre ("Cantado").
   const modeLabel = mode === "sung" ? "" : tm(MUSIC_MODES.find((m) => m.value === mode)?.label ?? "");
-  addItem(
-    {
-      id: newId(),
-      kind: "music",
-      title: song.name,
-      subtitle: [song.album, modeLabel].filter(Boolean).join(" · ") || undefined,
-      plannedMinutes: seconds > 0 ? Math.ceil(seconds / 60) : 3,
-      source: liturgyItem({
-        id: newId(),
-        tipo: LiturgyItemTypeEnum.MUSICA,
-        subtipo: mode,
-        id_music: song.id_music,
-        musica: song.id_music,
-        item: song.name,
-        has_instrumental_music: song.has_instrumental_music,
-      }),
-    },
-    ensureSession()
-  );
+  addItem(songItem(song, mode, modeLabel), ensureSession());
 }
 
 function addFileToProgram(entry: LibraryEntry, meta: MediaMeta | null): void {
-  const kind = kindFromPath(entry.path);
-  const seconds = meta?.duration ?? 0;
-  addItem(
-    {
-      id: newId(),
-      kind,
-      title: fileTitle(entry),
-      subtitle: entry.name,
-      // Imagem não tem duração própria: um minuto é o ponto de partida mais comum.
-      plannedMinutes: seconds > 0 ? Math.ceil(seconds / 60) : 1,
-      source: liturgyItem({ id: newId(), tipo: LiturgyItemTypeEnum.ARQUIVO, dir: entry.path, item: fileTitle(entry) }),
-    },
-    ensureSession()
-  );
+  addItem(fileItem(entry, meta), ensureSession());
 }
-
 function toggleExpand(): void {
   toggleModuleExpanded(moduleId);
 }
@@ -406,42 +339,9 @@ const previewIsLive = computed(() => {
 });
 
 const stagePreview = computed(() => !!stage.preview.value && !previewIsLive.value);
-
-function fileView(path: string, title: string): PreviewView {
-  const kind = kindFromPath(path);
-  const url = $path.local(path);
-  if (kind === "image") return { kind: "image", title, icon: KIND_ICONS.image, playable: true, url };
-  if (kind === "video") return { kind: "video", title, icon: KIND_ICONS.video, playable: true, url };
-  return { kind: "other", title, icon: KIND_ICONS[kind], playable: true };
-}
-
-function programView(item: ProgramItem): PreviewView {
-  const src = item.source;
-  if (src?.tipo === LiturgyItemTypeEnum.MUSICA && src.id_music && src.id_music > 0 && !src.escolha) {
-    return { kind: "song", title: item.title, icon: KIND_ICONS.music, playable: true, songId: src.id_music };
-  }
-  if (item.children?.length) {
-    return { kind: "list", title: item.title, icon: KIND_ICONS[item.kind], playable: false, items: item.children.map((c) => c.title) };
-  }
-  if (item.bible) {
-    return { kind: "text", title: item.title, icon: KIND_ICONS.bible, playable: true, text: item.bible.text, reference: item.bible.reference };
-  }
-  if (item.kind === "note") {
-    return { kind: "text", title: item.title, icon: KIND_ICONS.note, playable: true, text: item.notes ?? src?.subitem ?? item.title };
-  }
-  if (src?.tipo === LiturgyItemTypeEnum.ARQUIVO && src.dir) return fileView(src.dir, item.title);
-  return { kind: "other", title: item.title, icon: KIND_ICONS[item.kind], playable: true };
-}
-
-const previewView = computed<PreviewView | null>(() => {
+const previewView = computed(() => {
   const t = stage.preview.value;
-  if (!t) return null;
-  if (t.type === "program") {
-    const item = findItem(t.itemId);
-    return item ? programView(item) : null;
-  }
-  if (t.type === "file") return fileView(t.entry.path, t.entry.name);
-  return { kind: "song", title: t.title, icon: KIND_ICONS.music, playable: true, songId: t.id_music, chooseMode: true };
+  return t ? previewViewOf(t, t.type === "program" ? findItem(t.itemId) : null) : null;
 });
 
 /**
@@ -745,67 +645,6 @@ function confirmRemoveSession(): void {
 /* ─── Programa ─── */
 
 const settingsDialogOpen = ref(false);
-
-async function loadAnnouncements(): Promise<{ id: string; title: string }[]> {
-  try {
-    const all = await $idb.getAll<{ id: string | number; nome: string; ordem: number }>(DB_TABLE.ANNOUNCEMENTS);
-    return all.sort((a, b) => a.ordem - b.ordem).map((a) => ({ id: String(a.id), title: a.nome }));
-  } catch (e) {
-    Telemetry.captureException(e, { source: "presentation_mode.load_announcements" });
-    return [];
-  }
-}
-
-/** Liturgia do dia da semana da data do programa, copiada para o programa. */
-function importFromLiturgy(): void {
-  const [y, m, d] = date.value.split("-").map(Number);
-  const liturgy = $liturgy.list(new Date(y, m - 1, d).getDay());
-  if (!liturgy.length) {
-    $alert.info({ text: alertKey("alerts.liturgy_empty") });
-    return;
-  }
-
-  const apply = async (): Promise<void> => {
-    const imported = importLiturgy(liturgy, {
-      newId,
-      defaultSessionLabel: tm("program.default_session"),
-      announcements: await loadAnnouncements(),
-    });
-    setSessions(imported.sessions);
-    if (imported.plannedStart) setPlannedStart(imported.plannedStart);
-    Telemetry.track("presentation_liturgy_imported", { items: liturgy.length });
-  };
-
-  if (!program.value.sessions.length) {
-    void apply();
-    return;
-  }
-  $alert.yesno({ title: alertKey("alerts.import_title"), text: alertKey("alerts.import_replace") }, (resp?: string) => {
-    if (resp === "yes") void apply();
-  });
-}
-
-/** O programa do dia grava sozinho; "Salvar" guarda uma cópia como liturgia reutilizável. */
-function saveAsLiturgy(): void {
-  if (!program.value.sessions.length) {
-    $alert.info({ text: alertKey("alerts.program_empty") });
-    return;
-  }
-  const [y, m, d] = date.value.split("-");
-  $alert.prompt(
-    { title: alertKey("alerts.save_title"), input_default: tm("program.save_default_name", { date: `${d}/${m}/${y}` }) },
-    (name: string | null) => {
-      if (!name?.trim()) return;
-      void useLiturgyLibrary()
-        .save({ name: name.trim(), items: programToLiturgy(program.value, newId), binding: null })
-        .then(() => $alert.info({ text: alertKey("alerts.saved") }))
-        .catch((e: unknown) => {
-          Telemetry.captureException(e, { source: "presentation_mode.save_as_liturgy" });
-          $alert.error({ text: alertKey("alerts.save_failed") });
-        });
-    }
-  );
-}
 
 // Todas as ações do ribbon contextual chegam aqui. As que ainda não têm
 // handler são ignoradas até a fase que as implementa.
