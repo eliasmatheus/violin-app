@@ -123,6 +123,7 @@
               :prepared="element.id === preparedItemId"
               :selected="element.id === selectedItemId"
               :open="!!openItems[element.id]"
+              :menu="itemMenu(element)"
               @select="onSelect(element.id)"
               @activate="emit('activate', element.id)"
               @toggle="toggleOpen(element.id)"
@@ -131,7 +132,26 @@
           </template>
         </draggable>
       </section>
+
+      <!-- O resto da lista é "parte vazia": o botão direito ali cria itens. -->
+      <LjContextMenu :items="addMenu">
+        <div class="pm-program__filler" data-testid="pm-program-filler" />
+      </LjContextMenu>
     </div>
+
+    <LjMenu :items="addMenu" side="top" align="end">
+      <template #trigger>
+        <button
+          type="button"
+          class="pm-program__fab"
+          :aria-label="tm('program.add')"
+          :title="tm('program.add')"
+          data-testid="pm-program-fab"
+        >
+          <LjIcon :icon="ICONS.ACTIONS.ADD" :size="20" />
+        </button>
+      </template>
+    </LjMenu>
 
     <footer class="pm-program__foot">
       <span>{{ countsLabel }}</span>
@@ -143,7 +163,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import draggable from "vuedraggable";
-import { LjButton, LjEmpty, LjIcon, LjInput, LjPopover } from "@/components/ui";
+import {
+  LjButton,
+  LjContextMenu,
+  LjEmpty,
+  LjIcon,
+  LjInput,
+  LjMenu,
+  LjPopover,
+  type LjMenuItem,
+} from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useModuleI18n } from "@/composables/useModuleI18n";
@@ -168,6 +197,9 @@ const emit = defineEmits<{
   "edit-item": [itemId: string];
   "edit-session": [sessionId: string];
   "new-item": [];
+  "new-session": [];
+  "duplicate-item": [itemId: string];
+  "remove-item": [itemId: string];
   import: [];
   settings: [];
 }>();
@@ -263,6 +295,25 @@ const countsLabel = computed(() => {
   )}`;
 });
 
+/** "+" flutuante e botão direito na parte vazia da lista. */
+const addMenu = computed<LjMenuItem[]>(() => [
+  { label: tm("ribbon.btn.new_item"), icon: ICONS.ACTIONS.ADD, action: () => emit("new-item") },
+  { label: tm("ribbon.btn.new_session"), icon: ICONS.ACTIONS.ADD_BOX, action: () => emit("new-session") },
+  { separator: true },
+  { label: tm("ribbon.btn.import_liturgy"), icon: ICONS.ACTIONS.IMPORT, action: () => emit("import") },
+]);
+
+function itemMenu(item: ProgramItem): LjMenuItem[] {
+  return [
+    { label: tm("library.preview"), icon: ICONS.UI.EYE, action: () => onSelect(item.id) },
+    { label: tm("library.play"), icon: ICONS.PLAYER.PLAY, action: () => emit("activate", item.id) },
+    { separator: true },
+    { label: tm("program.edit_item"), icon: ICONS.ACTIONS.EDIT_OUTLINE, action: () => emit("edit-item", item.id) },
+    { label: tm("ribbon.btn.duplicate"), icon: ICONS.ACTIONS.DUPLICATE, action: () => emit("duplicate-item", item.id) },
+    { label: tm("ribbon.btn.delete_item"), icon: ICONS.ACTIONS.DELETE, action: () => emit("remove-item", item.id) },
+  ];
+}
+
 function onSelect(itemId: string): void {
   select(itemId);
   emit("preview", itemId);
@@ -275,6 +326,7 @@ function onSessionItems(sessionId: string, list: ProgramItem[]): void {
 
 <style scoped>
 .pm-program {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -468,6 +520,47 @@ function onSessionItems(sessionId: string, list: ProgramItem[]): void {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Espaço para o "+" não cobrir o último item. */
+.pm-program__filler {
+  flex: 1;
+  min-height: 64px;
+}
+
+.pm-program__fab {
+  position: absolute;
+  right: 12px;
+  bottom: 36px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 2px solid var(--lj-orange);
+  border-radius: 50%;
+  background: var(--lj-surface-bg);
+  color: var(--lj-orange);
+  box-shadow: 0 2px 8px var(--lj-black-alpha-30);
+  cursor: pointer;
+  transition:
+    background 120ms var(--lj-ease),
+    color 120ms var(--lj-ease);
+}
+
+.pm-program__fab:hover,
+.pm-program__fab[data-state="open"] {
+  background: var(--lj-orange);
+  color: var(--lj-white);
+}
+
+.pm-program__fab:focus-visible {
+  outline: none;
+  box-shadow: var(--lj-ui-focus);
 }
 
 .pm-program__empty {

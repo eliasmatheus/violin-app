@@ -1,6 +1,11 @@
 <template>
   <div class="pm-return" data-testid="pm-return-mirror">
     <div v-if="cleared" class="pm-return__fill" :style="background" />
+    <div v-else-if="override" class="pm-return__fill pm-return__override" data-testid="pm-return-override">
+      <img v-if="override.type === 'image'" :src="override.url" alt="" />
+      <video v-else :src="override.url" muted autoplay playsinline />
+      <span class="pm-return__only">{{ tm("outputs.return_only") }}</span>
+    </div>
     <div v-else class="pm-return__frame">
       <div class="pm-return__current">
         <div class="pm-return__head">
@@ -21,6 +26,8 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useMainBackground } from "@/composables/useMainBackground";
+import { useModuleI18n } from "@/composables/useModuleI18n";
+import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useLiveContent } from "../composables/useLiveContent";
 
 /**
@@ -36,9 +43,12 @@ const props = defineProps<{
   upNext: string;
   /** Posição na pasta da biblioteca ("3/13"), quando o arquivo no ar veio dela. */
   fileCounter?: string;
+  /** Imagem ou vídeo só no retorno — cobre a composição normal. */
+  override?: { type: "image" | "video"; url: string } | null;
 }>();
 
 const { t } = useI18n();
+const { tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 const { current, music, bible, file, onlineTitle, announcement } = useLiveContent();
 const { style: background } = useMainBackground();
 
@@ -103,6 +113,30 @@ const view = computed(() => {
 .pm-return__fill {
   position: absolute;
   inset: 0;
+}
+
+.pm-return__override {
+  background: var(--lj-color-projection-bg);
+}
+
+.pm-return__override img,
+.pm-return__override video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.pm-return__only {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 0 5px;
+  border-radius: 2px;
+  background: var(--lj-color-cover-gold);
+  color: var(--lj-color-projection-bg);
+  font-family: var(--lj-font-shell);
+  font-size: 9px;
+  font-weight: 700;
 }
 
 .pm-return__frame {

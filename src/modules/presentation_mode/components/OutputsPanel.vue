@@ -88,8 +88,23 @@
           <LjIcon :icon="ICONS.PROJECTION.RETURN" :size="12" />{{ tm("outputs.stage_return") }}
         </span>
         <span class="pm-outputs__where">{{ monitorLabel(stageMonitor) }}</span>
+        <LjButton
+          v-if="returnOverride"
+          size="sm"
+          variant="ghost"
+          icon-only
+          :icon="ICONS.ACTIONS.CLOSE"
+          :title="tm('library.remove_from_return')"
+          data-testid="pm-outputs-clear-return"
+          @click="showOnReturn(null)"
+        />
       </header>
-      <ReturnMirror :cleared="cleared" :up-next="upNext?.title ?? ''" :file-counter="fileCounter" />
+      <ReturnMirror
+        :cleared="cleared"
+        :up-next="upNext?.title ?? ''"
+        :file-counter="fileCounter"
+        :override="returnOverride"
+      />
     </section>
 
     <footer class="pm-upnext" :class="{ 'pm-upnext--flash': flash }" data-testid="pm-upnext">
@@ -120,7 +135,7 @@ import { useDisplays } from "@/composables/useDisplays";
 import type { ProgramItem } from "@/types/Presentation";
 import LiveMirror from "./LiveMirror.vue";
 import ReturnMirror from "./ReturnMirror.vue";
-import { useOutputs } from "../composables/useOutputs";
+import { returnOverride, showOnReturn, useOutputs } from "../composables/useOutputs";
 import { KIND_ICONS } from "../program/kinds";
 
 defineProps<{

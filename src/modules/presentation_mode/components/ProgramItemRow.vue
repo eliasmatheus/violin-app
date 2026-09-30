@@ -1,59 +1,61 @@
 <template>
   <div class="pm-row-wrap">
-    <div
-      class="pm-row"
-      :class="{
-        'pm-row--live': live,
-        'pm-row--next': (next || prepared) && !live,
-        'pm-row--selected': selected && !live,
-      }"
-      role="button"
-      tabindex="0"
-      :data-testid="`pm-item-${item.id}`"
-      @click="emit('select')"
-      @dblclick="emit('activate')"
-      @keydown.enter.prevent="emit('activate')"
-    >
-      <span class="pm-row__time">{{ start }}</span>
-      <button
-        v-if="hasChildren"
-        type="button"
-        class="pm-row__chevron"
-        :aria-expanded="open"
-        :aria-label="tm(open ? 'program.collapse' : 'program.expand')"
-        @click.stop="emit('toggle')"
-        @dblclick.stop
+    <LjContextMenu :items="menu">
+      <div
+        class="pm-row"
+        :class="{
+          'pm-row--live': live,
+          'pm-row--next': (next || prepared) && !live,
+          'pm-row--selected': selected && !live,
+        }"
+        role="button"
+        tabindex="0"
+        :data-testid="`pm-item-${item.id}`"
+        @click="emit('select')"
+        @dblclick="emit('activate')"
+        @keydown.enter.prevent="emit('activate')"
       >
-        <LjIcon :icon="open ? ICONS.UI.CHEVRON_DOWN : ICONS.UI.CHEVRON_RIGHT" :size="13" />
-      </button>
-      <LjIcon :icon="KIND_ICONS[item.kind]" :size="15" class="pm-row__icon" />
-      <div class="pm-row__text">
-        <span class="pm-row__title">{{ item.title || tm("program.untitled") }}</span>
-        <span v-if="item.subtitle" class="pm-row__subtitle">{{ item.subtitle }}</span>
+        <span class="pm-row__time">{{ start }}</span>
+        <button
+          v-if="hasChildren"
+          type="button"
+          class="pm-row__chevron"
+          :aria-expanded="open"
+          :aria-label="tm(open ? 'program.collapse' : 'program.expand')"
+          @click.stop="emit('toggle')"
+          @dblclick.stop
+        >
+          <LjIcon :icon="open ? ICONS.UI.CHEVRON_DOWN : ICONS.UI.CHEVRON_RIGHT" :size="13" />
+        </button>
+        <LjIcon :icon="KIND_ICONS[item.kind]" :size="15" class="pm-row__icon" />
+        <div class="pm-row__text">
+          <span class="pm-row__title">{{ item.title || tm("program.untitled") }}</span>
+          <span v-if="item.subtitle" class="pm-row__subtitle">{{ item.subtitle }}</span>
+        </div>
+        <span v-if="live" class="pm-live-badge">
+          <span class="pm-live-badge__dot" />{{ tm("program.live") }}
+        </span>
+        <span v-else-if="prepared" class="pm-queued-badge">{{ tm("program.queued") }}</span>
+        <LjIcon
+          v-else-if="done"
+          :icon="ICONS.UI.CHECK"
+          :size="13"
+          class="pm-row__done"
+          :aria-label="tm('program.done')"
+        />
+        <span class="pm-row__duration">{{ formatDuration(item.plannedMinutes) }}</span>
+        <button
+          type="button"
+          class="pm-row__edit"
+          :title="tm('program.edit_item')"
+          :aria-label="tm('program.edit_item')"
+          @click.stop="emit('edit')"
+          @dblclick.stop
+        >
+          <LjIcon :icon="ICONS.ACTIONS.EDIT_OUTLINE" :size="12" />
+        </button>
       </div>
-      <span v-if="live" class="pm-live-badge">
-        <span class="pm-live-badge__dot" />{{ tm("program.live") }}
-      </span>
-      <span v-else-if="prepared" class="pm-queued-badge">{{ tm("program.queued") }}</span>
-      <LjIcon
-        v-else-if="done"
-        :icon="ICONS.UI.CHECK"
-        :size="13"
-        class="pm-row__done"
-        :aria-label="tm('program.done')"
-      />
-      <span class="pm-row__duration">{{ formatDuration(item.plannedMinutes) }}</span>
-      <button
-        type="button"
-        class="pm-row__edit"
-        :title="tm('program.edit_item')"
-        :aria-label="tm('program.edit_item')"
-        @click.stop="emit('edit')"
-        @dblclick.stop
-      >
-        <LjIcon :icon="ICONS.ACTIONS.EDIT_OUTLINE" :size="12" />
-      </button>
-    </div>
+    </LjContextMenu>
 
     <ol v-if="hasChildren && open" class="pm-subitems">
       <li v-for="(child, i) in item.children" :key="child.id" class="pm-subitem">
@@ -70,7 +72,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { LjIcon } from "@/components/ui";
+import { LjContextMenu, LjIcon, type LjMenuItem } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useModuleI18n } from "@/composables/useModuleI18n";
@@ -88,6 +90,8 @@ const props = defineProps<{
   prepared: boolean;
   selected: boolean;
   open: boolean;
+  /** Itens do botão direito sobre a linha. */
+  menu: LjMenuItem[];
 }>();
 
 const emit = defineEmits<{

@@ -11,6 +11,9 @@
         @edit-item="openEditItem"
         @edit-session="openEditSession"
         @new-item="openNewItem"
+        @new-session="openNewSession"
+        @duplicate-item="duplicateItem"
+        @remove-item="(id: string) => confirmRemoveItem(id)"
         @import="importFromLiturgy"
         @settings="settingsDialogOpen = true"
       />
@@ -18,13 +21,13 @@
       <section class="pm-stage" data-testid="pm-stage">
         <header class="pm-bar">
           <span v-if="stagePreview" class="pm-preview-badge" data-testid="pm-stage-badge">{{ tm("stage.preview") }}</span>
-          <span v-else-if="liveKind" class="pm-on-air" data-testid="pm-stage-badge"><span class="pm-on-air__dot" />{{ tm("stage.on_air") }}</span>
+          <span v-else-if="onAir" class="pm-on-air" data-testid="pm-stage-badge"><span class="pm-on-air__dot" />{{ tm("stage.on_air") }}</span>
           <LjIcon v-if="stageIcon" :icon="stageIcon" :size="14" />
           <span class="pm-bar__title" data-testid="pm-stage-title">{{ stageTitle }}</span>
           <span v-if="stageMeta" class="pm-bar__meta">{{ stageMeta }}</span>
           <div class="pm-bar__tools">
             <LjButton
-              v-if="stagePreview && liveKind"
+              v-if="stagePreview && onAir"
               size="sm"
               :icon="ICONS.PROJECTION.START"
               data-testid="pm-stage-show-live"
@@ -42,13 +45,19 @@
             />
           </div>
         </header>
-        <StagePreview v-if="stagePreview && previewView" :view="previewView" @play="playPreview" />
+        <StagePreview
+          v-if="stagePreview && previewView"
+          :view="previewView"
+          @play="playPreview"
+          @play-return="playPreviewOnReturn"
+        />
         <StageSlides
           v-else-if="showSlideGrid"
           :subtitle="liveProgramItem?.kind === 'music' ? liveProgramItem.subtitle : undefined"
           :locked="outputLocked"
         />
         <StageVideo v-else-if="showVideoStage" :locked="outputLocked" />
+        <StageVideo v-else-if="audioLive" :locked="outputLocked" :audio-title="audioTitle" />
         <!-- Imagem, versículo, anúncio: o palco mostra o que está na tela. -->
         <div v-else-if="liveKind" class="pm-stage__preview" data-testid="pm-stage-preview">
           <div class="pm-stage__frame"><LiveMirror :cleared="false" /></div>
@@ -63,6 +72,8 @@
         :tall="libraryHeight > LIBRARY_DEFAULT_HEIGHT"
         :height="libraryHeight"
         :live-path="libraryLivePath"
+        :return-path="returnOverride?.path ?? null"
+        @show-on-return="onShowOnReturn"
         @preview="(entry: LibraryEntry) => preview.show({ type: 'file', entry })"
         @stop="stopMedia"
         @preview-song="(s: LibrarySong) => preview.show({ type: 'song', id_music: s.id_music, title: s.name, subtitle: s.album })"
@@ -148,6 +159,7 @@ import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import LibraryPanel from "./LibraryPanel.vue";
 import LiveMirror from "./LiveMirror.vue";
 import $userdata from "@/helpers/UserData";
+import $appdata from "@/helpers/AppData";
 import { KEYS } from "@/constants/UserDataKeys";
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
 import { useFileLibrary, type LibraryEntry } from "../composables/useFileLibrary";
@@ -156,7 +168,14 @@ import { KIND_ICONS } from "../program/kinds";
 import Media from "@/composables/useMedia";
 import { useSlides } from "@/composables/useSlides";
 import { useLiveContent } from "../composables/useLiveContent";
-import { cleared, setCleared, startOutputs, stopOutputs } from "../composables/useOutputs";
+import {
+  cleared,
+  returnOverride,
+  setCleared,
+  showOnReturn,
+  startOutputs,
+  stopOutputs,
+} from "../composables/useOutputs";
 import { formatHHMM, plannedStarts } from "../program/time";
 import { newId, useProgram } from "../composables/useProgram";
 import { useProgramExecution } from "../composables/useProgramExecution";
@@ -321,14 +340,32 @@ function activate(itemId: string, { force = false } = {}): void {
 
 /* ─── Palco: prévia × ao vivo ─── */
 
+/**
+ * Áudio no ar: não manda nada para as saídas, então não aparece no Broadcast.
+ * O player marca "só áudio" com o título — é por aí que o palco sabe.
+ */
+const audioLive = computed(
+  () =>
+    $appdata.get<boolean>(KEYS.MODULES.MEDIA.CONFIG.AUDIO_ONLY, false) === true &&
+    !!$appdata.get<string>(KEYS.MODULES.MEDIA.CONFIG.AUDIO, "") &&
+    liveKind.value !== "music"
+);
+const audioTitle = computed(() => $appdata.get<string>(KEYS.MODULES.MEDIA.CONFIG.TITLE, "") ?? "");
+const onAir = computed(() => !!liveKind.value || audioLive.value);
+
 const preview = usePreview();
 
 /** O item em prévia é o que está no ar? Então o palco é o controle dele. */
 const previewIsLive = computed(() => {
   const t = preview.target.value;
   if (!t) return true;
-  if (t.type === "program") return t.itemId === liveItemId.value && !!liveKind.value;
-  if (t.type === "file") return liveKind.value === "file" && live.file.value?.title === t.entry.name;
+  if (t.type === "program") return t.itemId === liveItemId.value && onAir.value;
+  if (t.type === "file") {
+    return (
+      (liveKind.value === "file" && live.file.value?.title === t.entry.name) ||
+      (audioLive.value && audioTitle.value === t.entry.name)
+    );
+  }
   return liveKind.value === "music" && Number(slides.slides.value[0]?.id_music) === t.id_music;
 });
 
@@ -414,6 +451,26 @@ function playPreview(slideIndex = 0): void {
   }
 }
 
+/** Imagem ou vídeo só no retorno de palco; `null` tira de lá. */
+function onShowOnReturn(entry: LibraryEntry | null): void {
+  if (!entry) {
+    void showOnReturn(null);
+    return;
+  }
+  const type = kindFromPath(entry.path);
+  if (type !== "image" && type !== "video") return;
+  void showOnReturn({ type, url: $path.local(entry.path), title: entry.name, path: entry.path });
+}
+
+function playPreviewOnReturn(): void {
+  const t = preview.target.value;
+  if (t?.type === "file") onShowOnReturn(t.entry);
+  else if (t?.type === "program") {
+    const dir = findItem(t.itemId)?.source?.dir;
+    if (dir) onShowOnReturn({ name: dir.split(/[\\/]/).pop() ?? dir, path: dir, isDir: false, ext: "", size: 0, mtimeMs: 0 });
+  }
+}
+
 /** Traz para o palco o que está no ar, com os controles dele. */
 function focusLive(): void {
   if (liveItemId.value && liveProgramItem.value) {
@@ -452,6 +509,7 @@ const stageIcon = computed(() => {
 const stageTitle = computed(() => {
   if (stagePreview.value) return previewView.value?.title ?? "";
   if (liveProgramItem.value) return liveProgramItem.value.title;
+  if (audioLive.value && !liveKind.value) return audioTitle.value;
   switch (liveKind.value) {
     case "music":
       return slides.title.value;
@@ -501,7 +559,9 @@ const liveKind = live.current;
 const library = useFileLibrary();
 const libraryQueueLive = computed(() => {
   const q = library.queue.value;
-  return liveKind.value === "file" && !!q && live.file.value?.title === q.entries[q.index]?.name;
+  if (!q) return false;
+  const name = q.entries[q.index]?.name;
+  return (liveKind.value === "file" && live.file.value?.title === name) || (audioLive.value && audioTitle.value === name);
 });
 
 /** Arquivo da biblioteca que está no ar — borda de destaque e ✕ na grade. */

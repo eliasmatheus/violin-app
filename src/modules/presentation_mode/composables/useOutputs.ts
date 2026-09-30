@@ -38,6 +38,17 @@ const POLL_MS = 2000;
 
 const _cleared = ref(false);
 export { _cleared as cleared };
+
+/** Imagem ou vídeo só no retorno de palco (letra, recado). */
+export interface ReturnOverride {
+  type: "image" | "video";
+  url: string;
+  title: string;
+  /** Caminho no disco, para a biblioteca marcar o arquivo. */
+  path: string;
+}
+const _returnOverride = ref<ReturnOverride | null>(null);
+export { _returnOverride as returnOverride };
 const _showing = ref(false);
 const _busy = ref(false);
 let _responderInstalled = false;
@@ -49,6 +60,14 @@ function _installResponder(): void {
     (msg) => {
       if (msg.type === BROADCAST_TYPE.REQUEST_PROJECTION_CLEAR) {
         Broadcast.send(BROADCAST_TYPE.PROJECTION_CLEAR, { active: _cleared.value });
+      } else if (msg.type === BROADCAST_TYPE.REQUEST_RETURN_OVERRIDE) {
+        Broadcast.send(BROADCAST_TYPE.RETURN_OVERRIDE, _overridePayload());
+      } else if (
+        msg.type === BROADCAST_TYPE.RETURN_OVERRIDE &&
+        (msg.payload as { active?: boolean } | null)?.active === false
+      ) {
+        // O Esc limpa o retorno pelo Broadcast: o estado daqui acompanha.
+        _returnOverride.value = null;
       }
     },
     { replay: false }
@@ -69,6 +88,32 @@ async function _openFeatures(): Promise<string[]> {
 export async function refreshShowing(): Promise<void> {
   const open = await _openFeatures();
   _showing.value = MAIN_SCREEN_FEATURES.some((f) => open.includes(f));
+}
+
+function _overridePayload(): Record<string, unknown> {
+  const o = _returnOverride.value;
+  return o ? { active: true, type: o.type, url: o.url, title: o.title } : { active: false };
+}
+
+/**
+ * Leva a imagem ou o vídeo só para o retorno. Abre a janela de retorno se
+ * ela estiver fechada — o operador escolheu mostrar algo no palco.
+ */
+export async function showOnReturn(override: ReturnOverride | null): Promise<void> {
+  _installResponder();
+  _returnOverride.value = override;
+  Broadcast.send(BROADCAST_TYPE.RETURN_OVERRIDE, _overridePayload());
+  if (!override) return;
+  const open = await _openFeatures();
+  const returnFeatures = [PROJECTION_TYPE.RETURN, PROJECTION_TYPE.FILE_RETURN, PROJECTION_TYPE.ONLINE_VIDEO_RETURN, PROJECTION_TYPE.BACKGROUND_RETURN, PROJECTION_TYPE.BIBLE_RETURN];
+  if (!returnFeatures.some((f) => open.includes(f))) {
+    try {
+      await openMediaWindow("return", "music", { explicit: true });
+    } catch (e) {
+      Telemetry.captureException(e, { source: "presentation_mode.outputs.return_override" });
+    }
+  }
+  Telemetry.track("presentation_return_override", { type: override.type });
 }
 
 export function setCleared(value: boolean): void {

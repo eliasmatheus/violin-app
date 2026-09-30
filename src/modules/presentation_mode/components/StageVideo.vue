@@ -1,7 +1,13 @@
 <template>
   <div class="pm-video" data-testid="pm-stage-video">
     <div class="pm-video__stage">
-      <div class="pm-video__frame"><LiveMirror :cleared="false" /></div>
+      <!-- Áudio não vai para as saídas: o palco mostra só o que está tocando. -->
+      <div v-if="audioTitle !== undefined" class="pm-video__frame pm-video__audio" data-testid="pm-stage-audio">
+        <LjIcon :icon="ICONS.MUSIC.AUDIO" :size="48" />
+        <span class="pm-video__audio-title">{{ audioTitle }}</span>
+        <span class="pm-video__audio-hint">{{ tm("video.audio_only") }}</span>
+      </div>
+      <div v-else class="pm-video__frame"><LiveMirror :cleared="false" /></div>
     </div>
 
     <footer class="pm-video__bar">
@@ -100,10 +106,15 @@ import LiveMirror from "./LiveMirror.vue";
 
 /**
  * Palco do vídeo no ar: a imagem é o espelho mudo da tela principal, e a
- * barra comanda o player da janela do operador — de onde sai o som.
+ * barra comanda o player da janela do operador — de onde sai o som. O mesmo
+ * player serve ao áudio, que não tem imagem nem vai para as saídas.
  */
 
-const props = defineProps<{ locked: boolean }>();
+const props = defineProps<{
+  locked: boolean;
+  /** Com título, o player toca áudio: sem imagem, nada nas saídas. */
+  audioTitle?: string;
+}>();
 
 const { tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 const audio = useAudioPlayback();
@@ -204,6 +215,31 @@ function clock(seconds: number): string {
 
 .pm-video__frame {
   width: min(100cqw, calc(100cqh * 16 / 9));
+}
+
+.pm-video__audio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--lj-space-3);
+  aspect-ratio: 16 / 9;
+  border: 1px dashed var(--lj-surface-border-strong);
+  border-radius: var(--lj-radius-sm);
+  color: var(--lj-white-alpha-50);
+  text-align: center;
+}
+
+.pm-video__audio-title {
+  max-width: 90%;
+  font-size: 18px;
+  font-weight: var(--lj-weight-semibold);
+  color: var(--lj-white);
+  overflow-wrap: anywhere;
+}
+
+.pm-video__audio-hint {
+  font-size: 11px;
 }
 
 .pm-video__bar {

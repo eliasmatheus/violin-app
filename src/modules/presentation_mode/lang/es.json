@@ -67,7 +67,8 @@
     "edit_session": "Editar sesión",
     "default_session": "General",
     "save_default_name": "Programa {date}",
-    "queued": "EN COLA"
+    "queued": "EN COLA",
+    "add": "Agregar"
   },
   "kinds": {
     "music": "Música",
@@ -149,7 +150,8 @@
     "up_next": "A continuación",
     "prepared": "En cola — sale al aire al desbloquear",
     "send": "Enviar",
-    "nothing_next": "Fin del programa."
+    "nothing_next": "Fin del programa.",
+    "return_only": "SOLO EN EL RETORNO"
   },
   "stage": {
     "on_air": "AL AIRE",
@@ -196,7 +198,10 @@
     "stop": "Dejar de reproducir",
     "details": "Detalles",
     "preview": "Previsualizar",
-    "open_folder": "Abrir carpeta"
+    "open_folder": "Abrir carpeta",
+    "on_return": "RETORNO",
+    "play_on_return": "Reproducir solo en el retorno",
+    "remove_from_return": "Quitar del retorno"
   },
   "video": {
     "back_10": "Retroceder 10 segundos",
@@ -205,7 +210,8 @@
     "volume": "Volumen",
     "mute": "Cortar el audio",
     "unmute": "Devolver el audio",
-    "stop": "Detener el video"
+    "stop": "Detener el video",
+    "audio_only": "Audio — no va a las pantallas"
   },
   "music": {
     "categories": "Categorías",

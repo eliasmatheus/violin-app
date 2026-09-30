@@ -1021,14 +1021,13 @@ onBeforeUnmount(async () => {
   justify-content: center;
   height: 100%;
 }
+/* Imagem e vídeo preenchem a tela mantendo a proporção. Com só max-width e
+   max-height, uma imagem pequena (um cartaz de 628×857) ficava no tamanho
+   original no meio do telão, cercada de preto. */
 .file-projection__media {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-}
-.file-projection video.file-projection__media {
   width: 100%;
   height: 100%;
+  object-fit: contain;
 }
 .file-projection__youtube {
   width: 100vw;

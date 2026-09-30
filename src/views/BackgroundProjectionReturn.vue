@@ -78,6 +78,7 @@
 
   <!-- Layer 2: Overlays -->
   <OverlayRenderer />
+  <ReturnOverride />
   <ProjectionClearScreen />
 </template>
 
@@ -94,6 +95,7 @@ import { ModuleEnum } from "@/enums/ModuleEnum";
 import { getSetting } from "@/helpers/SettingsStorage";
 import OverlayRenderer from "@/components/OverlayRenderer.vue";
 import ProjectionClearScreen from "@/components/ProjectionClearScreen.vue";
+import ReturnOverride from "@/components/ReturnOverride.vue";
 import Slide from "@/components/Slide.vue";
 import { MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
 import { KEYS } from "@/constants/UserDataKeys";

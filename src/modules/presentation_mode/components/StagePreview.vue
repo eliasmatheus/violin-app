@@ -35,6 +35,16 @@
           <span>{{ view.title }}</span>
         </div>
 
+        <LjButton
+          v-if="view.kind === 'image' || view.kind === 'video'"
+          size="sm"
+          class="pm-preview__return"
+          :icon="ICONS.PROJECTION.RETURN"
+          data-testid="pm-preview-return"
+          @click="emit('play-return')"
+        >
+          {{ tm("library.play_on_return") }}
+        </LjButton>
         <LjTooltip v-if="view.playable" :text="tm('preview.play')">
           <button
             type="button"
@@ -82,7 +92,7 @@ export interface PreviewView {
 }
 
 const props = defineProps<{ view: PreviewView }>();
-const emit = defineEmits<{ play: [slideIndex?: number] }>();
+const emit = defineEmits<{ play: [slideIndex?: number]; "play-return": [] }>();
 
 const { tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 
@@ -233,6 +243,12 @@ watch(
   transition:
     opacity 120ms var(--lj-ease),
     background 120ms var(--lj-ease);
+}
+
+.pm-preview__return {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
 }
 
 .pm-preview__play:hover,

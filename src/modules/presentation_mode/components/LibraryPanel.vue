@@ -136,6 +136,7 @@
               :class="{
                 'pm-file--selected': entry.path === selected?.path,
                 'pm-file--live': entry.path === livePath,
+                'pm-file--return': entry.path === returnPath,
               }"
               role="button"
               tabindex="0"
@@ -150,6 +151,7 @@
                 <img v-if="thumbOf(entry)" :src="thumbOf(entry)" alt="" loading="lazy" />
                 <LjIcon v-else :icon="iconOf(entry)" :size="22" class="pm-file__icon" />
                 <span v-if="durationOf(entry)" class="pm-file__badge">{{ durationOf(entry) }}</span>
+                <span v-if="entry.path === returnPath" class="pm-file__return">{{ tm("library.on_return") }}</span>
                 <template v-if="!entry.isDir">
                   <LjTooltip :text="entry.path === livePath ? tm('library.stop') : tm('library.play')">
                     <button
@@ -272,6 +274,8 @@ const props = defineProps<{
   height: number;
   /** Caminho do arquivo que está no ar, para a borda de destaque e o ✕. */
   livePath: string | null;
+  /** Caminho do arquivo que está só no retorno de palco. */
+  returnPath: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -284,6 +288,8 @@ const emit = defineEmits<{
   preview: [entry: LibraryEntry];
   /** ✕ no arquivo que está no ar. */
   stop: [];
+  /** Imagem ou vídeo só no retorno de palco; `null` tira. */
+  "show-on-return": [entry: LibraryEntry | null];
   "preview-song": [song: LibrarySong];
   "play-song": [song: LibrarySong];
   "add-song": [song: LibrarySong];
@@ -359,6 +365,13 @@ function menuFor(entry: LibraryEntry): LjMenuItem[] {
       ? { label: tm("library.stop"), icon: ICONS.ACTIONS.CLOSE, action: () => emit("stop") }
       : { label: tm("library.play"), icon: ICONS.PLAYER.PLAY, action: () => emit("project", entry) },
     { label: tm("library.preview"), icon: ICONS.UI.EYE, action: () => onClick(entry) },
+    ...(fileKind(entry.ext) === "image" || fileKind(entry.ext) === "video"
+      ? [
+          entry.path === props.returnPath
+            ? { label: tm("library.remove_from_return"), icon: ICONS.PROJECTION.RETURN, action: () => emit("show-on-return", null) }
+            : { label: tm("library.play_on_return"), icon: ICONS.PROJECTION.RETURN, action: () => emit("show-on-return", entry) },
+        ]
+      : []),
     {
       label: tm("library.add_to_program"),
       icon: ICONS.ACTIONS.ADD,
@@ -784,6 +797,23 @@ const emptyMessage = computed(() => {
 .pm-file__info:focus-visible {
   outline: none;
   box-shadow: var(--lj-ui-focus);
+}
+
+.pm-file__return {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--lj-color-cover-gold);
+  color: var(--lj-color-projection-bg);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.pm-file--return .pm-file__thumb {
+  border-color: var(--lj-color-cover-gold);
 }
 
 .pm-file--live .pm-file__thumb {

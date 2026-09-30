@@ -16,7 +16,6 @@ import "@/assets/styles/appmenu-options.css";
 //Modules
 import ModuleManager from "@/helpers/ModuleManager";
 import $storage from "@/helpers/Storage";
-import $alert from "@helpers/Alert";
 import Platform from "@/helpers/Platform";
 import {
   API_URL,
@@ -1423,29 +1422,29 @@ $storage.hydrate().then(async () => {
           }
         };
 
+        // O Esc é a saída de emergência: tira da tela na hora, sem diálogo.
+        // Um erro no telão não pode esperar o operador achar o "Sim".
+        // Com o Modo apresentação aberto as janelas ficam — fechá-las é o
+        // "Parar apresentação"; o Esc só tira o conteúdo.
+        const keepWindows = AppData.get(KEYS.MODULES.PRESENTATION_MODE.SHOW, false) === true;
+        Broadcast.send(BROADCAST_TYPE.RETURN_OVERRIDE, { active: false });
+
         // Projeção de anúncios
         const fp = useFileProjection();
+        const lastFile = Broadcast.getLastPayload(BROADCAST_TYPE.FILE_PROJECTION);
         if (fp.isProjecting.value && fp.currentType.value === "announcements") {
           fp.stopProjection();
           Projection.close("announcements");
         }
-        // Projeção de arquivos de imagem e vídeo
-        else if (Broadcast.getLastPayload(BROADCAST_TYPE.FILE_PROJECTION)) {
-          $alert.yesno("modules.media.alerts.close_projection", (btn) => {
-            if (btn === "yes") {
-              Broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, { action: "clear" });
-              Media.close(true);
-              closeEverythingElse();
-            }
-          });
+        // Projeção de arquivos de imagem e vídeo. O "clear" também fica no
+        // cache — não é arquivo no ar.
+        else if (lastFile && lastFile.action !== "clear") {
+          Broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, { action: "clear" });
+          Media.close(true, false, keepWindows);
+          closeEverythingElse();
         } else if (_mediaIsActive()) {
-          // Música/Slides (com confirmação se ativa)
-          $alert.yesno("modules.media.alerts.close", (btn) => {
-            if (btn === "yes") {
-              Media.close(true);
-              closeEverythingElse();
-            }
-          });
+          Media.close(true, false, keepWindows);
+          closeEverythingElse();
         } else {
           closeEverythingElse();
         }
