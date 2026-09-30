@@ -2,7 +2,8 @@
   <ModuleContainer :manifest="manifest">
     <div
       class="pm-area"
-      :class="{ 'pm-area--library-wide': libraryFullWidth, 'pm-area--library-tall': libraryTall }"
+      :class="{ 'pm-area--library-wide': libraryFullWidth }"
+      :style="{ '--pm-library-h': `${libraryHeight}px` }"
     >
       <ProgramPanel
         @activate="activate"
@@ -46,9 +47,12 @@
 
       <LibraryPanel
         :full-width="libraryFullWidth"
-        :tall="libraryTall"
+        :tall="libraryHeight > LIBRARY_DEFAULT_HEIGHT"
+        :height="libraryHeight"
         @toggle-width="toggleLibraryWidth"
         @toggle-height="toggleLibraryHeight"
+        @resize="(h: number) => (draggingHeight = h)"
+        @resize-end="saveLibraryHeight"
         @project="projectFile"
         @add-to-program="addFileToProgram"
       />
@@ -60,6 +64,7 @@
         :locked="outputLocked"
         :can-navigate="canNavigate"
         :flash="upNextFlash"
+        :file-counter="libraryQueueLive && library.queue.value ? `${library.queue.value.index + 1}/${library.queue.value.entries.length}` : undefined"
         @first="navigate('first')"
         @prev="navigate('prev')"
         @next="navigate('next')"
@@ -119,7 +124,7 @@ import LiveMirror from "./LiveMirror.vue";
 import $userdata from "@/helpers/UserData";
 import { KEYS } from "@/constants/UserDataKeys";
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
-import type { LibraryEntry } from "../composables/useFileLibrary";
+import { useFileLibrary, type LibraryEntry } from "../composables/useFileLibrary";
 import type { MediaMeta } from "../composables/useMediaMeta";
 import { KIND_ICONS } from "../program/kinds";
 import Media from "@/composables/useMedia";
@@ -175,16 +180,29 @@ const expanded = computed(() => isModuleExpanded(moduleId));
 const libraryFullWidth = computed(
   () => $userdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_FULL_WIDTH, false) === true
 );
-const libraryTall = computed(
-  () => $userdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_TALL, false) === true
+const LIBRARY_DEFAULT_HEIGHT = 244;
+const LIBRARY_TALL_HEIGHT = 340;
+
+/** Durante o arraste a altura é local; só vai para as preferências ao soltar. */
+const draggingHeight = ref<number | null>(null);
+const libraryHeight = computed(
+  () =>
+    draggingHeight.value ??
+    $userdata.get<number>(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_HEIGHT, LIBRARY_DEFAULT_HEIGHT) ??
+    LIBRARY_DEFAULT_HEIGHT
 );
+
+function saveLibraryHeight(height: number): void {
+  $userdata.set(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_HEIGHT, Math.round(height));
+  draggingHeight.value = null;
+}
 
 function toggleLibraryWidth(): void {
   $userdata.set(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_FULL_WIDTH, !libraryFullWidth.value);
 }
 
 function toggleLibraryHeight(): void {
-  $userdata.set(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_TALL, !libraryTall.value);
+  saveLibraryHeight(libraryHeight.value > LIBRARY_DEFAULT_HEIGHT ? LIBRARY_DEFAULT_HEIGHT : LIBRARY_TALL_HEIGHT);
 }
 
 function fileTitle(entry: LibraryEntry): string {
@@ -194,6 +212,7 @@ function fileTitle(entry: LibraryEntry): string {
 /** Duplo clique ou "Enviar": vai para a tela principal pelo mesmo caminho da liturgia. */
 function projectFile(entry: LibraryEntry): void {
   if (outputLocked.value) return;
+  library.startQueue(entry);
   projectPath(entry.path, entry.name);
   Telemetry.track("presentation_library_projected", { ext: entry.ext });
 }
@@ -298,8 +317,23 @@ const live = useLiveContent();
 const liveKind = live.current;
 
 /** Há partes para percorrer: os slides da música que está no ar. */
+/**
+ * O arquivo no ar saiu da biblioteca? Então Anterior/Próximo andam pela pasta
+ * dele. A projeção leva o nome do arquivo como título — é por ele que se sabe
+ * se o que está na tela ainda é o da fila.
+ */
+const library = useFileLibrary();
+const libraryQueueLive = computed(() => {
+  const q = library.queue.value;
+  return liveKind.value === "file" && !!q && live.file.value?.title === q.entries[q.index]?.name;
+});
+
+/** Há partes para percorrer: os slides da música no ar, ou a pasta do arquivo no ar. */
 const canNavigate = computed(
-  () => !outputLocked.value && liveKind.value === "music" && slides.totalSlides.value > 0
+  () =>
+    !outputLocked.value &&
+    ((liveKind.value === "music" && slides.totalSlides.value > 0) ||
+      (libraryQueueLive.value && (library.queue.value?.entries.length ?? 0) > 1))
 );
 
 const upNextFlash = ref(false);
@@ -318,6 +352,12 @@ function navigate(to: "first" | "prev" | "next" | "last"): void {
   if (outputLocked.value) return;
   if (!canNavigate.value) {
     if (to === "next") flashUpNext();
+    return;
+  }
+  if (libraryQueueLive.value) {
+    const entry = library.stepQueue(to);
+    if (entry) projectPath(entry.path, entry.name);
+    else if (to === "next") flashUpNext();
     return;
   }
   const last = slides.totalSlides.value - 1;
@@ -560,11 +600,9 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
 .pm-library {
   grid-column: 2;
   grid-row: 2;
-  height: min(244px, 30vh);
-}
-
-.pm-area--library-tall .pm-library {
-  height: min(340px, 30vh);
+  /* O arraste já respeita o palco mínimo; o teto cobre a janela que encolheu depois. */
+  height: var(--pm-library-h);
+  max-height: 70vh;
 }
 
 .pm-outputs {

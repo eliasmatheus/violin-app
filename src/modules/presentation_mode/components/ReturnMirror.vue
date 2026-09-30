@@ -34,6 +34,8 @@ const props = defineProps<{
   cleared: boolean;
   /** Próximo item do programa, quando o conteúdo no ar não tem próxima parte. */
   upNext: string;
+  /** Posição na pasta da biblioteca ("3/13"), quando o arquivo no ar veio dela. */
+  fileCounter?: string;
 }>();
 
 const { t } = useI18n();
@@ -62,7 +64,12 @@ const view = computed(() => {
     case "bible":
       return { title: bible.value?.reference ?? "", text: bible.value?.text ?? "", next: props.upNext, counter: "1/1" };
     case "file":
-      return { title: file.value?.title ?? "", text: file.value?.title ?? "", next: props.upNext, counter: "1/1" };
+      return {
+        title: file.value?.title ?? "",
+        text: file.value?.title ?? "",
+        next: props.upNext,
+        counter: props.fileCounter || "1/1",
+      };
     case "online_video":
       return { title: onlineTitle.value, text: onlineTitle.value, next: props.upNext, counter: "1/1" };
     case "announcements":

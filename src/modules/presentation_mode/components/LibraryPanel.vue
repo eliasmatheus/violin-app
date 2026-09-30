@@ -1,5 +1,15 @@
 <template>
-  <section class="pm-library" data-testid="pm-library">
+  <section ref="root" class="pm-library" data-testid="pm-library">
+    <div
+      class="pm-library__resize"
+      role="separator"
+      aria-orientation="horizontal"
+      :aria-label="tm('library.resize')"
+      :title="tm('library.resize')"
+      data-testid="pm-library-resize"
+      @pointerdown="startResize"
+      @dblclick="emit('toggle-height')"
+    />
     <header class="pm-library__tabs">
       <div class="pm-library__tablist" role="tablist">
         <button type="button" role="tab" aria-selected="true" class="pm-library__tab pm-library__tab--active">
@@ -54,30 +64,41 @@
           <span class="pm-folder__label">{{ tm("library.favorites") }}</span>
           <span class="pm-folder__count">{{ lib.counts.value[FAVORITES] ?? "" }}</span>
         </button>
-        <div
-          v-for="folder in lib.folders.value"
-          :key="folder.path"
-          class="pm-folder pm-folder--user"
-          :class="{ 'pm-folder--active': lib.source.value === folder.path }"
-          role="button"
-          tabindex="0"
-          :title="folder.path"
-          @click="lib.openSource(folder.path)"
-          @keydown.enter="lib.openSource(folder.path)"
+        <!-- Todos e Favoritos ficam fixos no topo; as pastas do operador se arrastam. -->
+        <draggable
+          :model-value="lib.folders.value"
+          item-key="path"
+          tag="div"
+          class="pm-folders__user"
+          :animation="150"
+          ghost-class="pm-folder--ghost"
+          @update:model-value="lib.reorderFolders"
         >
-          <LjIcon :icon="ICONS.UI.FOLDER" :size="15" />
-          <span class="pm-folder__label">{{ folder.label }}</span>
-          <span class="pm-folder__count">{{ lib.counts.value[folder.path] ?? "" }}</span>
-          <button
-            type="button"
-            class="pm-folder__remove"
-            :title="tm('library.remove_folder')"
-            :aria-label="tm('library.remove_folder')"
-            @click.stop="confirmRemove(folder.path)"
-          >
-            <LjIcon :icon="ICONS.ACTIONS.CLOSE" :size="11" />
-          </button>
-        </div>
+          <template #item="{ element: folder }">
+            <div
+              class="pm-folder pm-folder--user"
+              :class="{ 'pm-folder--active': lib.source.value === folder.path }"
+              role="button"
+              tabindex="0"
+              :title="folder.path"
+              @click="lib.openSource(folder.path)"
+              @keydown.enter="lib.openSource(folder.path)"
+            >
+              <LjIcon :icon="ICONS.UI.FOLDER" :size="15" />
+              <span class="pm-folder__label">{{ folder.label }}</span>
+              <span class="pm-folder__count">{{ lib.counts.value[folder.path] ?? "" }}</span>
+              <button
+                type="button"
+                class="pm-folder__remove"
+                :title="tm('library.remove_folder')"
+                :aria-label="tm('library.remove_folder')"
+                @click.stop="confirmRemove(folder.path)"
+              >
+                <LjIcon :icon="ICONS.ACTIONS.CLOSE" :size="11" />
+              </button>
+            </div>
+          </template>
+        </draggable>
         <button type="button" class="pm-folder pm-folder--add" data-testid="pm-library-add-folder" @click="lib.addFolder()">
           <LjIcon :icon="ICONS.UI.FOLDER_PLUS" :size="15" />
           <span class="pm-folder__label">{{ tm("library.add_folder") }}</span>
@@ -173,7 +194,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import draggable from "vuedraggable";
 import { LjButton, LjEmpty, LjIcon } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
@@ -182,16 +204,50 @@ import { useModuleI18n } from "@/composables/useModuleI18n";
 import { ALL, FAVORITES, fileKind, useFileLibrary, type LibraryEntry } from "../composables/useFileLibrary";
 import { useMediaMeta, type MediaMeta } from "../composables/useMediaMeta";
 
-defineProps<{ fullWidth: boolean; tall: boolean }>();
+const props = defineProps<{ fullWidth: boolean; tall: boolean; height: number }>();
 
 const emit = defineEmits<{
   "toggle-width": [];
   "toggle-height": [];
+  resize: [height: number];
+  "resize-end": [height: number];
   project: [entry: LibraryEntry];
   "add-to-program": [entry: LibraryEntry, meta: MediaMeta | null];
 }>();
 
 const { t, tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
+
+/* ─── Altura por arraste da borda de cima ─── */
+
+const MIN_HEIGHT = 120;
+/** O palco acima nunca fica menor que isso. */
+const MIN_STAGE = 150;
+const root = ref<HTMLElement | null>(null);
+
+function startResize(event: PointerEvent): void {
+  const handle = event.currentTarget as HTMLElement;
+  const area = root.value?.parentElement;
+  if (!area) return;
+  handle.setPointerCapture(event.pointerId);
+  const startY = event.clientY;
+  const startHeight = props.height;
+  const max = Math.max(MIN_HEIGHT, area.clientHeight - MIN_STAGE);
+  let current = startHeight;
+
+  const move = (e: PointerEvent) => {
+    current = Math.min(max, Math.max(MIN_HEIGHT, startHeight + (startY - e.clientY)));
+    emit("resize", current);
+  };
+  const end = () => {
+    handle.removeEventListener("pointermove", move);
+    handle.removeEventListener("pointerup", end);
+    handle.removeEventListener("pointercancel", end);
+    emit("resize-end", current);
+  };
+  handle.addEventListener("pointermove", move);
+  handle.addEventListener("pointerup", end);
+  handle.addEventListener("pointercancel", end);
+}
 const lib = useFileLibrary();
 const { meta, request } = useMediaMeta();
 
@@ -295,6 +351,7 @@ const emptyMessage = computed(() => {
 
 <style scoped>
 .pm-library {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -302,6 +359,24 @@ const emptyMessage = computed(() => {
   overflow: hidden;
   background: var(--lj-surface-bg);
   border-top: 1px solid var(--lj-surface-border);
+}
+
+/* Faixa de pegar sobre a borda de cima; o traço acende ao passar o mouse. */
+.pm-library__resize {
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 6px;
+  cursor: row-resize;
+  touch-action: none;
+  transition: background 120ms var(--lj-ease);
+}
+
+.pm-library__resize:hover,
+.pm-library__resize:active {
+  background: linear-gradient(var(--lj-orange), var(--lj-orange)) top / 100% 2px no-repeat;
 }
 
 .pm-library__tabs {
@@ -443,6 +518,19 @@ const emptyMessage = computed(() => {
 
 .pm-folder--user:hover .pm-folder__count {
   display: none;
+}
+
+.pm-folders__user {
+  display: flex;
+  flex-direction: column;
+}
+
+.pm-folder--user {
+  cursor: grab;
+}
+
+.pm-folder--ghost {
+  opacity: 0.5;
 }
 
 .pm-folder--add {

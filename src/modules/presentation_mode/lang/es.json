@@ -187,6 +187,7 @@
     "favorite": "Marcar como favorito",
     "unfavorite": "Quitar de favoritos",
     "send": "Enviar a la pantalla principal",
-    "add_to_program": "Agregar al programa"
+    "add_to_program": "Agregar al programa",
+    "resize": "Arrastre para cambiar la altura (doble clic alterna)"
   }
 }

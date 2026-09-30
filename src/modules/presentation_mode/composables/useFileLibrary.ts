@@ -84,6 +84,15 @@ const _selectedPath = ref<string | null>(null);
 const _counts = ref<Record<string, number>>({});
 let _loadSeq = 0;
 
+/**
+ * Fila da pasta de onde o arquivo no ar saiu: Anterior e Próximo andam por
+ * ela, como num carrossel de anúncios. É uma cópia — trocar de pasta na
+ * grade não muda o que o telão está percorrendo.
+ */
+const _queue = ref<{ entries: LibraryEntry[]; index: number } | null>(null);
+
+export type QueueStep = "first" | "prev" | "next" | "last";
+
 async function _reload(): Promise<void> {
   const seq = ++_loadSeq;
   _loading.value = true;
@@ -205,6 +214,31 @@ export function useFileLibrary() {
         _dir.value = null;
       }
       await Promise.all([_reload(), _refreshCounts()]);
+    },
+
+    reorderFolders(list: LibraryFolder[]): void {
+      $userdata.set(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_FOLDERS, list);
+    },
+
+    /** O arquivo foi para a tela: a pasta aberta vira a fila de Anterior/Próximo. */
+    startQueue(entry: LibraryEntry): void {
+      const files = _entries.value.filter((e) => !e.isDir);
+      const index = files.findIndex((e) => e.path === entry.path);
+      _queue.value = index >= 0 ? { entries: files, index } : { entries: [entry], index: 0 };
+    },
+
+    queue: _queue,
+
+    /** Move a fila e devolve o arquivo da nova posição; `null` se já está na ponta. */
+    stepQueue(step: QueueStep): LibraryEntry | null {
+      const q = _queue.value;
+      if (!q) return null;
+      const last = q.entries.length - 1;
+      const target =
+        step === "first" ? 0 : step === "last" ? last : step === "next" ? q.index + 1 : q.index - 1;
+      if (target < 0 || target > last || target === q.index) return null;
+      _queue.value = { ...q, index: target };
+      return q.entries[target];
     },
 
     isFavorite(entry: LibraryEntry): boolean {

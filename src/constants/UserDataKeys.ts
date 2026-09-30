@@ -99,8 +99,8 @@ export const KEYS = {
       LIBRARY_FAVORITES: `${MODULES_PRESENTATION_MODE}.library_favorites`,
       /** UserData: biblioteca ocupando as duas colunas da esquerda. */
       LIBRARY_FULL_WIDTH: `${MODULES_PRESENTATION_MODE}.library_full_width`,
-      /** UserData: biblioteca mais alta. */
-      LIBRARY_TALL: `${MODULES_PRESENTATION_MODE}.library_tall`,
+      /** UserData: altura da biblioteca em px, ajustada arrastando a borda. */
+      LIBRARY_HEIGHT: `${MODULES_PRESENTATION_MODE}.library_height`,
     },
     MUSICS: {
       SELECTED_PLAYLIST: `${MODULES}.${ModuleEnum.MUSICS}.selected_playlist`,

@@ -89,7 +89,7 @@
         </span>
         <span class="pm-outputs__where">{{ monitorLabel(stageMonitor) }}</span>
       </header>
-      <ReturnMirror :cleared="cleared" :up-next="upNext?.title ?? ''" />
+      <ReturnMirror :cleared="cleared" :up-next="upNext?.title ?? ''" :file-counter="fileCounter" />
     </section>
 
     <footer class="pm-upnext" :class="{ 'pm-upnext--flash': flash }" data-testid="pm-upnext">
@@ -133,6 +133,8 @@ defineProps<{
   canNavigate: boolean;
   /** Pisca "A seguir" quando o Próximo não tem mais parte para avançar. */
   flash: boolean;
+  /** Posição do arquivo no ar na pasta da biblioteca. */
+  fileCounter?: string;
 }>();
 
 const emit = defineEmits<{
