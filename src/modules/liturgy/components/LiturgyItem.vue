@@ -122,6 +122,11 @@ import { LjCheckbox, LjChip, LjDialog, LjIcon, LjTooltip } from "@/components/ui
 import { MUSIC_ACTION, MusicAction } from "@/config/MusicAction";
 import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import $liturgy from "@/helpers/Liturgy";
+import { canLinkOverlay } from "../overlayLink";
+import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
+import Platform from "@/helpers/Platform";
+import $userdata from "@/helpers/UserData";
+import { KEYS } from "@/constants/UserDataKeys";
 
 interface ActionOption {
   action: string;
@@ -150,6 +155,19 @@ const chip = computed((): MusicAction | null => {
 
 const linkedOverlay = computed((): OverlaySlot | null => {
   if (!props.element?.linked_overlay_id) return null;
+  const scheduled =
+    props.element.tipo === LiturgyItemTypeEnum.ITENS_AGENDADOS
+      ? $liturgy.findScheduledForToday(props.element.id, $liturgy.getActiveDate())
+      : null;
+  if (
+    !canLinkOverlay(props.element, {
+      scheduledPath: typeof scheduled?.arquivo === "string" ? scheduled.arquivo : "",
+      systemMediaPlayer:
+        Platform.isDesktop &&
+        $userdata.get<boolean>(KEYS.OPTIONS.USE_SYSTEM_MEDIA_PLAYER, false) === true,
+    })
+  )
+    return null;
   return props.overlaySlots.find((s) => s.id === props.element.linked_overlay_id) || null;
 });
 

@@ -1,4 +1,5 @@
 <template>
+  <OverlayRenderer />
   <div
     class="ann-root"
     :style="{
@@ -68,6 +69,7 @@ import { useProjectionCloseNotice } from "@/composables/useProjectionCloseNotice
 import { useTransitionStage } from "@/composables/useTransitionStage";
 import { PROJECTION_TYPE } from "@/constants/Projection";
 import Broadcast from "@/helpers/Broadcast";
+import OverlayRenderer from "@/components/OverlayRenderer.vue";
 import { KEYS } from "@/constants/UserDataKeys";
 import { createTransitionContext } from "@/config/Transitions";
 import {

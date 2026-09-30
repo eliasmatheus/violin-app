@@ -43,8 +43,12 @@ import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import Broadcast from "@/helpers/Broadcast";
 import Database from "@/helpers/Database";
 import Liturgy from "@/helpers/Liturgy";
-import { IMAGE_EXT, AUDIO_EXT, VIDEO_EXT } from "@/constants/FileTypes";
+import { AUDIO_EXT } from "@/constants/FileTypes";
 import { openSlja, SLJA_EXT } from "@/helpers/SljaPlayer";
+import { heicToJpeg, isHeic } from "@/helpers/ImageConvert";
+import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
+import AudioLibrary from "@/helpers/AudioLibrary";
+import { getSong as getCustomSong } from "@/helpers/CustomSongs";
 import { DB_TABLE } from "@/constants/DbTables";
 import $idb from "@/helpers/IndexedDB";
 import $docs from "@/helpers/DocStore";
@@ -71,6 +75,7 @@ import { listenForVideoStateRequests } from "@/helpers/VideoStateRequest";
 import { BiblePresentationAuthority } from "@/presentation/BiblePresentationState";
 import { ModulePresentationAuthority } from "@/presentation/ModulePresentationState";
 import { nextOverlayEpoch } from "@/presentation/OverlayVisibilityState";
+import { canLinkOverlay, projectedFileKind, youtubeVideoId } from "@/modules/liturgy/overlayLink";
 import {
   AnnouncementsPresentationAuthority,
   announcementPosition,
@@ -604,6 +609,8 @@ $storage.hydrate().then(async () => {
 
               /** Resolve um path de arquivo para URL reproduzível. */
               function resolveFileUrl(p) {
+                if (typeof p !== "string" || !p) return "";
+                if (/^(blob|data):/i.test(p)) return p;
                 if (/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(p)) return p;
                 if (Platform.isDesktop) return Path.local(p);
                 return Path.file(p);
@@ -639,42 +646,106 @@ $storage.hydrate().then(async () => {
                 return false;
               }
 
-              /** Abre projeção de arquivo por extensão (imagem/vídeo/áudio/pdf). */
-              async function projectByExt(url, ext, title, libRef, sourcePath = url) {
-                if (ext === SLJA_EXT) {
-                  await openSlja(url, { title, origin: "remote" });
-                  return;
-                }
+              /** Executa um arquivo e informa se assumiu uma projeção visual no app. */
+              async function projectByExt(
+                url,
+                fileName,
+                title,
+                libRef,
+                sourcePath = fileName,
+                hint = "",
+                mime = ""
+              ) {
+                if (!url) return false;
+                const ext = (fileName || "").split(/[?#]/)[0].split(".").pop()?.toLowerCase();
+                const kind =
+                  projectedFileKind(fileName, hint) || projectedFileKind(sourcePath, hint);
+                if (kind === SLJA_EXT) return openSlja(url, { title, origin: "remote" });
                 if (
-                  (AUDIO_EXT.includes(ext) || VIDEO_EXT.includes(ext)) &&
-                  (await openWithSystemPlayer(
-                    sourcePath,
-                    VIDEO_EXT.includes(ext) ? "video" : "audio"
-                  ))
+                  (kind === "video" || AUDIO_EXT.includes(ext) || hint === "audio") &&
+                  (await openWithSystemPlayer(sourcePath, kind === "video" ? "video" : "audio"))
                 ) {
                   Media.close(true);
-                  return;
+                  return false;
                 }
-                if (IMAGE_EXT.includes(ext)) {
-                  const p = { url, type: "image", title };
-                  await Media.projectFile(p);
-                } else if (VIDEO_EXT.includes(ext)) {
-                  const p = { url, type: "video", title };
-                  await Media.projectFile(p, url);
-                } else if (AUDIO_EXT.includes(ext)) {
-                  await Media.openAudio({ url, title, mediaType: "audio" });
-                } else {
+                if (kind === "image" || kind === "video") {
+                  const p = { url, type: kind, title };
+                  if (libRef) p.libRef = libRef;
+                  if (kind === "image" && isHeic(fileName.split(/[?#]/)[0], mime)) {
+                    const response = await fetchWithTimeout(url, {
+                      timeout: NET_TIMEOUT.MEDIA,
+                      source: "file",
+                    });
+                    if (!response.ok) return false;
+                    // A janela alvo converte seus próprios bytes. Esta checagem
+                    // impede ativar o overlay se o HEIC não puder ser decodificado.
+                    await heicToJpeg(await response.blob());
+                    p.heic = true;
+                  }
+                  return Media.projectFile(p, kind === "video" ? url : undefined);
+                }
+                if (kind === "pdf") {
                   const p = { url, type: "pdf", title };
                   if (libRef) p.libRef = libRef;
-                  await Media.projectFile(p);
+                  return Media.projectFile(p);
                 }
+                if (AUDIO_EXT.includes(ext) || hint === "audio") {
+                  await Media.openAudio({ url, title, mediaType: "audio" });
+                }
+                return false;
               }
 
               try {
+                let projected = false;
+                let overlayItem = litItem;
+                const overlayContext = {};
                 switch (litItem.tipo) {
-                  case "musica":
-                    Media.open({ id_music: litItem.id_music, mode: data.tag });
+                  case "musica": {
+                    if (litItem.escolha || !litItem.id_music) break;
+                    // O controle remoto envia sempre `tag: audio`; a versão salva no
+                    // item é que decide se há slides ou somente áudio.
+                    const mode = litItem.subtipo || "sung";
+                    overlayItem = { ...litItem, subtipo: mode };
+                    if (mode === "audio" || mode === "audio_pb") {
+                      Media.stop();
+                      if (litItem.ref_id && litItem.id_music < 0) {
+                        const song = await getCustomSong(litItem.ref_id);
+                        const audioUrl = song?.audio_token
+                          ? await AudioLibrary.resolveAudio(song.audio_token)
+                          : null;
+                        if (audioUrl) {
+                          await Media.openAudio({
+                            url: audioUrl,
+                            title: song.nome,
+                            mediaType: "audio",
+                          });
+                        }
+                      } else {
+                        await Media.openAudio({
+                          id_music: litItem.id_music,
+                          mode:
+                            mode === "audio_pb"
+                              ? MusicActionEnum.INSTRUMENTAL
+                              : MusicActionEnum.AUDIO,
+                        });
+                      }
+                    } else if (litItem.ref_id && litItem.id_music < 0) {
+                      const song = await getCustomSong(litItem.ref_id);
+                      if (song) projected = await Media.openCustomSong(song);
+                    } else {
+                      const playbackMode =
+                        mode === "pb"
+                          ? MusicActionEnum.INSTRUMENTAL
+                          : mode === "lyric" || mode === "no_audio"
+                            ? MusicActionEnum.NO_AUDIO
+                            : MusicActionEnum.AUDIO;
+                      projected = await Media.open({
+                        id_music: litItem.id_music,
+                        mode: playbackMode,
+                      });
+                    }
                     break;
+                  }
                   case "site": {
                     const url = Liturgy.validateUrl(litItem.url);
                     window.open(url, "_blank", "noopener,noreferrer");
@@ -685,10 +756,16 @@ $storage.hydrate().then(async () => {
                     const sched = Liturgy.findScheduledForToday(litItem.id, activeDate);
                     const arquivo = sched ? String((sched && sched.arquivo) || "") : "";
                     if (arquivo) {
+                      overlayContext.scheduledPath = arquivo;
                       const url = resolveFileUrl(arquivo);
                       if (url) {
-                        const ext = arquivo.split(".").pop().toLowerCase();
-                        await projectByExt(url, ext, litItem.item || "", undefined, arquivo);
+                        projected = await projectByExt(
+                          url,
+                          arquivo,
+                          litItem.item || "",
+                          undefined,
+                          arquivo
+                        );
                       }
                     }
                     break;
@@ -697,19 +774,19 @@ $storage.hydrate().then(async () => {
                     const dir = litItem.dir || "";
                     const url = resolveFileUrl(dir);
                     if (url) {
-                      const ext = dir.split(".").pop().toLowerCase();
-                      await projectByExt(url, ext, litItem.item || "", undefined, dir);
+                      projected = await projectByExt(url, dir, litItem.item || "", undefined, dir);
                     }
                     break;
                   }
                   case "video-online": {
                     const videoUrl = litItem.url || "";
-                    const ytMatch = videoUrl.match(
-                      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/
-                    );
-                    if (ytMatch) {
-                      const embedUrl = `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0&controls=0`;
-                      Media.openYouTube(embedUrl, litItem.item || litItem.subitem || videoUrl);
+                    const videoId = youtubeVideoId(videoUrl);
+                    if (videoId) {
+                      const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&controls=0`;
+                      projected = await Media.openYouTube(
+                        embedUrl,
+                        litItem.item || litItem.subitem || videoUrl
+                      );
                     } else {
                       window.open(videoUrl, "_blank", "noopener,noreferrer");
                     }
@@ -731,9 +808,22 @@ $storage.hydrate().then(async () => {
                     } else {
                       recUrl = resolveFileUrl(recUrl);
                     }
-                    const recExt = (rec.name || rec.path).split(".").pop().toLowerCase();
                     const libRef = { table: DB_TABLE.MEDIA_LIBRARY, id: refId };
-                    await projectByExt(recUrl, recExt, litItem.item || "", libRef, rec.path);
+                    const fileName = rec.name || rec.path;
+                    overlayItem = {
+                      ...litItem,
+                      dir: fileName,
+                      subtipo: rec.type || litItem.subtipo,
+                    };
+                    projected = await projectByExt(
+                      recUrl,
+                      fileName,
+                      litItem.item || "",
+                      libRef,
+                      rec.path,
+                      rec.type || litItem.subtipo,
+                      rec.mime || ""
+                    );
                     break;
                   }
                   case "som-de-fundo": {
@@ -771,11 +861,11 @@ $storage.hydrate().then(async () => {
                   }
                   case "anuncios": {
                     const announcementToken = beginAnnouncementIntent();
-                    const ids = litItem.anuncios_ids || [];
                     const allAnn = await $idb.getAll(DB_TABLE.ANNOUNCEMENTS);
                     const sorted = allAnn.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
-                    const selected = ids.length
-                      ? sorted.filter((a) => ids.includes(String(a.id)))
+                    overlayContext.availableAnnouncementIds = sorted.map((a) => String(a.id));
+                    const selected = Array.isArray(litItem.anuncios_ids)
+                      ? sorted.filter((a) => litItem.anuncios_ids.includes(String(a.id)))
                       : sorted;
                     if (selected.length) {
                       const payload = {
@@ -802,7 +892,11 @@ $storage.hydrate().then(async () => {
                       AppData.set("modules.media.is_playing", true);
                       const fp = useFileProjection();
                       fp.start("announcements", selected[0]?.nome || "", selected.length, 0);
-                      ProjectionWindows.openAnnouncementsWindow().catch(() => {});
+                      const opened = await ProjectionWindows.openAnnouncementsWindow();
+                      projected =
+                        opened &&
+                        announcementsAuthority.current()?.announcement_session ===
+                          announcementToken.announcement_session;
                     }
                     break;
                   }
@@ -823,8 +917,12 @@ $storage.hydrate().then(async () => {
                     console.warn("[http] liturgy-execute: tipo desconhecido", litItem.tipo);
                 }
 
-                // Overlay vinculado — ativa automaticamente após execução
-                if (litItem.linked_overlay_id) {
+                // O vínculo só aparece na projeção que este comando abriu de fato.
+                if (
+                  projected &&
+                  litItem.linked_overlay_id &&
+                  canLinkOverlay(overlayItem, overlayContext)
+                ) {
                   try {
                     const linkedSlots = await readAllOverlaySlots();
                     const linkedSlot = linkedSlots.find((s) => s.id === litItem.linked_overlay_id);

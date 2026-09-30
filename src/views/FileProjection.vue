@@ -87,6 +87,7 @@ import { Settings } from "@/types/Settings";
 import { KEYS } from "@/constants/UserDataKeys";
 import { SETTINGS_TABLE } from "@/constants/DbTables";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
+import { heicToJpeg, isHeic } from "@/helpers/ImageConvert";
 import Telemetry from "@/helpers/Telemetry";
 import {
   mediaElementDetails,
@@ -300,13 +301,16 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
   // a referência da biblioteca, recria o objeto localmente lendo o IDB.
   if (p.libRef?.id && p.url?.startsWith("blob:")) {
     try {
-      const rec = await $idb.get<{ data?: ArrayBuffer; mime?: string }>(
+      const rec = await $idb.get<{ data?: ArrayBuffer; mime?: string; name?: string }>(
         p.libRef.table || DB_TABLE.MEDIA_LIBRARY,
         p.libRef.id
       );
       sourceDiagnostics.blob_resolution = "library_record_missing";
       if (rec?.data && rec.mime) {
-        const blob = new Blob([rec.data], { type: rec.mime });
+        let blob = new Blob([rec.data], { type: rec.mime });
+        if (p.type === "image" && (p.heic || isHeic(rec.name, rec.mime))) {
+          blob = await heicToJpeg(blob);
+        }
         sourceDiagnostics = {
           ...sourceDiagnostics,
           blob_resolution: "resolved",
@@ -324,6 +328,21 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
         "[FileProjection] libRef resolve falhou:",
         mediaDiagnosticMessage(e instanceof Error ? e.message : String(e))
       );
+    }
+  }
+  if (p.type === "image" && p.heic && !resolvedBlobUrl && !p.url?.startsWith("blob:")) {
+    try {
+      const response = await fetchWithTimeout(p.url, {
+        timeout: NET_TIMEOUT.MEDIA,
+        source: "file",
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      resolvedBlobUrl = URL.createObjectURL(await heicToJpeg(await response.blob()));
+      p = { ...p, url: resolvedBlobUrl };
+    } catch (error) {
+      sourceDiagnostics.blob_resolution = "heic_conversion_failed";
+      console.warn("[FileProjection] conversão de HEIC falhou:", error);
+      p = { ...p, url: "" };
     }
   }
   if (generation !== activationGeneration) {

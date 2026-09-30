@@ -20,6 +20,7 @@ import { listSongs as listCustomSongs } from "@/helpers/CustomSongs";
 import { AUDIO_EXT, VIDEO_EXT } from "@constants/FileTypes";
 import { useMusicCatalog } from "@/composables/useMusicCatalog";
 import { musicTitle } from "@root/config/musicCatalog.mjs";
+import { canLinkOverlay } from "../overlayLink";
 
 interface VideoItem {
   id: string;
@@ -335,11 +336,14 @@ export function useLiturgyItems(
     if (form.value.tipo === LiturgyItemTypeEnum.BLOCO) {
       form.value.blocoId = undefined;
     }
+    // O vínculo pertence ao tipo anterior, não à nova ação da liturgia.
+    form.value.linked_overlay_id = "";
   }
 
   function setMusicChoice(later: boolean | string): void {
     form.value.escolha = !!later;
     if (later) form.value.musica = -1;
+    if (!canLinkOverlay(form.value)) form.value.linked_overlay_id = "";
   }
 
   function onMusicChange(): void {

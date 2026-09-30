@@ -91,6 +91,7 @@ import { loadPdfDocument, type PDFDocumentProxy } from "@/helpers/PdfRuntime";
 import { Settings } from "@/types/Settings";
 import { DB_TABLE, SETTINGS_TABLE } from "@/constants/DbTables";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
+import { heicToJpeg, isHeic } from "@/helpers/ImageConvert";
 import Telemetry from "@/helpers/Telemetry";
 import {
   mediaElementDetails,
@@ -309,13 +310,16 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
   // isso a janela de retorno recebe uma URL blob morta e fica preta.
   if (p.libRef?.id && p.url?.startsWith("blob:")) {
     try {
-      const rec = await $idb.get<{ data?: ArrayBuffer; mime?: string }>(
+      const rec = await $idb.get<{ data?: ArrayBuffer; mime?: string; name?: string }>(
         p.libRef.table || DB_TABLE.MEDIA_LIBRARY,
         p.libRef.id
       );
       sourceDiagnostics.blob_resolution = "library_record_missing";
       if (rec?.data && rec.mime) {
-        const blob = new Blob([rec.data], { type: rec.mime });
+        let blob = new Blob([rec.data], { type: rec.mime });
+        if (p.type === "image" && (p.heic || isHeic(rec.name, rec.mime))) {
+          blob = await heicToJpeg(blob);
+        }
         sourceDiagnostics = {
           ...sourceDiagnostics,
           blob_resolution: "resolved",
@@ -335,6 +339,21 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
         "[FileProjectionReturn] resolução do blob falhou:",
         mediaDiagnosticMessage(error instanceof Error ? error.message : String(error))
       );
+    }
+  }
+  if (p.type === "image" && p.heic && !resolvedBlobUrl && !p.url?.startsWith("blob:")) {
+    try {
+      const response = await fetchWithTimeout(p.url, {
+        timeout: NET_TIMEOUT.MEDIA,
+        source: "file",
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      resolvedBlobUrl = URL.createObjectURL(await heicToJpeg(await response.blob()));
+      p = { ...p, url: resolvedBlobUrl };
+    } catch (error) {
+      sourceDiagnostics.blob_resolution = "heic_conversion_failed";
+      console.warn("[FileProjectionReturn] conversão de HEIC falhou:", error);
+      p = { ...p, url: "" };
     }
   }
   if (generation !== activationGeneration) {

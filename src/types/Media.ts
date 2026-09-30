@@ -58,6 +58,8 @@ export interface FileProjectionState {
   backward?: boolean;
   /** Referência para re-resolver URLs blob via IndexedDB na janela alvo. */
   libRef?: { table?: string; id: string };
+  /** HEIC/HEIF validado pelo emissor; cada janela converte seus próprios bytes. */
+  heic?: boolean;
 }
 
 export interface MediaFile {

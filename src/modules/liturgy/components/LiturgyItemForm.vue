@@ -349,25 +349,20 @@
       </LjField>
     </section>
 
-    <!-- ─── Vincular Overlay (exceto bloco, overlay e musica "escolha") ─── -->
+    <!-- ─── Vincular sobreposição quando há algo disponível ou um vínculo a remover ─── -->
     <section
-      v-if="
-        form.tipo !== LiturgyItemTypeEnum.BLOCO &&
-        form.tipo !== LiturgyItemTypeEnum.OVERLAY &&
-        !(form.tipo === LiturgyItemTypeEnum.MUSICA && form.escolha)
-      "
+      v-if="canShowOverlayLink && (overlaySlots.length > 0 || !!form.linked_overlay_id)"
       class="lif-panel"
     >
       <LjCheckbox
         :model-value="!!form.linked_overlay_id"
-        :disabled="overlaySlots.length === 0"
         :label="t('overlay.link_overlay')"
         @update:model-value="onLinkOverlayToggle($event)"
       />
       <p v-if="overlaySlots.length === 0" class="lif-hint">
         {{ t("overlay.no_slots") }}
       </p>
-      <div v-if="form.linked_overlay_id" class="lif-spaced">
+      <div v-if="form.linked_overlay_id && overlaySlots.length > 0" class="lif-spaced">
         <LjSelect
           :model-value="form.linked_overlay_id"
           :items="overlayOptions"
@@ -436,6 +431,10 @@ import { DB_TABLE } from "@/constants/DbTables";
 import type { LiturgyItem, LiturgyMusicItem, ScheduledCategory } from "@/types/Liturgy";
 import type { OverlaySlot } from "@/types/Overlay";
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
+import { canLinkOverlay } from "../overlayLink";
+import Platform from "@/helpers/Platform";
+import $userdata from "@/helpers/UserData";
+import { KEYS } from "@/constants/UserDataKeys";
 import { buildMusicOptions, musicMatches, type MusicOption } from "../musicOptions";
 import { useMusicCatalog } from "@/composables/useMusicCatalog";
 import { useI18n } from "vue-i18n";
@@ -690,9 +689,36 @@ interface AnnouncementOption {
 }
 
 const announcementItems = ref<AnnouncementOption[]>([]);
+const canShowOverlayLink = computed(() => {
+  const scheduled =
+    props.form.tipo === LiturgyItemTypeEnum.ITENS_AGENDADOS
+      ? Liturgy.findScheduledForToday(props.form.id, Liturgy.getActiveDate())
+      : null;
+  const selectedMusicRecord =
+    props.form.tipo === LiturgyItemTypeEnum.MUSICA
+      ? props.musicsList.find((music) => Number(music.id_music) === Number(props.form.musica))
+      : null;
+  const item = selectedMusicRecord
+    ? {
+        ...props.form,
+        id_music: Number(selectedMusicRecord.id_music),
+        ref_id: selectedMusicRecord.custom_song_id || props.form.ref_id,
+      }
+    : props.form;
+  return canLinkOverlay(item, {
+    scheduledPath: typeof scheduled?.arquivo === "string" ? scheduled.arquivo : "",
+    availableAnnouncementIds: announcementItems.value.map((item) => String(item.id)),
+    systemMediaPlayer:
+      Platform.isDesktop &&
+      $userdata.get<boolean>(KEYS.OPTIONS.USE_SYSTEM_MEDIA_PLAYER, false) === true,
+  });
+});
 const allAnnouncementsSelected = computed(() => {
   const ids = props.form.anuncios_ids || [];
-  return announcementItems.value.length > 0 && ids.length === announcementItems.value.length;
+  return (
+    announcementItems.value.length > 0 &&
+    announcementItems.value.every((item) => ids.includes(item.id))
+  );
 });
 
 async function loadAnnouncementOptions(): Promise<void> {
@@ -707,7 +733,7 @@ async function loadAnnouncementOptions(): Promise<void> {
 }
 
 watch(announcementItems, () => {
-  if (announcementItems.value.length && !props.form.anuncios_ids?.length) {
+  if (announcementItems.value.length && !Array.isArray(props.form.anuncios_ids)) {
     props.setFormField(
       "anuncios_ids",
       announcementItems.value.map((a) => a.id)

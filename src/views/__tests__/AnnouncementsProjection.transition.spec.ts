@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   listeners: new Set<(_message: { type: string; payload: unknown }) => void>(),
 }));
 vi.mock("@/composables/useProjectionCloseNotice", () => ({ useProjectionCloseNotice: vi.fn() }));
+vi.mock("@/components/OverlayRenderer.vue", () => ({ default: { template: "<div />" } }));
 vi.mock("@/helpers/Broadcast", () => ({
   default: {
     listen: (callback: (_message: { type: string; payload: unknown }) => void) => {
