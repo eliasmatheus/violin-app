@@ -32,6 +32,7 @@ import Modules from "@/helpers/Modules";
 import Dev from "@/helpers/Dev";
 import UserData from "@/helpers/UserData";
 import AppData from "@/helpers/AppData";
+import { anyOpenModuleWants } from "@/config/modules";
 import { useFileProjection } from "@/composables/useFileProjection";
 import { useBackgroundSound } from "@/composables/useBackgroundSound";
 import { syncFromIdb as syncDevicesFromIdb } from "@/composables/useDevices";
@@ -1521,11 +1522,12 @@ $storage.hydrate().then(async () => {
           }
         };
 
-        // Com o Modo apresentação aberto o Esc é a saída de emergência: tira da
+        // Com um módulo de operação ao vivo aberto (manifesto: `shell.immediateEscape`)
+        // o Esc é a saída de emergência: tira da
         // tela na hora, sem diálogo — um erro no telão não pode esperar o
         // operador achar o "Sim". E as janelas ficam: fechá-las é o "Parar
         // apresentação". Fora dele, vale a confirmação de sempre.
-        const immediate = AppData.get(KEYS.MODULES.PRESENTATION_MODE.SHOW, false) === true;
+        const immediate = anyOpenModuleWants("immediateEscape");
         const stop = (confirmKey, action) => {
           if (immediate) action();
           else $alert.yesno(confirmKey, (btn) => btn === "yes" && action());

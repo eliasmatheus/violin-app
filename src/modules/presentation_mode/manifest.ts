@@ -21,6 +21,12 @@ export const module: Module = {
   icon: ICONS.MODULES.PRESENTATION_MODE,
   color: "#00897b",
   showInMainMenu: true,
+  shell: {
+    expandedKey: KEYS.MODULES.PRESENTATION_MODE.EXPANDED,
+    hidesLiturgySidebar: true,
+    hidesFooterPlayer: true,
+    immediateEscape: true,
+  },
   category: ModuleCategoryEnum.WORSHIP,
   group: ModuleGroupEnum.CHURCH,
   order: 3,

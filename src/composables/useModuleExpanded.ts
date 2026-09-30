@@ -1,32 +1,28 @@
 import { computed, type ComputedRef } from "vue";
 import $appdata from "@/helpers/AppData";
 import $userdata from "@/helpers/UserData";
-import { KEYS } from "@/constants/UserDataKeys";
-import { ModuleEnum } from "@/enums/ModuleEnum";
+import { moduleShell } from "@/config/modules";
 
 /**
- * Módulos que podem ocupar a área do ribbon e das abas de módulo.
+ * Módulos que podem ocupar a área do ribbon e das abas de módulo — os que
+ * declaram `shell.expandedKey` no manifesto.
  *
  * A preferência é por módulo e fica gravada: quem opera expandido volta
  * expandido no próximo culto. O shell só a aplica enquanto a aba do módulo
  * estiver ativa — trocar de aba devolve o ribbon sem apagar a escolha.
  */
-const EXPANDED_KEYS: Readonly<Record<string, string>> = Object.freeze({
-  [ModuleEnum.PRESENTATION_MODE]: KEYS.MODULES.PRESENTATION_MODE.EXPANDED,
-});
-
 export function isModuleExpandable(moduleId: string | null | undefined): boolean {
-  return !!moduleId && moduleId in EXPANDED_KEYS;
+  return !!moduleShell(moduleId).expandedKey;
 }
 
 export function isModuleExpanded(moduleId: string | null | undefined): boolean {
-  if (!moduleId || !isModuleExpandable(moduleId)) return false;
-  return $userdata.get<boolean>(EXPANDED_KEYS[moduleId], false) === true;
+  const key = moduleShell(moduleId).expandedKey;
+  return !!key && $userdata.get<boolean>(key, false) === true;
 }
 
 export function setModuleExpanded(moduleId: string, value: boolean): void {
-  if (!isModuleExpandable(moduleId)) return;
-  $userdata.set(EXPANDED_KEYS[moduleId], value);
+  const key = moduleShell(moduleId).expandedKey;
+  if (key) $userdata.set(key, value);
 }
 
 export function toggleModuleExpanded(moduleId: string): void {

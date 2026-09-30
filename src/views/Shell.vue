@@ -42,7 +42,7 @@
       </div>
     </main>
 
-    <AppFooter v-show="!presentationActive" />
+    <AppFooter v-show="!hideFooterPlayer" />
     <OpeningBar />
 
     <CommandPalette v-if="cmdPaletteOpen" v-model="cmdPaletteOpen" />
@@ -107,7 +107,7 @@ import Platform from "@/helpers/Platform";
 import Telemetry from "@/helpers/Telemetry";
 import { ICONS } from "@/config/Icons";
 import { KEYS } from "@/constants/UserDataKeys";
-import { ModuleEnum } from "@/enums/ModuleEnum";
+import { anyOpenModuleWants, moduleShell } from "@/config/modules";
 import $popup from "@/helpers/Popup";
 import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
@@ -166,22 +166,18 @@ const liturgyModuleOpen = computed(() => {
   return $appdata.get<boolean>(KEYS.MODULES.LITURGY.SHOW, false) === true;
 });
 
-const presentationModuleOpen = computed(
-  () => $appdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.SHOW, false) === true
-);
-
 const showLiturgySidebar = computed(
   () =>
     !liturgyModuleOpen.value &&
-    !presentationModuleOpen.value &&
+    !anyOpenModuleWants("hidesLiturgySidebar") &&
     $userdata.get<boolean>(KEYS.SHELL.LITURGY_VISIBLE, true) !== false
 );
 
 const { activeModule, isExpanded: isShellExpanded } = useShellExpanded();
 
-// O palco do Modo apresentação já tem os controles da música e do vídeo no
-// ar; o mini-player do rodapé seria um segundo painel dos mesmos botões.
-const presentationActive = computed(() => activeModule.value === ModuleEnum.PRESENTATION_MODE);
+// Módulo com os próprios controles da música e do vídeo no ar: o mini-player
+// do rodapé seria um segundo painel dos mesmos botões.
+const hideFooterPlayer = computed(() => moduleShell(activeModule.value).hidesFooterPlayer === true);
 
 useProjectionShutdown();
 
