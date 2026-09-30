@@ -7,7 +7,7 @@
     >
       <ProgramPanel
         @activate="activate"
-        @preview="(id: string) => preview.show({ type: 'program', itemId: id })"
+        @preview="(id: string) => stage.show({ type: 'program', itemId: id })"
         @edit-item="openEditItem"
         @edit-session="openEditSession"
         @new-item="openNewItem"
@@ -75,9 +75,9 @@
         :live-path="libraryLivePath"
         :return-path="returnOverride?.path ?? null"
         @show-on-return="onShowOnReturn"
-        @preview="(entry: LibraryEntry) => preview.show({ type: 'file', entry })"
+        @preview="(entry: LibraryEntry) => stage.show({ type: 'file', entry })"
         @stop="stopMedia"
-        @preview-song="(s: LibrarySong) => preview.show({ type: 'song', id_music: s.id_music, title: s.name, subtitle: s.album })"
+        @preview-song="(s: LibrarySong) => stage.show({ type: 'song', id_music: s.id_music, title: s.name, subtitle: s.album })"
         @play-song="(s: LibrarySong, m: MusicMode) => playSong(s.id_music, s.name, s.album, 0, m)"
         @add-song="addSongToProgram"
         @toggle-width="toggleLibraryWidth"
@@ -128,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { LjButton, LjIcon } from "@/components/ui";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import { ICONS } from "@/config/Icons";
@@ -154,7 +154,8 @@ import StageVideo from "./StageVideo.vue";
 import type { LibrarySong } from "./LibrarySongRow.vue";
 import DateTime from "@/helpers/DateTime";
 import StagePreview, { type PreviewView } from "./StagePreview.vue";
-import { usePreview } from "../composables/usePreview";
+import { useStage } from "../composables/useStage";
+import { expectationOf, isOnAir, samePlayable, type Playable } from "../program/playable";
 import $path from "@/helpers/Path";
 import LibraryPanel from "./LibraryPanel.vue";
 import LiveMirror from "./LiveMirror.vue";
@@ -206,13 +207,14 @@ const {
   goLive,
   toggleOpen,
   preparedItemId,
-  liveItemId,
   upNextItem,
   outputLocked,
   setOutputLocked,
   prepare,
 } = useProgram();
 const { execute, projectPath } = useProgramExecution();
+const stage = useStage();
+onBeforeUnmount(stage.reset);
 
 onMounted(() => {
   void ensureLoaded();
@@ -257,10 +259,7 @@ function fileTitle(entry: LibraryEntry): string {
 
 /** Duplo clique ou "Enviar": vai para a tela principal pelo mesmo caminho da liturgia. */
 function projectFile(entry: LibraryEntry): void {
-  if (outputLocked.value) return;
-  library.startQueue(entry);
-  projectPath(entry.path, entry.name);
-  Telemetry.track("presentation_library_projected", { ext: entry.ext });
+  dispatch({ type: "file", entry });
 }
 
 function addSongToProgram(song: LibrarySong, mode: MusicMode = "sung"): void {
@@ -319,34 +318,58 @@ function findItem(itemId: string): ProgramItem | null {
   return null;
 }
 
+interface DispatchOptions {
+  /** Música: slide em que ela entra. */
+  slideIndex?: number;
+  mode?: MusicMode;
+  /** Ignora a trava — é o destravar mandando ao ar o que estava na fila. */
+  force?: boolean;
+}
+
 /**
- * Duplo clique: o item entra no ar e é executado. Item com sub-itens só abre
- * a lista e espera o operador escolher — nada vai para a tela.
+ * Única porta para o ar. Item com sub-itens só abre a lista e espera o
+ * operador escolher. Com a saída travada, a tela fica como está: o item do
+ * programa espera na fila; o resto não vai.
  */
-function activate(itemId: string, { force = false } = {}): void {
-  const item = findItem(itemId);
-  if (!item) return;
-  if (item.children?.length) {
-    toggleOpen(item.id, true);
-    return;
+function dispatch(playable: Playable, { slideIndex = 0, mode = "sung", force = false }: DispatchOptions = {}): void {
+  const item = playable.type === "program" ? findItem(playable.itemId) : null;
+  if (playable.type === "program") {
+    if (!item) return;
+    if (item.children?.length) {
+      toggleOpen(item.id, true);
+      return;
+    }
   }
-  // Saída travada: a tela principal fica como está e o item espera na fila.
   if (outputLocked.value && !force) {
-    prepare(item.id);
+    if (item) prepare(item.id);
     return;
   }
-  preview.show({ type: "program", itemId: item.id });
-  goLive(item.id);
-  execute(item);
-  Telemetry.track("presentation_item_live", { kind: item.kind });
+
+  stage.show(playable);
+  const expected = expectationOf(playable, item, mode);
+  if (item) {
+    goLive(item.id);
+    execute(item);
+    Telemetry.track("presentation_item_live", { kind: item.kind });
+  } else if (playable.type === "file") {
+    library.startQueue(playable.entry);
+    projectPath(playable.entry.path, playable.entry.name);
+    Telemetry.track("presentation_library_projected", { ext: playable.entry.ext });
+  } else if (playable.type === "song") {
+    playMusicInMode(playable.id_music, mode);
+  }
+  stage.markSent(playable, expected);
+  if (expected.songId) goToSlideWhenLoaded(expected.songId, slideIndex);
+}
+
+/** Duplo clique no programa. */
+function activate(itemId: string, options?: DispatchOptions): void {
+  dispatch({ type: "program", itemId }, options);
 }
 
 /* ─── Palco: prévia × ao vivo ─── */
 
-/**
- * Áudio no ar: não manda nada para as saídas, então não aparece no Broadcast.
- * O player marca "só áudio" com o título — é por aí que o palco sabe.
- */
+/** Áudio no ar: não manda nada para as saídas, então não aparece no Broadcast. */
 const audioLive = computed(
   () =>
     $appdata.get<boolean>(KEYS.MODULES.MEDIA.CONFIG.AUDIO_ONLY, false) === true &&
@@ -356,27 +379,33 @@ const audioLive = computed(
 const audioTitle = computed(() => $appdata.get<string>(KEYS.MODULES.MEDIA.CONFIG.TITLE, "") ?? "");
 const onAir = computed(() => !!liveKind.value || audioLive.value);
 
-const preview = usePreview();
+
+const liveSongId = computed(() => {
+  const id = Number(slides.slides.value[0]?.id_music);
+  return liveKind.value === "music" && id > 0 ? id : null;
+});
+
+/**
+ * O que o módulo mandou ao ar, enquanto ainda é o que está no ar. Some
+ * sozinho quando a tela passa a mostrar outra coisa — outro módulo, o Esc.
+ */
+const liveOrigin = computed<Playable | null>(() => {
+  const sent = stage.sent.value;
+  if (!sent) return null;
+  const signal = { kind: liveKind.value, audio: audioLive.value, songId: liveSongId.value };
+  return isOnAir(sent.expected, signal) ? sent.playable : null;
+});
 
 /** O item em prévia é o que está no ar? Então o palco é o controle dele. */
 const previewIsLive = computed(() => {
-  const t = preview.target.value;
+  const t = stage.preview.value;
   if (!t) return true;
-  if (t.type === "program") return t.itemId === liveItemId.value && onAir.value;
-  if (t.type === "file") {
-    return (
-      (liveKind.value === "file" && live.file.value?.title === t.entry.name) ||
-      (audioLive.value && audioTitle.value === t.entry.name)
-    );
-  }
-  return (
-    (liveKind.value === "music" && Number(slides.slides.value[0]?.id_music) === t.id_music) ||
-    // "Só áudio" não tem slides: o player marca o título da música.
-    (audioLive.value && audioTitle.value === t.title)
-  );
+  if (liveOrigin.value && samePlayable(t, liveOrigin.value)) return true;
+  // Música tocada de outro módulo: os slides no ar dizem qual é.
+  return t.type === "song" && t.id_music === liveSongId.value;
 });
 
-const stagePreview = computed(() => !!preview.target.value && !previewIsLive.value);
+const stagePreview = computed(() => !!stage.preview.value && !previewIsLive.value);
 
 function fileView(path: string, title: string): PreviewView {
   const kind = kindFromPath(path);
@@ -405,7 +434,7 @@ function programView(item: ProgramItem): PreviewView {
 }
 
 const previewView = computed<PreviewView | null>(() => {
-  const t = preview.target.value;
+  const t = stage.preview.value;
   if (!t) return null;
   if (t.type === "program") {
     const item = findItem(t.itemId);
@@ -417,45 +446,40 @@ const previewView = computed<PreviewView | null>(() => {
 
 /**
  * Clique num slide da prévia: a música vai ao ar e, quando os slides dela
- * chegarem, salta para o slide escolhido.
+ * chegarem, salta para o slide escolhido. Só uma espera por vez: mandar outra
+ * coisa ao ar cancela a anterior.
  */
+let cancelSlideWait: (() => void) | null = null;
 function goToSlideWhenLoaded(idMusic: number, index: number): void {
+  cancelSlideWait?.();
+  cancelSlideWait = null;
   if (index <= 0) return;
-  let done = false;
   const stop = watch(
     () => [slides.totalSlides.value, slides.slides.value[0]?.id_music] as const,
     ([total, id]) => {
-      if (done || total <= index || Number(id) !== idMusic) return;
-      done = true;
+      if (total <= index || Number(id) !== idMusic) return;
+      cancel();
       Media.goToSlide(index);
     },
     { immediate: true }
   );
-  setTimeout(() => {
-    done = true;
+  const timer = setTimeout(() => cancel(), 15000);
+  function cancel(): void {
     stop();
-  }, 15000);
+    clearTimeout(timer);
+    if (cancelSlideWait === cancel) cancelSlideWait = null;
+  }
+  cancelSlideWait = cancel;
 }
+onBeforeUnmount(() => cancelSlideWait?.());
 
 function playSong(idMusic: number, title: string, subtitle?: string, slideIndex = 0, mode: MusicMode = "sung"): void {
-  if (outputLocked.value) return;
-  preview.show({ type: "song", id_music: idMusic, title, subtitle });
-  playMusicInMode(idMusic, mode);
-  goToSlideWhenLoaded(idMusic, slideIndex);
+  dispatch({ type: "song", id_music: idMusic, title, subtitle }, { slideIndex, mode });
 }
 
 function playPreview(slideIndex = 0, mode: MusicMode = "sung"): void {
-  const t = preview.target.value;
-  if (!t) return;
-  if (t.type === "program") {
-    activate(t.itemId);
-    const src = findItem(t.itemId)?.source;
-    if (src?.id_music) goToSlideWhenLoaded(src.id_music, slideIndex);
-  } else if (t.type === "file") {
-    projectFile(t.entry);
-  } else {
-    playSong(t.id_music, t.title, t.subtitle, slideIndex, mode);
-  }
+  const t = stage.preview.value;
+  if (t) dispatch(t, { slideIndex, mode });
 }
 
 function onShowOnReturn(entry: LibraryEntry | null): void {
@@ -469,7 +493,7 @@ function onShowOnReturn(entry: LibraryEntry | null): void {
 }
 
 function playPreviewOnReturn(): void {
-  const t = preview.target.value;
+  const t = stage.preview.value;
   if (t?.type === "file") onShowOnReturn(t.entry);
   else if (t?.type === "program") {
     const dir = findItem(t.itemId)?.source?.dir;
@@ -478,16 +502,9 @@ function playPreviewOnReturn(): void {
 }
 
 function focusLive(): void {
-  if (liveItemId.value && liveProgramItem.value) {
-    preview.show({ type: "program", itemId: liveItemId.value });
-  } else if (libraryQueueLive.value && library.queue.value) {
-    const q = library.queue.value;
-    preview.show({ type: "file", entry: q.entries[q.index] });
-  } else if (liveKind.value === "music") {
-    preview.show({ type: "song", id_music: Number(slides.slides.value[0]?.id_music), title: slides.title.value });
-  } else {
-    preview.show(null);
-  }
+  if (liveOrigin.value) stage.show(liveOrigin.value);
+  else if (liveSongId.value) stage.show({ type: "song", id_music: liveSongId.value, title: slides.title.value });
+  else stage.show(null);
 }
 
 /* ─── Palco ─── */
@@ -502,7 +519,9 @@ const showVideoStage = computed(
     (liveKind.value === "file" && live.file.value?.type === "video")
 );
 
-const liveProgramItem = computed(() => (liveItemId.value ? findItem(liveItemId.value) : null));
+const liveProgramItem = computed(() =>
+  liveOrigin.value?.type === "program" ? findItem(liveOrigin.value.itemId) : null
+);
 
 const stageIcon = computed(() => {
   if (stagePreview.value) return previewView.value?.icon ?? null;
@@ -532,7 +551,7 @@ const stageTitle = computed(() => {
 });
 
 const stageMeta = computed(() => {
-  const t = preview.target.value;
+  const t = stage.preview.value;
   if (stagePreview.value && t) {
     if (t.type === "program") return findItem(t.itemId)?.subtitle ?? "";
     if (t.type === "song") return t.subtitle ?? "";
@@ -555,18 +574,12 @@ const slides = useSlides();
 const live = useLiveContent();
 const liveKind = live.current;
 
-/** Há partes para percorrer: os slides da música que está no ar. */
-/**
- * O arquivo no ar saiu da biblioteca? Então Anterior/Próximo andam pela pasta
- * dele. A projeção leva o nome do arquivo como título — é por ele que se sabe
- * se o que está na tela ainda é o da fila.
- */
+/** O arquivo no ar saiu da biblioteca? Então Anterior/Próximo andam pela pasta dele. */
 const library = useFileLibrary();
 const libraryQueueLive = computed(() => {
   const q = library.queue.value;
-  if (!q) return false;
-  const name = q.entries[q.index]?.name;
-  return (liveKind.value === "file" && live.file.value?.title === name) || (audioLive.value && audioTitle.value === name);
+  const origin = liveOrigin.value;
+  return !!q && origin?.type === "file" && q.entries[q.index]?.path === origin.entry.path;
 });
 
 /** Arquivo da biblioteca que está no ar — borda de destaque e ✕ na grade. */
@@ -608,8 +621,12 @@ function navigate(to: "first" | "prev" | "next" | "last"): void {
   }
   if (libraryQueueLive.value) {
     const entry = library.stepQueue(to);
-    if (entry) projectPath(entry.path, entry.name);
-    else if (to === "next") flashUpNext();
+    if (entry) {
+      // Sem `dispatch`: ele recomeçaria a fila a partir da pasta aberta agora.
+      projectPath(entry.path, entry.name);
+      const playable = { type: "file", entry } as const;
+      stage.markSent(playable, expectationOf(playable, null));
+    } else if (to === "next") flashUpNext();
     return;
   }
   const last = slides.totalSlides.value - 1;

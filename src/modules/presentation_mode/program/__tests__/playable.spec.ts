@@ -1,0 +1,72 @@
+import { describe, expect, it } from "vitest";
+import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
+import type { ProgramItem } from "@/types/Presentation";
+import type { LibraryEntry } from "../../composables/useFileLibrary";
+import { liturgyItem } from "../liturgy";
+import { expectationOf, isOnAir, samePlayable, type LiveSignal } from "../playable";
+
+const entry = (path: string): LibraryEntry => ({
+  name: path.split("/").pop() ?? path,
+  path,
+  isDir: false,
+  ext: path.split(".").pop() ?? "",
+  size: 0,
+  mtimeMs: 0,
+});
+
+const music = (id: number, subtipo = "sung"): ProgramItem => ({
+  id: "m",
+  kind: "music",
+  title: "Hino",
+  plannedMinutes: 3,
+  source: liturgyItem({ id: "s", tipo: LiturgyItemTypeEnum.MUSICA, subtipo, id_music: id, musica: id, item: "Hino" }),
+});
+
+const signal = (s: Partial<LiveSignal>): LiveSignal => ({ kind: null, audio: false, songId: null, ...s });
+
+describe("samePlayable", () => {
+  it("compara arquivo pelo caminho, não pelo nome", () => {
+    const a = { type: "file", entry: entry("/Anúncios/Todos.png") } as const;
+    const b = { type: "file", entry: entry("/Jovens/Todos.png") } as const;
+    expect(samePlayable(a, b)).toBe(false);
+    expect(samePlayable(a, { type: "file", entry: entry("/Anúncios/Todos.png") })).toBe(true);
+  });
+
+  it("tipos diferentes nunca são o mesmo", () => {
+    expect(samePlayable({ type: "program", itemId: "1" }, { type: "song", id_music: 1, title: "" })).toBe(false);
+  });
+});
+
+describe("expectationOf + isOnAir", () => {
+  it("música do programa só está no ar com os slides dela", () => {
+    const expected = expectationOf({ type: "program", itemId: "m" }, music(42), undefined);
+    expect(isOnAir(expected, signal({ kind: "music", songId: 42 }))).toBe(true);
+    expect(isOnAir(expected, signal({ kind: "music", songId: 7 }))).toBe(false);
+  });
+
+  it("música só em áudio espera o player de áudio", () => {
+    const expected = expectationOf({ type: "program", itemId: "m" }, music(42, "audio"), undefined);
+    expect(isOnAir(expected, signal({ audio: true }))).toBe(true);
+    expect(isOnAir(expected, signal({ kind: "music", songId: 42 }))).toBe(false);
+  });
+
+  it("arquivo da biblioteca deixa de estar no ar quando outro conteúdo assume", () => {
+    const expected = expectationOf({ type: "file", entry: entry("/a/aviso.png") }, null);
+    expect(isOnAir(expected, signal({ kind: "file" }))).toBe(true);
+    expect(isOnAir(expected, signal({ kind: "bible" }))).toBe(false);
+    expect(isOnAir(expected, signal({}))).toBe(false);
+  });
+
+  it("música do acervo respeita o formato escolhido", () => {
+    const song = { type: "song", id_music: 5, title: "x" } as const;
+    expect(expectationOf(song, null, "audio_pb")).toEqual({ kind: "audio" });
+    expect(expectationOf(song, null, "lyric")).toEqual({ kind: "music", songId: 5 });
+  });
+
+  it("item sem efeito acompanhado vale enquanto houver algo no ar", () => {
+    const note: ProgramItem = { id: "n", kind: "note", title: "Aviso", plannedMinutes: 1 };
+    const expected = expectationOf({ type: "program", itemId: "n" }, note);
+    expect(isOnAir(expected, signal({ kind: "announcements" }))).toBe(true);
+    expect(isOnAir(expected, signal({}))).toBe(false);
+  });
+});
