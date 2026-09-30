@@ -303,10 +303,14 @@
 
       <div class="si-auto-hint" v-html="tm('add_auto_hint')" />
 
+      <div v-if="autoPopulateScanning" class="si-auto-result si-auto-result--busy" role="status">
+        <LjSpinner :size="14" />
+        <span>{{ tm("add_auto_scanning") }}</span>
+      </div>
       <div
-        v-if="autoPopulateResult"
+        v-else-if="autoPopulateResult"
         class="si-auto-result"
-        :class="{ 'si-auto-result--ok': autoPopulateResult.includes('sucesso') }"
+        :class="{ 'si-auto-result--ok': autoPopulateResultOk }"
       >
         {{ autoPopulateResult }}
       </div>
@@ -318,6 +322,7 @@
           size="sm"
           variant="primary"
           :icon="ICONS.ACTIONS.SEARCH"
+          :loading="autoPopulateScanning"
           :disabled="!autoPopulateFolder || !autoPopulateTargetCat || !Platform.isDesktop"
           @click="executeAutoPopulate"
         >
@@ -333,7 +338,15 @@ import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, 
 import { useI18n } from "vue-i18n";
 import { module as manifest } from "../manifest";
 import ModuleContainer from "@/components/ModuleContainer.vue";
-import { LjButton, LjCalendar, LjDialog, LjField, LjIcon, LjInput } from "@/components/ui";
+import {
+  LjButton,
+  LjCalendar,
+  LjDialog,
+  LjField,
+  LjIcon,
+  LjInput,
+  LjSpinner,
+} from "@/components/ui";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
 import type {
   LjCalendarDayClick,
@@ -345,6 +358,8 @@ import ScheduledStore from "@/helpers/ScheduledStore";
 import Platform from "@/helpers/Platform";
 import $path from "@/helpers/Path";
 import $alert from "@/helpers/Alert";
+import $snackbar from "@/helpers/Snackbar";
+import { useBackgroundTasks } from "@/composables/useBackgroundTasks";
 import { ICONS } from "@/config/Icons";
 import { isHeic, heicToJpeg } from "@/helpers/ImageConvert";
 import { ModuleEnum } from "@/enums/ModuleEnum";
@@ -559,7 +574,26 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
 const autoPopulateDialog = ref(false);
 const autoPopulateFolder = ref("");
 const autoPopulateResult = ref("");
+const autoPopulateResultOk = ref(true);
+const autoPopulateScanning = ref(false);
 const autoPopulateTargetCat = ref<string | number>("");
+
+const bgTasks = useBackgroundTasks();
+const SCAN_TASK_ID = "scheduled-items:populate";
+
+function isScanTaskRunning(): boolean {
+  return bgTasks.tasks.value.some((t) => t.id === SCAN_TASK_ID && t.status === "running");
+}
+
+/**
+ * O modal é o feedback primário; quando ele já foi fechado, o resultado
+ * final da varredura vai para a snackbar (verde = ok, vermelho = erro).
+ */
+function notifyScanResult(): void {
+  if (autoPopulateDialog.value) return;
+  if (autoPopulateResultOk.value) $snackbar.success(autoPopulateResult.value);
+  else $snackbar.error(autoPopulateResult.value);
+}
 
 function openAutoPopulate(): void {
   if (!Platform.isDesktop) {
@@ -571,6 +605,7 @@ function openAutoPopulate(): void {
   const cat = categories.value.find((c) => String(c.id) === String(autoPopulateTargetCat.value));
   autoPopulateFolder.value = (cat?.auto_folder as string) || "";
   autoPopulateResult.value = "";
+  autoPopulateResultOk.value = true;
   autoPopulateDialog.value = true;
 }
 
@@ -581,68 +616,113 @@ async function chooseAutoFolder(): Promise<void> {
 
 async function executeAutoPopulate(): Promise<void> {
   if (!autoPopulateFolder.value || !autoPopulateTargetCat.value) return;
-  const catId = String(autoPopulateTargetCat.value);
-  const files = await Platform.readDir(autoPopulateFolder.value);
-  if (!files || !files.length) {
-    autoPopulateResult.value = tm("add_auto_no_files");
+  if (isScanTaskRunning()) {
+    autoPopulateScanning.value = true;
     return;
   }
-  let created = 0;
-  let updated = 0;
-  const PADRAO = /(\d{2})-(\d{2})-(\d{2})_(.+)\.\w+$/;
-  const existingItems = $liturgy.scheduledItems();
-  for (const file of files) {
-    const m = file.match(PADRAO);
-    if (!m) continue;
-    const [, dd, mm, yy] = m;
-    const year = `20${yy}`;
-    const date = `${year}-${mm}-${dd}`;
-    const path = `${autoPopulateFolder.value}/${file}`;
-    const nome =
-      m[4] ||
-      (path
-        ? path
-            .split(/[\\/]/)
-            .pop()
-            ?.replace(/\.[^.]+$/, "") || ""
-        : "");
-    // Verifica se já existe item para essa categoria+dia — se sim, sobrescreve.
-    const existing = existingItems.find((i) => i.data === date && String(i.categoria) === catId);
-    if (existing) {
-      await ScheduledStore.saveItem({ ...existing, arquivo: path, nome });
-      updated++;
+  autoPopulateScanning.value = true;
+  autoPopulateResult.value = "";
+  autoPopulateResultOk.value = true;
+
+  let cancelled = false;
+  bgTasks.registerTask(SCAN_TASK_ID, "shell.background_tasks.scheduled_scan", () => {
+    cancelled = true;
+  });
+
+  try {
+    const catId = String(autoPopulateTargetCat.value);
+    const files = await Platform.readDir(autoPopulateFolder.value);
+    if (cancelled) return;
+    if (!files || !files.length) {
+      autoPopulateResultOk.value = false;
+      autoPopulateResult.value = tm("add_auto_no_files");
+      bgTasks.completeTask(SCAN_TASK_ID);
+      notifyScanResult();
+      return;
+    }
+    let created = 0;
+    let updated = 0;
+    let lastPct = 0;
+    const PADRAO = /(\d{2})-(\d{2})-(\d{2})_(.+)\.\w+$/;
+    const existingItems = $liturgy.scheduledItems();
+    for (let idx = 0; idx < files.length; idx++) {
+      if (cancelled) break;
+      const file = files[idx];
+      // Progresso por arquivo, atualizado só quando o percentual inteiro muda.
+      const pct = Math.round(((idx + 1) / files.length) * 100);
+      if (pct !== lastPct) {
+        lastPct = pct;
+        bgTasks.updateTask(SCAN_TASK_ID, {
+          progress: pct,
+          detail: `${idx + 1}/${files.length} — ${tm("add_auto_scanning")}`,
+        });
+      }
+      const m = file.match(PADRAO);
+      if (!m) continue;
+      const [, dd, mm, yy] = m;
+      const year = `20${yy}`;
+      const date = `${year}-${mm}-${dd}`;
+      const path = `${autoPopulateFolder.value}/${file}`;
+      const nome =
+        m[4] ||
+        (path
+          ? path
+              .split(/[\\/]/)
+              .pop()
+              ?.replace(/\.[^.]+$/, "") || ""
+          : "");
+      // Verifica se já existe item para essa categoria+dia — se sim, sobrescreve.
+      const existing = existingItems.find((i) => i.data === date && String(i.categoria) === catId);
+      if (existing) {
+        await ScheduledStore.saveItem({ ...existing, arquivo: path, nome });
+        updated++;
+      } else {
+        const id = uid("sch_");
+        await ScheduledStore.saveItem({
+          id,
+          categoria: catId,
+          data: date,
+          nome,
+          arquivo: path,
+          arquivo_info: "E",
+        });
+        created++;
+      }
+    }
+    if (cancelled) return;
+    if (created > 0 || updated > 0) {
+      // Salva a pasta na categoria para pré-preenchimento futuro.
+      const cat = $liturgy
+        .scheduledCategories()
+        .find((c) => String(c.id) === String(autoPopulateTargetCat.value));
+      if (cat) {
+        await ScheduledStore.saveCategory({
+          ...cat,
+          auto_folder: autoPopulateFolder.value,
+        });
+      }
+      const parts: string[] = [];
+      if (created) parts.push(tm("add_auto_created").replace("{n}", String(created)));
+      if (updated) parts.push(tm("add_auto_updated").replace("{n}", String(updated)));
+      autoPopulateResultOk.value = true;
+      autoPopulateResult.value = parts.join(". \n") + ".";
+      await refresh();
+      selectedCategoryId.value = catId;
     } else {
-      const id = uid("sch_");
-      await ScheduledStore.saveItem({
-        id,
-        categoria: catId,
-        data: date,
-        nome,
-        arquivo: path,
-        arquivo_info: "E",
-      });
-      created++;
+      autoPopulateResultOk.value = false;
+      autoPopulateResult.value = tm("add_auto_no_files");
     }
-  }
-  if (created > 0 || updated > 0) {
-    // Salva a pasta na categoria para pré-preenchimento futuro.
-    const cat = $liturgy
-      .scheduledCategories()
-      .find((c) => String(c.id) === String(autoPopulateTargetCat.value));
-    if (cat) {
-      await ScheduledStore.saveCategory({
-        ...cat,
-        auto_folder: autoPopulateFolder.value,
-      });
+    bgTasks.completeTask(SCAN_TASK_ID);
+    notifyScanResult();
+  } catch {
+    if (!cancelled) {
+      autoPopulateResultOk.value = false;
+      autoPopulateResult.value = tm("add_auto_error");
+      bgTasks.updateTask(SCAN_TASK_ID, { status: "error", completedAt: Date.now() });
+      notifyScanResult();
     }
-    const parts: string[] = [];
-    if (created) parts.push(tm("add_auto_created").replace("{n}", String(created)));
-    if (updated) parts.push(tm("add_auto_updated").replace("{n}", String(updated)));
-    autoPopulateResult.value = parts.join(". \n") + ".";
-    await refresh();
-    selectedCategoryId.value = catId;
-  } else {
-    autoPopulateResult.value = tm("add_auto_no_files");
+  } finally {
+    autoPopulateScanning.value = false;
   }
 }
 
@@ -1373,5 +1453,12 @@ async function removeEntry(): Promise<void> {
 .si-auto-result--ok {
   background: var(--lj-success-soft);
   color: var(--lj-success);
+}
+.si-auto-result--busy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lj-space-2);
+  background: var(--lj-surface-bg-soft);
+  color: var(--lj-text-muted);
 }
 </style>

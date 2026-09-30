@@ -1134,7 +1134,8 @@
       "packages": "Pacotes",
       "gloss": "Glosa",
       "libras_music": "Tradução Libras — Músicas",
-      "libras_bible": "Tradução Libras — Bíblia"
+      "libras_bible": "Tradução Libras — Bíblia",
+      "scheduled_scan": "Escaneando itens agendados"
     },
     "appmenu_items": {
       "about": "Sobre...",
