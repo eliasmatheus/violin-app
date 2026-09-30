@@ -227,6 +227,8 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ steps.meta.outputs.title }}
           prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          # O rascunho permite conferir todos os instaladores e manifests antes de publicar.
+          draft: true
           body: ${{ steps.notes.outputs.body }}
           fail_on_unmatched_files: true
           files: |
