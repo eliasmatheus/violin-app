@@ -1,26 +1,39 @@
 /**
  * Regenerate the browser, PWA and desktop icons from src/assets/img/logo.svg.
+ * Use --desktop-only when the public assets are already current.
  * Requires the project's Playwright browser. macOS additionally needs iconutil.
  */
 import { chromium } from "playwright";
 import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const source = readFileSync("src/assets/img/logo.svg", "utf8");
-const paths = [...source.matchAll(/<path\b[^>]*\/>/g)].map(([path]) => path);
-const circlePath = source.match(/<path id="circulo-amarelo"[^>]* d="([^"]+)"\/>/)?.[1];
-if (paths.length !== 5 || !circlePath) throw new Error("O SVG do logo precisa ter as cinco camadas esperadas.");
+const desktopOnly = process.argv.includes("--desktop-only");
+const artwork = source.match(/<svg\b([^>]*)>([\s\S]*)<\/svg>\s*$/);
+const viewBox = artwork?.[1].match(/\bviewBox="([^"]+)"/)?.[1];
+const style = artwork?.[1].match(/\bstyle="([^"]+)"/)?.[1] || "";
+if (!artwork || !viewBox) throw new Error("O SVG do logo precisa ter um viewBox.");
+const sourceHash = createHash("sha256").update(source).digest("hex");
+const manifestPath = "build/brand-assets.json";
+/** @type {{ mac?: { source: string, files: Record<string, string> } }} */
+const previousManifest = existsSync(manifestPath)
+  ? JSON.parse(readFileSync(manifestPath, "utf8"))
+  : {};
 
-writeFileSync("public/logo.svg", source);
-writeFileSync("public/ico/favicon.svg", source);
+if (!desktopOnly) {
+  writeFileSync("public/logo.svg", source);
+  writeFileSync("public/ico/favicon.svg", source);
+}
 
 // Electron expects a flattened .icns, so this SVG composes the macOS-only
-// depth and highlights around the exact five paths of the supplied artwork.
+// plate around the complete, editable artwork, including its groups and clips.
 // The square canvas has a transparent margin for older macOS Dock versions.
-const macSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+const macSvg = `<!-- brand-source-sha256: ${sourceHash} -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="plate" x1=".05" y1="0" x2=".95" y2="1" gradientUnits="objectBoundingBox">
       <stop stop-color="#FFFFFF"/><stop offset=".20" stop-color="#FBFEFF"/>
@@ -31,12 +44,6 @@ const macSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="102
       <stop offset=".36" stop-color="#FFFFFF" stop-opacity=".10"/>
       <stop offset=".74" stop-color="#E7F5FF" stop-opacity=".04"/>
       <stop offset="1" stop-color="#BCD9ED" stop-opacity=".22"/>
-    </linearGradient>
-    <linearGradient id="markLight" x1="0" y1="0" x2=".8" y2="1">
-      <stop stop-color="#FFFFFF" stop-opacity=".31"/>
-      <stop offset=".28" stop-color="#FFFFFF" stop-opacity=".10"/>
-      <stop offset=".62" stop-color="#FFFFFF" stop-opacity="0"/>
-      <stop offset="1" stop-color="#001F5E" stop-opacity=".25"/>
     </linearGradient>
     <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
       <stop stop-color="#FFFFFF" stop-opacity="1"/>
@@ -59,20 +66,23 @@ const macSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="102
     <path d="M111 330 C237 90 508 100 723 153 C574 159 412 219 306 342 C235 424 171 501 100 518 Z" fill="#D9EEFA" opacity=".28"/>
     <path d="M111 731 C306 861 655 826 914 619 L925 926 H99 Z" fill="#B9D7E9" opacity=".16"/>
   </g>
-  <svg x="165" y="171" width="694" height="681" viewBox="0 0 1138 1115" overflow="visible">
-    <g filter="url(#markShadow)">${paths.join("")}</g>
-    <path d="${circlePath}" fill="url(#markLight)"/>
-    <path d="${circlePath}" fill="none" stroke="url(#edge)" stroke-width="4" opacity=".58"/>
-  </svg>
+  <g filter="url(#markShadow)">
+    <svg x="165" y="165" width="694" height="694" viewBox="${viewBox}" style="${style}" overflow="visible">${artwork[2]}</svg>
+  </g>
   <rect x="100.5" y="100.5" width="823" height="823" rx="199.5" fill="none" stroke="url(#edge)" stroke-width="3"/>
 </svg>`;
 writeFileSync("build/icon-mac.svg", macSvg);
 
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 1024, height: 1024 }, deviceScaleFactor: 1 });
+const page = await browser.newPage({
+  viewport: { width: 1024, height: 1024 },
+  deviceScaleFactor: 1,
+});
 async function render(svg, size) {
   await page.setViewportSize({ width: size, height: size });
-  await page.setContent(`<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}svg{display:block;width:100%;height:100%}</style>${svg}`);
+  await page.setContent(
+    `<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}svg{display:block;width:100%;height:100%}</style>${svg}`
+  );
   return page.screenshot({ omitBackground: true, animations: "disabled" });
 }
 
@@ -80,11 +90,13 @@ const pngs = new Map();
 for (const size of [16, 32, 48, 144, 152, 180, 192, 256, 512, 1200]) {
   pngs.set(size, await render(source, size));
 }
-for (const size of [16, 32, 144, 152, 180, 192, 512]) {
-  writeFileSync(`public/ico/favicon-${size}x${size}.png`, pngs.get(size));
+if (!desktopOnly) {
+  for (const size of [16, 32, 144, 152, 180, 192, 512]) {
+    writeFileSync(`public/ico/favicon-${size}x${size}.png`, pngs.get(size));
+  }
+  writeFileSync("public/ico/favicon.png", pngs.get(1200));
+  writeFileSync("public/logo_violin.png", pngs.get(1200));
 }
-writeFileSync("public/ico/favicon.png", pngs.get(512));
-writeFileSync("public/logo_violin.png", pngs.get(1200));
 writeFileSync("build/icon-512.png", pngs.get(512));
 
 // ICO stores PNG entries, which Windows supports from Vista onward.
@@ -106,7 +118,7 @@ function ico(sizes) {
   });
   return Buffer.concat([header, ...sizes.map((size) => pngs.get(size))]);
 }
-writeFileSync("public/favicon.ico", ico([16, 32, 48, 256]));
+if (!desktopOnly) writeFileSync("public/favicon.ico", ico([16, 32, 48, 256]));
 writeFileSync("build/icon.ico", ico([16, 32, 48, 256]));
 
 if (process.platform === "darwin") {
@@ -131,4 +143,25 @@ if (process.platform === "darwin") {
   }
 }
 await browser.close();
-console.log("Logo, PWA, Windows, Linux e macOS: assets gerados.");
+const checksum = (path) => createHash("sha256").update(readFileSync(path)).digest("hex");
+const desktopFiles = ["build/icon-512.png", "build/icon.ico"];
+const macFiles = ["build/icon-mac.svg", "build/icon-mac.png", "build/icon-mac.icns"];
+const manifest = {
+  source: sourceHash,
+  desktop: Object.fromEntries(desktopFiles.map((path) => [path, checksum(path)])),
+  mac:
+    process.platform === "darwin"
+      ? {
+          source: sourceHash,
+          files: Object.fromEntries(macFiles.map((path) => [path, checksum(path)])),
+        }
+      : previousManifest.mac || null,
+};
+writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+console.log(
+  process.platform === "darwin"
+    ? desktopOnly
+      ? "Ícones desktop de Windows, Linux e macOS gerados."
+      : "Logo, PWA, Windows, Linux e macOS: assets gerados."
+    : "Logo e ícones de Windows/Linux gerados; macOS requer iconutil."
+);

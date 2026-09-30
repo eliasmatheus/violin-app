@@ -13,6 +13,7 @@
   "main": "electron/main.cjs",
   "scripts": {
     "assets:brand": "node scripts/generate-brand-assets.mjs",
+    "validate:brand-assets": "node scripts/validate-brand-assets.mjs",
     "version:major": "npm version major",
     "version:minor": "npm version minor",
     "version:patch": "npm version patch",
@@ -26,7 +27,7 @@
     "validate:release-version": "node scripts/validate-release-version.mjs",
     "validate:release-artifacts": "node scripts/validate-release-artifacts.mjs",
     "validate:observability-release": "node scripts/validate-observability-release.mjs",
-    "prebuild": "npm run validate:agent-context && npm run validate:manifests && npm run validate:release-version && npm run typecheck",
+    "prebuild": "npm run validate:agent-context && npm run validate:manifests && npm run validate:brand-assets && npm run validate:release-version && npm run typecheck",
     "build": "vite build",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{vue,js,json}\"",

@@ -1,0 +1,15 @@
+{
+  "source": "8a4cd20ce89f93db46aabbb88f3f3954bd06ebb853e2876c54f210d956457da9",
+  "desktop": {
+    "build/icon-512.png": "aaa30bdfd584bd8b2c62db290cb2b6823b8be54a93027c8938ec8af29da1122e",
+    "build/icon.ico": "7a7bb2d0390a158babf35da407504f6d0e74e23afc0aca1d0b56adbbd6717867"
+  },
+  "mac": {
+    "source": "8a4cd20ce89f93db46aabbb88f3f3954bd06ebb853e2876c54f210d956457da9",
+    "files": {
+      "build/icon-mac.svg": "96f2945335b2b10400406ac464c4dc7e918ee24d7303d50d847318626245fe05",
+      "build/icon-mac.png": "dc397b56b98a516fb709919453c98851560aa9124a9539dde38c7430c7de7210",
+      "build/icon-mac.icns": "f97c521f2c118cf1e6ff39b5d53e9cf2dffe9e452af997ee6f0c04f9a591992b"
+    }
+  }
+}
