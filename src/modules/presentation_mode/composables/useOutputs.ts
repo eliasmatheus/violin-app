@@ -9,14 +9,16 @@ import {
 } from "@/helpers/ProjectionWindows";
 import { isWebWindowOpen } from "@/helpers/projection/webWindow";
 import { PROJECTION_TYPE } from "@/constants/Projection";
+import { KEYS } from "@/constants/UserDataKeys";
+import $appdata from "@/helpers/AppData";
 import { useDisplays } from "@/composables/useDisplays";
 
 /**
  * As duas saídas do Modo apresentação: a tela principal e o retorno de palco.
  *
  * "Tela principal" não é uma janela só: música, Bíblia, arquivo e vídeo
- * on-line abrem cada um a sua no mesmo monitor. Ela está no ar se qualquer
- * uma delas (ou o retorno) estiver aberta — as mesmas que "Parar" fecha.
+ * on-line abrem cada um a sua no mesmo monitor — e o retorno também tem uma
+ * por conteúdo. Cada saída está no ar se qualquer janela dela estiver aberta.
  * Projeção de fundo e anúncios têm botão próprio nos seus módulos.
  *
  * A tela limpa é estado da janela principal, anunciado às janelas de
@@ -27,10 +29,16 @@ import { useDisplays } from "@/composables/useDisplays";
 
 const MAIN_SCREEN_FEATURES = [
   PROJECTION_TYPE.MUSIC,
-  PROJECTION_TYPE.RETURN,
   PROJECTION_TYPE.BIBLE,
   PROJECTION_TYPE.FILE,
   PROJECTION_TYPE.ONLINE_VIDEO,
+];
+const RETURN_FEATURES = [
+  PROJECTION_TYPE.RETURN,
+  PROJECTION_TYPE.FILE_RETURN,
+  PROJECTION_TYPE.ONLINE_VIDEO_RETURN,
+  PROJECTION_TYPE.BACKGROUND_RETURN,
+  PROJECTION_TYPE.BIBLE_RETURN,
 ];
 
 /** Janelas abertas não avisam quando fecham sozinhas; o botão Projetar também pergunta a cada 2 s. */
@@ -49,7 +57,9 @@ export interface ReturnOverride {
 }
 const _returnOverride = ref<ReturnOverride | null>(null);
 export { _returnOverride as returnOverride };
-const _showing = ref(false);
+const _mainOpen = ref(false);
+const _returnOpen = ref(false);
+const _showing = computed(() => _mainOpen.value || _returnOpen.value);
 const _busy = ref(false);
 let _responderInstalled = false;
 
@@ -82,12 +92,25 @@ async function _openFeatures(): Promise<string[]> {
       /* cai no caminho da web */
     }
   }
-  return MAIN_SCREEN_FEATURES.filter((f) => isWebWindowOpen(f));
+  return [...MAIN_SCREEN_FEATURES, ...RETURN_FEATURES].filter((f) => isWebWindowOpen(f));
+}
+
+/**
+ * O ribbon habilita Iniciar, Parar e Limpar tela pelo que dá para fazer
+ * agora — ele lê o AppData, não os refs daqui.
+ */
+function _publish(): void {
+  const idle = !_busy.value;
+  $appdata.set(KEYS.MODULES.PRESENTATION_MODE.CAN_START, idle && !(_mainOpen.value && _returnOpen.value));
+  $appdata.set(KEYS.MODULES.PRESENTATION_MODE.CAN_STOP, idle && _showing.value);
+  $appdata.set(KEYS.MODULES.PRESENTATION_MODE.CAN_CLEAR, _showing.value && !_cleared.value);
 }
 
 export async function refreshShowing(): Promise<void> {
   const open = await _openFeatures();
-  _showing.value = MAIN_SCREEN_FEATURES.some((f) => open.includes(f));
+  _mainOpen.value = MAIN_SCREEN_FEATURES.some((f) => open.includes(f));
+  _returnOpen.value = RETURN_FEATURES.some((f) => open.includes(f));
+  _publish();
 }
 
 function _overridePayload(): Record<string, unknown> {
@@ -105,8 +128,7 @@ export async function showOnReturn(override: ReturnOverride | null): Promise<voi
   Broadcast.send(BROADCAST_TYPE.RETURN_OVERRIDE, _overridePayload());
   if (!override) return;
   const open = await _openFeatures();
-  const returnFeatures = [PROJECTION_TYPE.RETURN, PROJECTION_TYPE.FILE_RETURN, PROJECTION_TYPE.ONLINE_VIDEO_RETURN, PROJECTION_TYPE.BACKGROUND_RETURN, PROJECTION_TYPE.BIBLE_RETURN];
-  if (!returnFeatures.some((f) => open.includes(f))) {
+  if (!RETURN_FEATURES.some((f) => open.includes(f))) {
     try {
       await openMediaWindow("return", "music", { explicit: true });
     } catch (e) {
@@ -120,11 +142,13 @@ export function setCleared(value: boolean): void {
   _installResponder();
   _cleared.value = value;
   Broadcast.send(BROADCAST_TYPE.PROJECTION_CLEAR, { active: value });
+  _publish();
 }
 
 export async function startOutputs(): Promise<void> {
   if (_busy.value) return;
   _busy.value = true;
+  _publish();
   try {
     await openMediaWindow("projection", "music", { explicit: true });
     await openMediaWindow("return", "music", { explicit: true });
@@ -140,6 +164,7 @@ export async function startOutputs(): Promise<void> {
 export async function stopOutputs(): Promise<void> {
   if (_busy.value) return;
   _busy.value = true;
+  _publish();
   try {
     await closeProjectionWindows();
     if (_cleared.value) setCleared(false);

@@ -19,6 +19,8 @@
       "lock_output": "Bloquear salida",
       "main_screen": "Pantalla principal",
       "stage_return": "Retorno de escenario",
+      "stop_main_screen": "Detener pantalla principal",
+      "stop_stage_return": "Detener retorno",
       "library_files": "Archivos",
       "library_musics": "Músicas",
       "library_videos": "Videos",

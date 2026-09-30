@@ -110,6 +110,12 @@ export const KEYS = {
       EXPANDED: `${MODULES_PRESENTATION_MODE}.expanded`,
       /** UserData: saída travada. Mora aqui porque o stateBinding do ribbon lê o UserData; o módulo zera ao abrir. */
       OUTPUT_LOCKED: `${MODULES_PRESENTATION_MODE}.output_locked`,
+      /** AppData: há saída para abrir — alguma das duas (tela principal, retorno) está fechada. */
+      CAN_START: `${MODULES_PRESENTATION_MODE}.can_start`,
+      /** AppData: há saída aberta para fechar. */
+      CAN_STOP: `${MODULES_PRESENTATION_MODE}.can_stop`,
+      /** AppData: há saída aberta e a tela ainda não está limpa. */
+      CAN_CLEAR: `${MODULES_PRESENTATION_MODE}.can_clear`,
       /** UserData: pastas do navegador de arquivos — `{ path, label }[]`. */
       LIBRARY_FOLDERS: `${MODULES_PRESENTATION_MODE}.library_folders`,
       /** UserData: arquivos marcados com estrela no navegador de arquivos. */

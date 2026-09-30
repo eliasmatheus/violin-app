@@ -660,7 +660,7 @@ const RIBBON_HANDLERS: Record<string, () => void> = {
   save_program: saveAsLiturgy,
   start: () => void startOutputs(),
   stop: () => void stopOutputs(),
-  clear: () => setCleared(!cleared.value),
+  clear: () => setCleared(true),
   previous: () => navigate("prev"),
   next: () => navigate("next"),
   lock_output: toggleLock,

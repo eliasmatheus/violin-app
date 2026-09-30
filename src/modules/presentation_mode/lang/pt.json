@@ -19,6 +19,8 @@
       "lock_output": "Travar saída",
       "main_screen": "Tela principal",
       "stage_return": "Retorno de palco",
+      "stop_main_screen": "Parar tela principal",
+      "stop_stage_return": "Parar retorno",
       "library_files": "Arquivos",
       "library_musics": "Músicas",
       "library_videos": "Vídeos",

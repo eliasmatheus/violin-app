@@ -46,9 +46,9 @@ export const contextualPages: RibbonPage[] = [
         id: `${moduleCtxId}_presentation`,
         title: "ribbon.groups.presentation",
         buttons: [
-          { id: `${moduleId}_start`, icon: ICONS.PROJECTION.START, label: `${btn}.start`, action: `${moduleId}_start`, color: "#27ae60" },
-          { id: `${moduleId}_stop`, icon: ICONS.PROJECTION.STOP, label: `${btn}.stop`, action: `${moduleId}_stop`, color: "#e74c3c" },
-          { id: `${moduleId}_clear`, icon: ICONS.PROJECTION.CLEAN, label: `${btn}.clear`, action: `${moduleId}_clear`, color: "#f39c12" },
+          { id: `${moduleId}_start`, icon: ICONS.PROJECTION.START, label: `${btn}.start`, action: `${moduleId}_start`, color: "#27ae60", enabledWhen: KEYS.MODULES.PRESENTATION_MODE.CAN_START },
+          { id: `${moduleId}_stop`, icon: ICONS.PROJECTION.STOP, label: `${btn}.stop`, action: `${moduleId}_stop`, color: "#e74c3c", enabledWhen: KEYS.MODULES.PRESENTATION_MODE.CAN_STOP },
+          { id: `${moduleId}_clear`, icon: ICONS.PROJECTION.CLEAN, label: `${btn}.clear`, action: `${moduleId}_clear`, color: "#f39c12", enabledWhen: KEYS.MODULES.PRESENTATION_MODE.CAN_CLEAR },
         ],
       },
       {
@@ -84,8 +84,8 @@ export const contextualPages: RibbonPage[] = [
         id: `${moduleCtxId}_outputs`,
         title: "ribbon.groups.outputs",
         buttons: [
-          { id: `${moduleId}_main_screen`, type: "screen", feature: PROJECTION_TYPE.MUSIC, route: PROJECTION_URL.MUSIC, icon: ICONS.PROJECTION.SCREEN_OUTLINE, label: `${btn}.main_screen`, color: "#1b4f8a" },
-          { id: `${moduleId}_stage_return`, type: "screen", feature: PROJECTION_TYPE.RETURN, route: PROJECTION_URL.RETURN, icon: ICONS.PROJECTION.RETURN, label: `${btn}.stage_return`, color: "#1b4f8a" },
+          { id: `${moduleId}_main_screen`, type: "screen", feature: PROJECTION_TYPE.MUSIC, route: PROJECTION_URL.MUSIC, icon: ICONS.PROJECTION.SCREEN_OUTLINE, label: `${btn}.main_screen`, labelActive: `${btn}.stop_main_screen`, color: "#1b4f8a" },
+          { id: `${moduleId}_stage_return`, type: "screen", feature: PROJECTION_TYPE.RETURN, route: PROJECTION_URL.RETURN, icon: ICONS.PROJECTION.RETURN, label: `${btn}.stage_return`, labelActive: `${btn}.stop_stage_return`, color: "#1b4f8a" },
         ],
       },
       {

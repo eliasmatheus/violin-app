@@ -90,6 +90,7 @@
                   :route="btn.route"
                   :icon-color="resolveBtnColor(btn)"
                   :label="$t(btn.label)"
+                  :active-label="btn.labelActive ? $t(btn.labelActive) : undefined"
                   :size="btn.size || 'large'"
                   :testid="`ribbon-btn-${btn.id}`"
                 />
@@ -101,7 +102,7 @@
                   :label="$t(resolveBtnLabel(btn))"
                   :size="btn.size || 'large'"
                   :active="isButtonActive(btn)"
-                  :disabled="btn.disabled"
+                  :disabled="isBtnDisabled(btn)"
                   :testid="`ribbon-btn-${btn.id}`"
                   @click="executeButton(btn)"
                   @pointerenter="onButtonIntent(btn)"
@@ -248,7 +249,7 @@
                   :label="$t(resolveBtnLabel(btn))"
                   :size="btn.size || 'small'"
                   :active="isButtonActive(btn)"
-                  :disabled="btn.disabled"
+                  :disabled="isBtnDisabled(btn)"
                   :testid="`ribbon-btn-${btn.id}`"
                   @click="executeButton(btn)"
                 />
@@ -665,6 +666,11 @@ const EDITOR_ACTIONS = new Set<string>([
   "editor_view_4_3",
   "editor_view_16_9",
 ]);
+
+function isBtnDisabled(btn: RibbonButton): boolean {
+  if (btn.disabled) return true;
+  return !!btn.enabledWhen && $appdata.get<boolean>(btn.enabledWhen, false) !== true;
+}
 
 function resolveBtnIcon(btn: RibbonButton): string {
   if (btn.stateBinding) {
