@@ -17,6 +17,7 @@ import "@/assets/styles/appmenu-options.css";
 import ModuleManager from "@/helpers/ModuleManager";
 import $storage from "@/helpers/Storage";
 import Platform from "@/helpers/Platform";
+import $alert from "@/helpers/Alert";
 import {
   API_URL,
   API_URL_DB,
@@ -1520,11 +1521,15 @@ $storage.hydrate().then(async () => {
           }
         };
 
-        // O Esc é a saída de emergência: tira da tela na hora, sem diálogo.
-        // Um erro no telão não pode esperar o operador achar o "Sim".
-        // Com o Modo apresentação aberto as janelas ficam — fechá-las é o
-        // "Parar apresentação"; o Esc só tira o conteúdo.
-        const keepWindows = AppData.get(KEYS.MODULES.PRESENTATION_MODE.SHOW, false) === true;
+        // Com o Modo apresentação aberto o Esc é a saída de emergência: tira da
+        // tela na hora, sem diálogo — um erro no telão não pode esperar o
+        // operador achar o "Sim". E as janelas ficam: fechá-las é o "Parar
+        // apresentação". Fora dele, vale a confirmação de sempre.
+        const immediate = AppData.get(KEYS.MODULES.PRESENTATION_MODE.SHOW, false) === true;
+        const stop = (confirmKey, action) => {
+          if (immediate) action();
+          else $alert.yesno(confirmKey, (btn) => btn === "yes" && action());
+        };
         Broadcast.send(BROADCAST_TYPE.RETURN_OVERRIDE, { active: false });
 
         // Projeção de anúncios
@@ -1537,12 +1542,16 @@ $storage.hydrate().then(async () => {
         // Projeção de arquivos de imagem e vídeo. O "clear" também fica no
         // cache — não é arquivo no ar.
         else if (lastFile && lastFile.action !== "clear") {
-          Broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, { action: "clear" });
-          Media.close(true, false, keepWindows);
-          closeEverythingElse();
+          stop("modules.media.alerts.close_projection", () => {
+            Broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, { action: "clear" });
+            Media.close(true, false, immediate);
+            closeEverythingElse();
+          });
         } else if (_mediaIsActive()) {
-          Media.close(true, false, keepWindows);
-          closeEverythingElse();
+          stop("modules.media.alerts.close", () => {
+            Media.close(true, false, immediate);
+            closeEverythingElse();
+          });
         } else {
           closeEverythingElse();
         }

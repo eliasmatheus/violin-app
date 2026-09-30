@@ -99,7 +99,7 @@
               tabindex="0"
               :title="folder.path"
               @click="lib.openSource(folder.path)"
-              @keydown.enter="lib.openSource(folder.path)"
+              @keydown.enter.self="lib.openSource(folder.path)"
             >
               <LjIcon :icon="ICONS.UI.FOLDER" :size="15" />
               <span class="pm-folder__label">{{ folder.label }}</span>
@@ -145,7 +145,7 @@
               :data-testid="`pm-file-${entry.name}`"
               @click="onClick(entry)"
               @dblclick="onOpen(entry)"
-              @keydown.enter="onOpen(entry)"
+              @keydown.enter.self="onOpen(entry)"
             >
               <span class="pm-file__thumb">
                 <img v-if="thumbOf(entry)" :src="thumbOf(entry)" alt="" loading="lazy" />
@@ -302,7 +302,8 @@ const TABS = [
   { id: "files", label: "library.files", icon: ICONS.UI.FOLDER_OPEN },
   { id: "musics", label: "library.musics", icon: ICONS.MUSIC.MUSIC },
 ] as const;
-const tab = ref<(typeof TABS)[number]["id"]>("files");
+/** Controlada de fora: o ribbon também troca a aba. */
+const tab = defineModel<(typeof TABS)[number]["id"]>("tab", { default: "files" });
 
 /* ─── Altura por arraste da borda de cima ─── */
 

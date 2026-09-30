@@ -13,7 +13,7 @@
         :data-testid="`pm-item-${item.id}`"
         @click="emit('select')"
         @dblclick="emit('activate')"
-        @keydown.enter.prevent="emit('activate')"
+        @keydown.enter.self.prevent="emit('activate')"
       >
         <span class="pm-row__time">{{ start }}</span>
         <button

@@ -7,7 +7,7 @@
       :data-testid="`pm-song-${song.id_music}`"
       @click="emit('preview')"
       @dblclick="emit('play', 'sung')"
-      @keydown.enter="emit('play', 'sung')"
+      @keydown.enter.self="emit('play', 'sung')"
     >
       <span class="pm-song__track">{{ song.track ?? "" }}</span>
       <LjIcon :icon="ICONS.MUSIC.MUSIC" :size="14" class="pm-song__icon" />

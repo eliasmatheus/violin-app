@@ -51,8 +51,8 @@
         :aria-valuetext="clock(shownTime)"
         data-testid="pm-video-timeline"
         @pointerdown="startSeek"
-        @keydown.left.prevent="Media.advanceTime(-5)"
-        @keydown.right.prevent="Media.advanceTime(5)"
+        @keydown.left.prevent="!locked && Media.advanceTime(-5)"
+        @keydown.right.prevent="!locked && Media.advanceTime(5)"
       >
         <span class="pm-video__buffer" :style="{ width: `${audio.buffered.value}%` }" />
         <span class="pm-video__progress" :style="{ width: `${shownPercent}%` }" />

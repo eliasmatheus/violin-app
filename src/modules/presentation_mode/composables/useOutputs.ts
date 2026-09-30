@@ -163,8 +163,10 @@ export function useOutputs() {
   });
   onBeforeUnmount(() => {
     if (timer) clearInterval(timer);
-    // Fechar o módulo não pode deixar o telão preso no fundo.
+    // Fechar o módulo não pode deixar o telão preso no fundo nem o retorno
+    // preso num conteúdo que ninguém mais controla.
     if (_cleared.value) setCleared(false);
+    if (_returnOverride.value) void showOnReturn(null);
   });
 
   /** Número do monitor do papel ("projection" / "stage"), ou `null` sem monitor. */

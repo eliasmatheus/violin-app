@@ -68,6 +68,7 @@
       </section>
 
       <LibraryPanel
+        v-model:tab="libraryTab"
         :full-width="libraryFullWidth"
         :tall="libraryHeight > LIBRARY_DEFAULT_HEIGHT"
         :height="libraryHeight"
@@ -791,6 +792,8 @@ function saveAsLiturgy(): void {
 
 // Todas as ações do ribbon contextual chegam aqui. As que ainda não têm
 // handler são ignoradas até a fase que as implementa.
+const libraryTab = ref<"files" | "musics">("files");
+
 const RIBBON_HANDLERS: Record<string, () => void> = {
   toggle_expand: toggleExpand,
   new_session: openNewSession,
@@ -806,6 +809,9 @@ const RIBBON_HANDLERS: Record<string, () => void> = {
   next: () => navigate("next"),
   lock_output: toggleLock,
   go_to_slide: goToSlidePrompt,
+  library_files: () => (libraryTab.value = "files"),
+  library_musics: () => (libraryTab.value = "musics"),
+  slide_grid: focusLive,
 };
 
 useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
