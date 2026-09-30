@@ -117,4 +117,16 @@ function onKeydown(e: KeyboardEvent): void {
   gap: 2px;
   flex-shrink: 0;
 }
+
+@media (max-width: 700px) {
+  .fpb-footer {
+    height: 44px;
+    padding-inline: var(--lj-space-2);
+  }
+
+  .fpb-actions :deep(.lj-btn) {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
 </style>

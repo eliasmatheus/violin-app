@@ -256,6 +256,19 @@ function onDismiss(event: Event): void {
   background: var(--lj-surface-bg-soft);
 }
 
+@media (max-width: 600px) {
+  .lj-dialog__footer {
+    flex-wrap: wrap;
+    padding-inline: var(--lj-space-4);
+    padding-bottom: calc(var(--lj-space-4) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .lj-dialog__footer > button,
+  .lj-dialog__footer > [role="button"] {
+    min-height: 44px;
+  }
+}
+
 @keyframes lj-dialog-fade {
   from {
     opacity: 0;

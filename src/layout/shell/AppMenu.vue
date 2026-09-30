@@ -17,7 +17,12 @@
     <Teleport to="body">
       <Transition name="app-menu" @enter="descerBotoes" @leave="restaurarBotoes">
         <div v-if="open" class="app-menu-overlay" @click.self="close">
-          <div class="app-menu-panel" role="menu" :aria-label="$t('shell.appmenu')">
+          <div
+            class="app-menu-panel"
+            :class="{ 'app-menu-panel--web': !Platform.isDesktop }"
+            role="menu"
+            :aria-label="$t('shell.appmenu')"
+          >
             <header
               class="app-menu-header"
               :class="{ 'app-menu-header--mac': hasOverlayTrafficLights }"
@@ -37,7 +42,7 @@
             </header>
 
             <div class="app-menu-body">
-              <nav class="app-menu-sidebar">
+              <nav ref="navigation" class="app-menu-sidebar" :aria-label="$t('shell.appmenu')">
                 <button
                   v-for="item in items"
                   :key="item.id"
@@ -46,6 +51,7 @@
                   :class="{ 'app-menu-item--active': activeItem?.id === item.id }"
                   :title="$t(item.label)"
                   role="menuitem"
+                  :aria-current="activeItem?.id === item.id ? 'page' : undefined"
                   @click="selectItem(item)"
                 >
                   <LjIcon :icon="item.icon" />
@@ -98,7 +104,7 @@
 
 <script setup>
 import { LjIcon } from "@/components/ui";
-import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent } from "vue";
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, defineAsyncComponent } from "vue";
 
 const loadAppMenuOpcoes = () => import("./AppMenuOpcoes.vue");
 const AppMenuOpcoes = defineAsyncComponent(loadAppMenuOpcoes);
@@ -136,6 +142,7 @@ const hasOverlayTrafficLights = computed(
 
 const open = ref(false);
 const trigger = ref(null);
+const navigation = ref(null);
 const activeItem = ref(null);
 const renderedItem = ref(null);
 let renderTimer = null;
@@ -276,6 +283,7 @@ function openMenu() {
   const item = items.value.find((i) => i.id === "settings") || items.value[0];
   activeItem.value = item;
   scheduleRenderedItem(item);
+  revealActiveItem();
   document.addEventListener("keydown", onKeydown);
 }
 
@@ -288,7 +296,17 @@ function openAt(itemId) {
   const item = items.value.find((i) => i.id === itemId) || items.value[0];
   activeItem.value = item;
   scheduleRenderedItem(item);
+  revealActiveItem();
   document.addEventListener("keydown", onKeydown);
+}
+
+function revealActiveItem() {
+  void nextTick(() => {
+    navigation.value?.querySelector(".app-menu-item--active")?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+  });
 }
 
 function close() {
@@ -383,6 +401,7 @@ function selectItem(item) {
   if (item.inline) {
     // Renderiza dentro do menu, não fecha. Sem cortina para proteger, a troca é imediata.
     showItem(item);
+    revealActiveItem();
     return;
   }
   close();
@@ -495,6 +514,11 @@ function onOpenOptions(e) {
 
 .app-menu-btn--open {
   background: var(--lj-shell-chrome-hover);
+}
+
+.app-menu--compact-web .app-menu-btn {
+  min-height: 44px;
+  height: 44px;
 }
 
 /* Painel fullscreen */
@@ -701,13 +725,97 @@ function onOpenOptions(e) {
 }
 
 @media (max-width: 560px) {
+  .app-menu-btn {
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .app-menu-overlay,
+  .app-menu-panel {
+    height: 100dvh;
+  }
+
+  .app-menu-body {
+    flex-direction: column;
+  }
+
+  .app-menu-sidebar {
+    width: 100%;
+    min-height: 48px;
+    flex-direction: row;
+    flex-shrink: 0;
+    align-items: stretch;
+    gap: var(--lj-space-1);
+    padding: 0 var(--lj-space-4);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-padding-inline: var(--lj-space-4);
+    scrollbar-width: none;
+  }
+
+  .app-menu-sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-menu-item {
+    flex: 0 0 auto;
+    min-height: 48px;
+    gap: var(--lj-space-3);
+    padding: 0 var(--lj-space-4);
+    white-space: nowrap;
+  }
+
+  .app-menu-item-label {
+    display: inline;
+  }
+
   .app-menu-content {
-    padding: var(--lj-space-5) var(--lj-space-6) var(--lj-space-6);
+    min-width: 0;
+    padding: var(--lj-space-5) var(--lj-space-6)
+      calc(var(--lj-space-6) + env(safe-area-inset-bottom));
   }
 
   .app-menu-header {
-    padding: 0 var(--lj-space-5);
+    height: calc(var(--lj-appmenu-header-height) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) var(--lj-space-5) 0;
     gap: var(--lj-space-4);
+  }
+
+  .app-menu-back {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .app-menu-header-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1000px) and (pointer: coarse) {
+  .app-menu-panel--web .app-menu-back {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .app-menu-panel--web .app-menu-sidebar {
+    width: 200px;
+  }
+
+  .app-menu-panel--web .app-menu-item {
+    justify-content: flex-start;
+    gap: var(--lj-space-3);
+    min-height: 44px;
+    height: 44px;
+    padding-inline: var(--lj-space-5);
+  }
+
+  .app-menu-panel--web .app-menu-item-label {
+    display: inline;
   }
 }
 

@@ -1,5 +1,8 @@
 <template>
-  <div class="shell-root" :class="{ 'shell-fading-in': !ready }">
+  <div
+    class="shell-root"
+    :class="{ 'shell-fading-in': !ready, 'shell-root--web': !Platform.isDesktop }"
+  >
     <AppSystemBar />
 
     <RibbonBar />
@@ -7,11 +10,7 @@
     <!-- PageControl interno (tabs dos módulos abertos) -->
     <OpenModulesTabs />
 
-    <main
-      class="shell-main"
-      :class="{ 'shell-main--active': footerActive }"
-      :style="{ '--footer-height': footerHeight }"
-    >
+    <main class="shell-main">
       <div class="shell-grid" :class="{ 'shell-grid--with-sidebar': showLiturgySidebar }">
         <Transition name="chat-drawer-slide">
           <ChatDrawer v-if="Platform.isDesktop && (isChatOpen || isPinned)" />
@@ -113,7 +112,6 @@ import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { registerShell } from "@/composables/useShell";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { useViewport } from "@/composables/useViewport";
-import { useFileProjection } from "@/composables/useFileProjection";
 import { useProjectionShutdown } from "@/composables/useProjectionShutdown";
 import { useBackgroundTasks } from "@/composables/useBackgroundTasks";
 import { hasOpenWebWindows } from "@/helpers/projection/webWindow";
@@ -165,30 +163,11 @@ const liturgyModuleOpen = computed(() => {
 });
 
 const showLiturgySidebar = computed(
-  () => !liturgyModuleOpen.value && $userdata.get<boolean>(KEYS.SHELL.LITURGY_VISIBLE, true) !== false
+  () =>
+    !liturgyModuleOpen.value && $userdata.get<boolean>(KEYS.SHELL.LITURGY_VISIBLE, true) !== false
 );
 
-const fp = useFileProjection();
-
 useProjectionShutdown();
-
-const playerMinimized = computed(() => {
-  try {
-    return $appdata.get<boolean>(KEYS.MODULES.MEDIA.MINIMIZED, false) === true;
-  } catch (_) {
-    return false;
-  }
-});
-
-const hasProjection = computed(() => fp.isProjecting.value);
-
-const footerActive = computed(() => playerMinimized.value || hasProjection.value);
-
-const footerHeight = computed(() => {
-  if (playerMinimized.value) return "var(--lj-player-height)";
-  if (hasProjection.value) return "36px";
-  return "0px";
-});
 
 // Listeners externos (eventos globais que substituem acoplamento direto via shell._ref)
 const onOpenCommandPalette = () => {
@@ -751,6 +730,7 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 100vh;
   min-height: 100dvh;
+  overflow: hidden;
   backface-visibility: hidden;
   transition: opacity 120ms ease-out;
 }
@@ -773,11 +753,8 @@ onBeforeUnmount(() => {
   min-height: 0;
   max-width: 100%;
   overflow: hidden;
+  padding-bottom: var(--lj-dock-offset, 0px);
   transition: padding-bottom 0.3s ease;
-}
-
-.shell-main--active {
-  padding-bottom: var(--footer-height);
 }
 .shell-grid {
   position: relative;
@@ -812,7 +789,22 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 700px) {
+  .shell-root {
+    --lj-sidebar-collapsed: 44px;
+    min-height: 0;
+  }
+
   .shell-grid--with-sidebar .shell-center {
+    margin-right: var(--lj-sidebar-collapsed);
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1000px) and (pointer: coarse) {
+  .shell-root--web {
+    --lj-sidebar-collapsed: 45px;
+  }
+
+  .shell-root--web .shell-grid--with-sidebar .shell-center {
     margin-right: var(--lj-sidebar-collapsed);
   }
 }

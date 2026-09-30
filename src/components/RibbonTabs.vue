@@ -13,7 +13,7 @@
         'rtab--ctx-active': page.contextual && store.activePage === page.id,
       }"
       :aria-selected="store.activePage === page.id"
-      @click.stop="store.selectPage(page.id)"
+      @click.stop="selectPage(page.id)"
     >
       {{ $t(page.title) }}
     </button>
@@ -33,6 +33,12 @@ withDefaults(
 );
 
 const store = useRibbonStore();
+const emit = defineEmits<{ select: [id: string] }>();
+
+function selectPage(id: string) {
+  store.selectPage(id);
+  emit("select", id);
+}
 </script>
 
 <style scoped>
@@ -97,5 +103,17 @@ const store = useRibbonStore();
   top: 0;
   height: 2px;
   background: var(--lj-orange);
+}
+
+.rtabs--compact-web {
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity;
+}
+
+.rtabs--compact-web .rtab {
+  min-height: 44px;
+  padding-inline: var(--lj-space-4);
+  font-size: var(--lj-text-base);
+  scroll-snap-align: start;
 }
 </style>

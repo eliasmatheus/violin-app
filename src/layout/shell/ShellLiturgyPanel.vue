@@ -1,5 +1,11 @@
 <template>
-  <aside class="liturgy-panel" :class="{ 'liturgy-panel--collapsed': effectiveCollapsed }">
+  <aside
+    class="liturgy-panel"
+    :class="{
+      'liturgy-panel--collapsed': effectiveCollapsed,
+      'liturgy-panel--compact-web': isCompact,
+    }"
+  >
     <div class="liturgy-panel-header">
       <button
         type="button"
@@ -102,6 +108,7 @@ import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
 import { useLiturgyExecution } from "@/modules/liturgy/composables/useLiturgyExecution";
 import { prepararAgenda } from "@/modules/liturgy/agenda";
 import { useViewport } from "@/composables/useViewport";
+import Platform from "@/helpers/Platform";
 
 const { t } = useI18n();
 
@@ -117,7 +124,14 @@ const { executeItem, playMusic } = useLiturgyExecution();
 const collapsed = ref(false);
 const mobileOpen = ref(false);
 const { width } = useViewport();
-const isCompact = computed(() => width.value > 0 && width.value <= 700);
+const coarsePointer =
+  typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+const isCompact = computed(
+  () =>
+    !Platform.isDesktop &&
+    width.value > 0 &&
+    (width.value <= 700 || (coarsePointer && width.value <= 1000))
+);
 const effectiveCollapsed = computed(() => (isCompact.value ? !mobileOpen.value : collapsed.value));
 watch(isCompact, () => {
   mobileOpen.value = false;
@@ -237,21 +251,19 @@ onMounted(() => {
   width: var(--lj-sidebar-collapsed);
 }
 
-@media (max-width: 700px) {
-  .liturgy-panel {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 10;
-    width: min(var(--lj-sidebar-width), calc(100vw - 48px));
-    box-shadow: -8px 0 20px rgba(0, 0, 0, 0.12);
-  }
+.liturgy-panel--compact-web {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  width: min(var(--lj-sidebar-width), calc(100vw - 48px));
+  box-shadow: -8px 0 20px rgba(0, 0, 0, 0.12);
+}
 
-  .liturgy-panel--collapsed {
-    width: var(--lj-sidebar-collapsed);
-    box-shadow: none;
-  }
+.liturgy-panel--compact-web.liturgy-panel--collapsed {
+  width: var(--lj-sidebar-collapsed);
+  box-shadow: none;
 }
 
 .liturgy-panel--collapsed .liturgy-panel-header {
@@ -480,5 +492,30 @@ onMounted(() => {
 }
 .liturgy-item--checked .liturgy-item-title {
   text-decoration: line-through;
+}
+
+.liturgy-panel--compact-web .liturgy-panel-header {
+  min-height: 44px;
+  height: 44px;
+}
+
+.liturgy-panel--compact-web .liturgy-icon-btn {
+  min-width: 44px;
+  width: 44px;
+  height: 44px;
+}
+
+.liturgy-panel--compact-web.liturgy-panel--collapsed .liturgy-icon-btn {
+  min-width: calc(var(--lj-sidebar-collapsed) - 1px);
+  width: calc(var(--lj-sidebar-collapsed) - 1px);
+}
+
+.liturgy-panel--compact-web.liturgy-panel--collapsed .liturgy-panel-header {
+  border-bottom: 0;
+}
+
+.liturgy-panel--compact-web .liturgy-item,
+.liturgy-panel--compact-web :deep(.lj-btn) {
+  min-height: 44px;
 }
 </style>

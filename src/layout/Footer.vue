@@ -9,6 +9,7 @@
       'footer--bg-only': hasBgSound && !hasPlayer && !hasProjection,
       'footer--fp-only': hasProjection && !hasPlayer && !hasBgSound,
       'footer--playlist': playlist.isActive.value,
+      'footer--mobile-web': !Platform.isDesktop,
     }"
   >
     <BackgroundSoundPlayer v-if="hasBgSound" />
@@ -233,6 +234,7 @@ import BackgroundSoundPlayer from "@/components/BackgroundSoundPlayer.vue";
 import FileProjectionBar from "@/components/FileProjectionBar.vue";
 import { LjChip, LjDivider, LjIcon, LjSpinner, LjTooltip } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
+import Platform from "@/helpers/Platform";
 import { useFileProjection } from "@/composables/useFileProjection";
 import { usePlaylistPlayback } from "@/modules/musics/composables/usePlaylistPlayback";
 
@@ -677,5 +679,81 @@ onMounted(loadDBVersion);
 .player-gauge-fill--mute {
   background: linear-gradient(180deg, var(--lj-danger), var(--lj-danger-dark));
   box-shadow: none;
+}
+
+@media (max-width: 700px) {
+  .footer--mobile-web {
+    --lj-player-gauge-height: 10px;
+    height: 108px;
+  }
+
+  .footer--mobile-web.footer--bg-sound {
+    height: 152px;
+  }
+
+  .footer--mobile-web.footer--playlist {
+    height: 136px;
+  }
+
+  .footer--mobile-web.footer--playlist.footer--bg-sound {
+    height: 180px;
+  }
+
+  .footer--mobile-web.footer--bg-only,
+  .footer--mobile-web.footer--fp-only {
+    height: 44px;
+  }
+
+  .footer--mobile-web .player-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 44px minmax(0, 1fr);
+    gap: 0;
+    padding: 0 var(--lj-space-2);
+  }
+
+  .footer--mobile-web .player-controls {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .footer--mobile-web .player-controls::-webkit-scrollbar {
+    display: none;
+  }
+
+  .footer--mobile-web .player-controls .player-btn {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .footer--mobile-web .player-slide-text {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    text-align: left;
+    font-size: var(--lj-text-sm);
+  }
+
+  .footer--mobile-web .player-meta {
+    grid-column: 2;
+    grid-row: 2;
+    gap: var(--lj-space-1);
+    margin-left: 0;
+    font-size: var(--lj-text-sm);
+  }
+
+  .footer--mobile-web .player-meta .player-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .footer--mobile-web .playlist-bar-meta {
+    display: none;
+  }
 }
 </style>

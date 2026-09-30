@@ -21,7 +21,12 @@
   </Window>
 
   <!-- Modo EMBEDDED (default — replica PageControl Delphi) -->
-  <div v-else-if="show" v-show="isActiveEmbedded" class="module-embedded">
+  <div
+    v-else-if="show"
+    v-show="isActiveEmbedded"
+    class="module-embedded"
+    :class="{ 'module-embedded--web': !Platform.isDesktop }"
+  >
     <header v-if="$slots.header" class="module-embedded-header">
       <div class="module-embedded-slot-header">
         <slot name="header" />
@@ -67,6 +72,7 @@ import Modules from "@/helpers/Modules";
 import AppData from "@/helpers/AppData";
 import UserData from "@/helpers/UserData";
 import Telemetry from "@/helpers/Telemetry";
+import Platform from "@/helpers/Platform";
 import { setScrollPosition, getScrollPosition } from "@/helpers/ScrollMemory";
 
 const props = defineProps({
@@ -456,5 +462,106 @@ defineExpose({ userdata, tm, moduleId, module: module_ });
   border-top: 1px solid var(--lj-surface-border);
   flex-shrink: 0;
   min-height: 38px;
+}
+
+@media (max-width: 700px) {
+  /* Alguns manifests ainda passam minWidth/minHeight inline para janelas de
+     operação desktop. O host embedded precisa caber no telefone em qualquer
+     módulo; a prioridade é restrita a ele e a este breakpoint. */
+  .module-embedded--web {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-width: 100%;
+  }
+
+  .module-embedded--web .module-embedded-header,
+  .module-embedded--web .module-embedded-footer {
+    min-width: 0;
+    max-width: 100%;
+    padding: var(--lj-space-2) var(--lj-space-3);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .module-embedded--web .module-embedded-header {
+    align-items: flex-start;
+    max-height: min(42dvh, 300px);
+    overflow-y: auto;
+  }
+
+  .module-embedded--web .module-embedded-slot-header {
+    flex-wrap: wrap;
+  }
+
+  .module-embedded--web .module-embedded-slot-header > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .module-embedded--web .module-embedded-footer {
+    flex-wrap: wrap;
+    max-height: 28dvh;
+    overflow-y: auto;
+  }
+
+  .module-embedded--web .module-embedded-footer :deep(.lj-divider--vertical),
+  .module-embedded--web .module-embedded-footer :deep(.lj-u-spacer) {
+    display: none;
+  }
+
+  .module-embedded--web .module-embedded-footer :deep(.lj-btn) {
+    min-height: 40px;
+  }
+
+  .module-embedded--web .module-embedded-header :deep(.lj-btn),
+  .module-embedded--web .module-embedded-left :deep(.lj-btn),
+  .module-embedded--web .module-embedded-right :deep(.lj-btn) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .module-embedded--web .module-embedded-body {
+    flex-direction: column;
+  }
+
+  .module-embedded--web .module-embedded-left,
+  .module-embedded--web .module-embedded-right {
+    width: 100%;
+    max-height: 40%;
+    border-right: 0;
+  }
+
+  .module-embedded--web .module-embedded-left:empty,
+  .module-embedded--web .module-embedded-right:empty {
+    display: none;
+  }
+
+  .module-embedded--web .module-embedded-right {
+    border-left: 0;
+    border-top: 1px solid var(--lj-surface-border);
+  }
+}
+
+@media (max-width: 700px) and (max-height: 500px) {
+  .module-embedded--web .module-embedded-header {
+    max-height: 28dvh;
+  }
+
+  .module-embedded--web .module-embedded-footer {
+    max-height: 24dvh;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1000px) and (max-height: 500px) and (pointer: coarse) {
+  .module-embedded--web .module-embedded-header {
+    align-items: flex-start;
+    max-height: 22dvh;
+    overflow-y: auto;
+  }
+
+  .module-embedded--web .module-embedded-footer {
+    max-height: 14dvh;
+    overflow-y: auto;
+  }
 }
 </style>

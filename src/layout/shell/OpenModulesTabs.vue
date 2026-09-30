@@ -2,6 +2,7 @@
   <div
     v-if="openModules.length > 0"
     class="subtabs-wrapper"
+    :class="{ 'subtabs-wrapper--compact-web': isMobileWeb }"
     role="tablist"
     :aria-label="$t('shell.open_modules')"
   >
@@ -9,6 +10,7 @@
       :list="openModules"
       item-key="id"
       class="subtabs"
+      :disabled="isMobileWeb"
       ghost-class="subtab--ghost"
       :animation="150"
       @end="onReorder"
@@ -32,10 +34,12 @@
           <span class="subtab-label lj-u-truncate">{{ t(getModule(m.id).title) }}</span>
           <span
             role="button"
-            tabindex="-1"
+            tabindex="0"
             class="subtab-close"
             :aria-label="`${$t('alert.close')}: ${t(getModule(m.id).title)}`"
             @click.stop="close(m.id)"
+            @keydown.enter.stop.prevent="close(m.id)"
+            @keydown.space.stop.prevent="close(m.id)"
           >
             <LjIcon :icon="ICONS.ACTIONS.CLOSE" size="12" aria-hidden="true" />
           </span>
@@ -49,16 +53,28 @@
 import { LjIcon } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { computed } from "vue";
+import { useViewport } from "@/composables/useViewport";
+import Platform from "@/helpers/Platform";
 import { useI18n } from "vue-i18n";
 import draggable from "vuedraggable";
 import $appdata from "@/helpers/AppData";
 import $userdata from "@/helpers/UserData";
 import $modules from "@/helpers/Modules";
-import { getModules } from "@/config/modules";
+import { getAllModules } from "@/config/modules";
 import { KEYS } from "@/constants/UserDataKeys";
 
 const { t } = useI18n();
-const modules = getModules;
+const { width } = useViewport();
+const coarsePointer =
+  typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+const isMobileWeb = computed(
+  () =>
+    !Platform.isDesktop &&
+    width.value > 0 &&
+    (width.value <= 700 || (coarsePointer && width.value <= 1000))
+);
+// Opened system modules also need their manifest, even when hidden from the Ribbon.
+const modules = getAllModules;
 const openModules = computed({
   get() {
     const modules = $appdata.get("modules") || {};
@@ -259,5 +275,29 @@ function close(id) {
 
 .subtab--ghost {
   opacity: 0.4;
+}
+
+.subtabs-wrapper--compact-web .subtabs {
+  --lj-subtabs-height: 48px;
+  align-items: stretch;
+  gap: var(--lj-space-1);
+  padding-top: var(--lj-space-1);
+  overscroll-behavior-inline: contain;
+}
+
+.subtabs-wrapper--compact-web .subtab,
+.subtabs-wrapper--compact-web .subtab--active {
+  min-height: 40px;
+  margin-bottom: 0;
+  padding-inline: var(--lj-space-3);
+}
+
+.subtabs-wrapper--compact-web .subtab-close {
+  width: 40px;
+  height: 40px;
+}
+
+.subtabs-wrapper--compact-web .subtab-label {
+  max-width: 120px;
 }
 </style>

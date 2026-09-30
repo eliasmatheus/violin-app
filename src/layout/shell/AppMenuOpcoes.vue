@@ -2482,4 +2482,84 @@ onMounted(async () => {
 .opt-bg-fields .opt-row:last-child {
   margin-bottom: 0;
 }
+
+@media (max-width: 600px) {
+  .opt--settings {
+    min-width: 0;
+    --lj-opt-scroll-pad: var(--lj-space-5);
+  }
+
+  .opt--settings .opt-section,
+  .opt--settings .opt-bg {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .opt--settings .opt-row {
+    min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--lj-space-2);
+  }
+
+  .opt--settings .opt-section .opt-row:not(.opt-row--col) > .opt-label,
+  .opt--settings .opt-label {
+    min-width: 0;
+    width: 100%;
+    flex: 0 0 auto;
+  }
+
+  .opt--settings
+    .opt-section
+    .opt-row
+    :is(.opt-select, .select-font, .lj-monitor-select, .lj-select) {
+    width: 100%;
+    max-width: none;
+  }
+
+  .opt--settings .opt-row :deep(.lj-select),
+  .opt--settings .opt-row .opt-select,
+  .opt--settings .opt-row .opt-input,
+  .opt--settings .opt-row .opt-btn {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .opt--settings .opt-checkbox {
+    min-height: 44px;
+  }
+
+  .opt--settings .opt-row--clock > .opt-hint {
+    flex: 0 0 auto;
+  }
+
+  .opt--settings .opt-format-block {
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .fmt-top,
+  .fmt-params,
+  .opt-format-row {
+    min-width: 0;
+  }
+
+  .fmt-top {
+    overflow-x: auto;
+  }
+
+  .fmt-params {
+    padding-left: 0;
+  }
+
+  .opt--settings .opt-bg-preview-wrap,
+  .opt--settings .opt-bg-pick {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .opt--settings .opt-bg-empty-text {
+    white-space: normal;
+  }
+}
 </style>
