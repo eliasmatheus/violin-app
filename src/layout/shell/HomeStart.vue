@@ -1,16 +1,19 @@
 <template>
   <section class="home-start" :aria-label="$t('shell.home_title')">
-    <LjLogo :size="56" class="home-start__logo" />
+    <LjLogo :size="88" class="home-start__logo" />
     <h1>{{ $t("shell.home_title") }}</h1>
     <p>{{ $t("shell.home_description") }}</p>
     <div class="home-start__actions">
-      <button type="button" @click="open(ModuleEnum.MUSICS)">
+      <button type="button" class="home-start__action--primary" @click="open(ModuleEnum.MUSICS)">
+        <LjIcon :icon="ICONS.MODULES.MUSICS" :size="18" color="currentColor" />
         {{ $t("shell.home_music") }}
       </button>
       <button type="button" @click="open(ModuleEnum.BIBLE)">
+        <LjIcon :icon="ICONS.MODULES.BIBLE" :size="18" color="currentColor" />
         {{ $t("shell.home_bible") }}
       </button>
       <button type="button" @click="open(ModuleEnum.LITURGY)">
+        <LjIcon :icon="ICONS.MODULES.LITURGY" :size="18" color="currentColor" />
         {{ $t("shell.home_liturgy") }}
       </button>
     </div>
@@ -19,6 +22,8 @@
 
 <script setup lang="ts">
 import LjLogo from "@/components/LjLogo.vue";
+import { LjIcon } from "@/components/ui";
+import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import $modules from "@/helpers/Modules";
 
@@ -69,7 +74,7 @@ function open(id: ModuleEnum): void {
 .home-start__actions button {
   display: inline-flex;
   align-items: center;
-  gap: var(--lj-space-3);
+  gap: var(--lj-space-4);
   min-height: 42px;
   padding: 0 var(--lj-space-5);
   border: 1px solid currentColor;
@@ -84,6 +89,18 @@ function open(id: ModuleEnum): void {
 
 .home-start__actions button:hover {
   background: var(--lj-shell-chrome-hover);
+}
+
+/* Cores invertidas da área inicial: o token de ação coincide com o fundo em
+   alguns temas (azul, azul-escuro), e o botão principal sumiria. */
+.home-start__actions .home-start__action--primary {
+  border-color: var(--lj-home-text);
+  background: var(--lj-home-text);
+  color: var(--lj-home-bg);
+}
+
+.home-start__actions .home-start__action--primary:hover {
+  background: color-mix(in srgb, var(--lj-home-text) 88%, var(--lj-home-bg));
 }
 
 .home-start__actions button:focus-visible {
