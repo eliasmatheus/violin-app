@@ -5,7 +5,7 @@
  * O helper apenas gerencia CRUD — quem chama decide a estrutura do registro.
  *
  * Exemplo (wallpaper):
- *   await saveSetting({ id: "main", image: arrayBuffer, mime: "image/png", position: "cover", color: "#000033" });
+ *   await saveSetting({ id: "main", image: arrayBuffer, mime: "image/png", position: "cover", color: "#000000" });
  *   const wp = await getSetting("main");
  */
 

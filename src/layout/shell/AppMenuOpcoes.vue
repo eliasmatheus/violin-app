@@ -1545,7 +1545,7 @@ import $alert from "@/helpers/Alert";
 import { DEFAULT_MAX_HEIGHT, MAX_HEIGHTS, normalizeMaxHeight } from "@/helpers/OnlineVideo";
 import { ICONS } from "@/config/Icons";
 import { KEYS } from "@/constants/UserDataKeys";
-import { MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
+import { DEFAULT_BACKGROUND_COLOR, MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
 import { AUTO_THEME_ID, isThemePreference, THEME_IDS } from "@/config/Themes";
 import { SLIDE_STYLE_DEFAULT } from "@/config/SlideStyle";
 import { estiloDeFundo } from "@/helpers/BackgroundStyle";
@@ -1782,7 +1782,7 @@ function saveUserData(key: string, value: unknown): void {
 
 /* ── Wallpaper via IndexedDB ── */
 
-const bgColor = ref("#000033");
+const bgColor = ref(DEFAULT_BACKGROUND_COLOR);
 const bgPosition = ref("cover");
 let wallpaperBlobUrl = ref("");
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1855,7 +1855,7 @@ async function removeBgImage(): Promise<void> {
 onMounted(async () => {
   const s = await getSetting<any>(MAIN_BACKGROUND_ID).catch(() => null);
   if (s) {
-    bgColor.value = s.color || "#000033";
+    bgColor.value = s.color || DEFAULT_BACKGROUND_COLOR;
     bgPosition.value = s.position || "cover";
     if (s.image) {
       const blob = new Blob([s.image], { type: s.mime || "image/png" });
@@ -2162,7 +2162,7 @@ const fileProjBgEnabled: ComputedRef<boolean> = computed(
   () => $userdata.get(KEYS.OPTIONS.FILE_PROJECTION.BACKGROUND_ENABLED, false) as boolean
 );
 
-const fileProjBgColor = ref("#000033");
+const fileProjBgColor = ref(DEFAULT_BACKGROUND_COLOR);
 const fileProjBgPosition = ref("cover");
 const fileProjBgImageUrl = ref("");
 let fileProjBlobUrl: string | null = null;
@@ -2185,7 +2185,7 @@ async function saveFileProjBg(): Promise<void> {
 async function loadFileProjBg(): Promise<void> {
   const s = await getSetting<any>(FP_STORAGE_ID).catch(() => null);
   if (s) {
-    fileProjBgColor.value = s.color || "#000033";
+    fileProjBgColor.value = s.color || DEFAULT_BACKGROUND_COLOR;
     fileProjBgPosition.value = s.position || "cover";
     if (s.image) {
       if (fileProjBlobUrl) URL.revokeObjectURL(fileProjBlobUrl);
@@ -2200,7 +2200,7 @@ async function loadFileProjBg(): Promise<void> {
       fileProjBgImageUrl.value = "";
     }
   } else {
-    fileProjBgColor.value = "#000033";
+    fileProjBgColor.value = DEFAULT_BACKGROUND_COLOR;
     fileProjBgPosition.value = "cover";
     fileProjBgImageUrl.value = "";
   }

@@ -88,7 +88,7 @@ import { KEYS } from "@/constants/UserDataKeys";
 import $userdata from "@/helpers/UserData";
 import { getSetting } from "@/helpers/SettingsStorage";
 import { loadPdfDocument, type PDFDocumentProxy } from "@/helpers/PdfRuntime";
-import { Settings } from "@/types/Settings";
+import { DEFAULT_BACKGROUND_COLOR, Settings } from "@/types/Settings";
 import { DB_TABLE, SETTINGS_TABLE } from "@/constants/DbTables";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
 import { heicToJpeg, isHeic } from "@/helpers/ImageConvert";
@@ -176,7 +176,7 @@ const _YT_SYNC_INTERVAL = 500;
 
 /* ── Wallpaper via IndexedDB ── */
 
-const wpColor = ref("#000033");
+const wpColor = ref(DEFAULT_BACKGROUND_COLOR);
 const wpImageUrl = ref("");
 const wpPosition = ref("cover");
 let wpBlobUrl: string | null = null;
@@ -990,7 +990,7 @@ async function reloadWallpaper(): Promise<void> {
   const id = useCustom ? SETTINGS_TABLE.FILE_PROJECTION_BACKGROUND : SETTINGS_TABLE.MAIN_BACKGROUND;
   const s = await getSetting<Settings>(id).catch(() => null);
   if (s) {
-    wpColor.value = s.color || "#000033";
+    wpColor.value = s.color || DEFAULT_BACKGROUND_COLOR;
     wpPosition.value = s.position || "cover";
     if (s.image) {
       if (wpBlobUrl) URL.revokeObjectURL(wpBlobUrl);

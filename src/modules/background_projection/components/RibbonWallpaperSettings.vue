@@ -53,14 +53,14 @@ import { pickImageData } from "@/helpers/FilePicker";
 import { getSetting, saveSetting } from "@/helpers/SettingsStorage";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import Broadcast from "@/helpers/Broadcast";
-import { MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
+import { DEFAULT_BACKGROUND_COLOR, MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
 
 const { t: i18nT } = useI18n();
 const modulePrefix = $modules.getPath(ModuleEnum.BACKGROUND_PROJECTION);
 const tm = (key: string) => i18nT(`modules.background_projection.${key}`);
 const currentBgImage = computed(() => wpImageUrl.value);
 
-const wpColor = ref("#000033");
+const wpColor = ref(DEFAULT_BACKGROUND_COLOR);
 const wpImageUrl = ref("");
 const wpPosition = ref("cover");
 let wpBlobUrl: string | null = null;
@@ -125,7 +125,7 @@ async function remove(): Promise<void> {
 onMounted(async () => {
   const s = await getSetting<Settings>(MAIN_BACKGROUND_ID).catch(() => null);
   if (s) {
-    wpColor.value = s.color || "#000033";
+    wpColor.value = s.color || DEFAULT_BACKGROUND_COLOR;
     wpPosition.value = s.position || "cover";
     if (s.image) {
       const blob = new Blob([s.image], { type: s.mime || "image/png" });

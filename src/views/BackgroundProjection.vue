@@ -157,7 +157,7 @@ import { getSetting } from "@/helpers/SettingsStorage";
 import OverlayRenderer from "@/components/OverlayRenderer.vue";
 import LibrasOverlay from "@/views/LibrasOverlay.vue";
 import Slide from "@/components/Slide.vue";
-import { MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
+import { DEFAULT_BACKGROUND_COLOR, MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
 import { KEYS } from "@/constants/UserDataKeys";
 import { SETTINGS_TABLE } from "@/constants/DbTables";
 import type { YTAPI, YTPlayer, VideoMediaState } from "@/types/Media";
@@ -216,7 +216,7 @@ function activateBg(value: unknown): void {
 
 /* ── Wallpaper via IndexedDB ── */
 
-const wpColor = ref("#000033");
+const wpColor = ref(DEFAULT_BACKGROUND_COLOR);
 const wpImageUrl = ref("");
 const wpPosition = ref("cover");
 let wpBlobUrl: string | null = null;
@@ -771,7 +771,7 @@ async function reloadWallpaper(): Promise<void> {
   const id = useCustom ? SETTINGS_TABLE.FILE_PROJECTION_BACKGROUND : MAIN_BACKGROUND_ID;
   const s = await getSetting<Settings>(id).catch(() => null);
   if (s) {
-    wpColor.value = s.color || "#000033";
+    wpColor.value = s.color || DEFAULT_BACKGROUND_COLOR;
     wpPosition.value = s.position || "cover";
     if (s.image) {
       if (wpBlobUrl) URL.revokeObjectURL(wpBlobUrl);
