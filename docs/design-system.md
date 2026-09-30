@@ -790,6 +790,36 @@ sempre. Use `null` (`icon?: string | null`).
 
 ---
 
+## Logo e ícones do app
+
+`src/assets/img/logo.svg` é a fonte de todos os ícones. Ele é desenhado em cinco
+grupos `<g id="camada-*">`, de trás para a frente: fundo, violino, cordas,
+clave e arco. Cada forma é inteira, inclusive onde outra camada a cobre: o
+ícone do macOS mostra as camadas separadas, e o vidro deixa ver o que fica
+embaixo. Ao editar o logo, mantenha os grupos e rode `npm run assets:brand`; o
+`validate:brand-assets` (no `prebuild`) falha se algo ficar para trás.
+
+O gerador produz, a partir do logo:
+
+| Saída                                                      | Como                                                                  |
+| ---------------------------------------------------------- | --------------------------------------------------------------------- |
+| `build/icon-mac.icon/Assets/*.svg`                         | Um arquivo por grupo `camada-*`                                       |
+| `src/assets/img/logo-profundidade.svg`                     | Cada camada projeta sombra, na cor dela, só sobre o disco             |
+| PNGs de 144 px para cima, `icon-512.png`, 256 px do `.ico` | Renderizados do logo com profundidade                                 |
+| PNGs de 16, 32 e 48 px                                     | Logo plano: nesse tamanho a sombra só borra o desenho                 |
+| `icon-mac.png` e `icon-mac.icns`                           | Render do `.icon` pelo `ictool` quando o Icon Composer está instalado |
+
+O `icon.json` do `.icon` (vidro, sombras, translucidez, placa branca no claro e
+preta no escuro) é editado à mão ou no Icon Composer, e o gerador não o toca. O
+`LjLogo` usa a versão com profundidade a partir de 32 px.
+
+O `.icon` só vale no app empacotado, que o compila em `Assets.car`; isso exige
+Xcode 26, e por isso o job macOS do release roda em `macos-26`. No
+`electron:dev` o Dock mostra o `icon-mac.png`, que é estático: só a aparência
+clara.
+
+---
+
 ## Arquivos de Referência
 
 | Arquivo                                   | Conteúdo                                                             |
