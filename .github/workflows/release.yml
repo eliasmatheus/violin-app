@@ -28,7 +28,8 @@ jobs:
               dist_electron/*.exe
               dist_electron/*.blockmap
               dist_electron/latest.yml
-          - os: macos-latest
+          # Icon Composer exige actool/Xcode 26+ para compilar o .icon em camadas.
+          - os: macos-26
             platform: mac
             artifact: installer-macos
             artifact_glob: |
@@ -58,6 +59,18 @@ jobs:
 
       - name: Instalar dependências
         run: npm ci
+
+      - name: Conferir Xcode para ícone em camadas
+        if: matrix.platform == 'mac'
+        shell: bash
+        run: |
+          xcodebuild -version
+          actool --version
+          version="$(xcodebuild -version | awk '/^Xcode / { print $2; exit }')"
+          if [[ -z "$version" || "${version%%.*}" -lt 26 ]]; then
+            echo "::error::O ícone .icon requer Xcode 26 ou superior."
+            exit 1
+          fi
 
       - name: Conferir versão da release
         run: npm run validate:release-version
@@ -161,6 +174,16 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      - name: Conferir ícone em camadas no app macOS
+        if: matrix.platform == 'mac'
+        shell: bash
+        run: |
+          app="dist_electron/mac-universal/LouvorJA Violin.app"
+          test -s "$app/Contents/Resources/Assets.car"
+          test -s "$app/Contents/Resources/icon.icns"
+          name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$app/Contents/Info.plist")"
+          test "$name" = Icon
+
       - name: Conferir arquivos do atualizador
         run: npm run validate:release-artifacts
 
@@ -227,6 +250,8 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ steps.meta.outputs.title }}
           prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          # O rascunho permite conferir todos os instaladores e manifests antes de publicar.
+          draft: true
           body: ${{ steps.notes.outputs.body }}
           fail_on_unmatched_files: true
           files: |

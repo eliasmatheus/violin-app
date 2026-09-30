@@ -68,10 +68,19 @@ cores fixas do app Delphi original.
 | `--lj-color-operator-grid`   | `#232323`                | Grade de slides do `/operator`              |
 | `--lj-color-operator-line`   | `#524752`                | Linha de separação no operador              |
 | `--lj-color-list-bg`         | `#232323`                | Fundo de listas em projeção                 |
-| `--lj-color-splash-bg`       | `#2d2d28`                | Fundo da tela de splash                     |
+| `--lj-color-splash-bg`       | `#f7fafd`                | Fundo da tela de splash                     |
 | `--lj-color-favorites-line`  | `#e8e8e8`                | Linha de favoritos (light)                  |
 | `--lj-color-cover-gold-dark` | `#c89500`                | Capa no player dark                         |
 | `--lj-gold-alpha-60`         | `rgba(239, 180, 0, 0.6)` | Overlay gold semi-transparente              |
+
+Na área inicial da janela principal, `--lj-home-bg` usa `#2e74aa` no tema
+Claro, `#155b8a` no Azul e `#1b2a41` no Azul-escuro. No tema escuro, usa o mesmo
+`--lj-body-bg` da ribbon (`#1f2937`), enquanto a barra superior permanece
+azul (`#153653`). Os demais temas coloridos usam um tom da própria paleta.
+`--lj-shell-chrome-bg` controla a barra superior e a lateral do menu.
+Texto, ícones e botões nativos da janela acompanham o contraste do fundo.
+No escuro, a aba selecionada também usa `--lj-body-bg`, sem mudar de tom
+na passagem para o corpo da ribbon.
 
 ---
 
@@ -531,15 +540,15 @@ border-radius: var(--lj-radius-lg); /* dialogs */
 ### AppMenu Sidebar
 
 ```css
-background: var(--lj-appmenu-sidebar-bg); /* navy */
-color: var(--lj-appmenu-sidebar-color); /* white 70% */
+background: var(--lj-appmenu-sidebar-bg); /* acompanha --lj-shell-chrome-bg */
+color: var(--lj-appmenu-sidebar-color); /* branco */
 
 /* item hover */
 background: var(--lj-appmenu-sidebar-hover-bg); /* white 8% */
 
 /* item ativo */
 background: var(--lj-appmenu-sidebar-active-bg); /* orange */
-color: var(--lj-appmenu-sidebar-active-color); /* #fff */
+color: var(--lj-appmenu-sidebar-active-color); /* texto escuro sobre laranja */
 ```
 
 ---
@@ -781,6 +790,36 @@ Nunca use `false` como sentinela numa prop que também aceita string
 (`icon?: string | false`). O Vue faz _casting_ de Boolean: uma prop cujo tipo
 inclui `Boolean` nasce `false` quando não é passada, e o ramo "desligado" vale
 sempre. Use `null` (`icon?: string | null`).
+
+---
+
+## Logo e ícones do app
+
+`src/assets/img/logo.svg` é a fonte de todos os ícones. Ele é desenhado em cinco
+grupos `<g id="camada-*">`, de trás para a frente: fundo, violino, cordas,
+clave e arco. Cada forma é inteira, inclusive onde outra camada a cobre: o
+ícone do macOS mostra as camadas separadas, e o vidro deixa ver o que fica
+embaixo. Ao editar o logo, mantenha os grupos e rode `npm run assets:brand`; o
+`validate:brand-assets` (no `prebuild`) falha se algo ficar para trás.
+
+O gerador produz, a partir do logo:
+
+| Saída                                                      | Como                                                                  |
+| ---------------------------------------------------------- | --------------------------------------------------------------------- |
+| `build/icon-mac.icon/Assets/*.svg`                         | Um arquivo por grupo `camada-*`                                       |
+| `src/assets/img/logo-profundidade.svg`                     | Cada camada projeta sombra, na cor dela, só sobre o disco             |
+| PNGs de 144 px para cima, `icon-512.png`, 256 px do `.ico` | Renderizados do logo com profundidade                                 |
+| PNGs de 16, 32 e 48 px                                     | Logo plano: nesse tamanho a sombra só borra o desenho                 |
+| `icon-mac.png` e `icon-mac.icns`                           | Render do `.icon` pelo `ictool` quando o Icon Composer está instalado |
+
+O `icon.json` do `.icon` (vidro, sombras, translucidez, placa branca no claro e
+preta no escuro) é editado à mão ou no Icon Composer, e o gerador não o toca. O
+`LjLogo` usa a versão com profundidade a partir de 32 px.
+
+O `.icon` só vale no app empacotado, que o compila em `Assets.car`; isso exige
+Xcode 26, e por isso o job macOS do release roda em `macos-26`. No
+`electron:dev` o Dock mostra o `icon-mac.png`, que é estático: só a aparência
+clara.
 
 ---
 

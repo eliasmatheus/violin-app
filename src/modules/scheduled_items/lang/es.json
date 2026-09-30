@@ -41,6 +41,8 @@
   "add_auto_created": "{n} ítems creados con éxito.",
   "add_auto_updated": "{n} ítems actualizados",
   "add_auto_no_files": "Ningún archivo encontrado en el patrón.",
+  "add_auto_scanning": "Escaneando archivos...",
+  "add_auto_error": "Error al escanear los archivos.",
   "add_auto_desktop_only": "Disponible solo en escritorio.",
   "ribbon": {
     "title_ctx": "Gestionar Elementos Programados",

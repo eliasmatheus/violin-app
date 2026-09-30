@@ -2,19 +2,40 @@
   <ModuleContainer
     ref="moduleContainer"
     :manifest="manifest"
-    :style="{ minWidth: '700px' }"
+    :style="{ minWidth: mobileLayout ? '0' : '700px' }"
     @close="stop"
   >
     <div
       class="media-root"
-      :class="{ 'media-root--drag-over': isDragOver }"
+      :class="{ 'media-root--drag-over': isDragOver, 'media-root--mobile': mobileLayout }"
       @dragenter.prevent="onDragEnter"
       @dragover.prevent="onDragOver"
       @dragleave="onDragLeave"
       @drop.prevent="onDrop"
     >
+      <nav v-if="mobileLayout" class="media-mobile-nav" :aria-label="tm('title')">
+        <button
+          type="button"
+          class="media-mobile-nav__button"
+          :class="{ 'is-active': mobileView === 'library' }"
+          :aria-current="mobileView === 'library' ? 'page' : undefined"
+          @click="mobileView = 'library'"
+        >
+          {{ tm("library") }}
+        </button>
+        <button
+          type="button"
+          class="media-mobile-nav__button"
+          :class="{ 'is-active': mobileView === 'playlist' }"
+          :aria-current="mobileView === 'playlist' ? 'page' : undefined"
+          @click="mobileView = 'playlist'"
+        >
+          {{ tm("playlist") }} ({{ playlist.length }})
+        </button>
+      </nav>
+
       <!-- Toolbar -->
-      <div class="media-toolbar">
+      <div v-show="!mobileLayout || mobileView === 'library'" class="media-toolbar">
         <LjTabs
           :model-value="libraryFilter"
           :tabs="filterTabs"
@@ -22,17 +43,23 @@
           @update:model-value="libraryFilter = $event as LibraryFilter"
         />
         <span class="lj-u-spacer" />
-        <LjButton size="sm" variant="subtle" :icon="ICONS.ACTIONS.ADD" @click="addFiles">
+        <LjButton
+          size="sm"
+          variant="subtle"
+          :icon="ICONS.ACTIONS.ADD"
+          class="media-add-button"
+          @click="addFiles"
+        >
           {{ tm("add_files") }}
         </LjButton>
       </div>
 
-      <LjDivider />
+      <LjDivider v-show="!mobileLayout || mobileView === 'library'" />
 
       <!-- Split -->
       <div class="media-split">
         <!-- Library -->
-        <div class="media-library">
+        <div v-show="!mobileLayout || mobileView === 'library'" class="media-library">
           <div class="media-search">
             <LjInput
               v-model="searchQuery"
@@ -142,10 +169,10 @@
           </div>
         </div>
 
-        <LjDivider vertical />
+        <LjDivider v-if="!mobileLayout" vertical />
 
         <!-- Playlist -->
-        <div class="media-playlist">
+        <div v-show="!mobileLayout || mobileView === 'playlist'" class="media-playlist">
           <div class="media-playlist-header">
             <LjIcon :icon="ICONS.FORMAT.LIST_BULLETED" :size="16" />
             <span>{{ tm("playlist") }} ({{ playlist.length }})</span>
@@ -323,6 +350,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { useViewport } from "@/composables/useViewport";
 import { module as manifest } from "../manifest";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import CategoryManagerDialog, {
@@ -348,6 +376,10 @@ import { IMAGE_EXT, VIDEO_EXT } from "@/constants/FileTypes";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
 import Telemetry from "@/helpers/Telemetry";
 import { fileProjectionPageFor, newFileProjectionId } from "@/helpers/FileProjectionPage";
+
+const { width: viewportWidth } = useViewport();
+const mobileLayout = computed(() => !Platform.isDesktop && viewportWidth.value <= 1000);
+const mobileView = ref<"library" | "playlist">("library");
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -1016,6 +1048,8 @@ async function playIndex(index: number): Promise<void> {
   if (!item) return;
   if (currentIndex.value === index && isPlaying.value) return;
   const generation = ++playIndexGeneration;
+  // Direção da navegação para o modo automático de transição da projeção.
+  const backward = index < currentIndex.value;
 
   currentIndex.value = index;
   isPlaying.value = true;
@@ -1028,6 +1062,7 @@ async function playIndex(index: number): Promise<void> {
   const isVideo = item.type === "video";
 
   const payload: Record<string, unknown> = { url, type: item.type, title: item.name };
+  payload.backward = backward;
   if (item.type === "pdf") {
     payload.page = 1;
     payload.playback_id = currentPdfPlaybackId;
@@ -1252,6 +1287,37 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.media-mobile-nav {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--lj-space-2);
+  padding: 0 var(--lj-space-4);
+  border-bottom: 1px solid var(--lj-surface-border);
+}
+
+.media-mobile-nav__button {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--lj-space-4);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--lj-text-muted);
+  font: inherit;
+  font-weight: var(--lj-weight-medium);
+}
+
+.media-mobile-nav__button.is-active {
+  border-bottom-color: var(--lj-ui-accent);
+  color: var(--lj-ui-accent-text);
+}
+
+.media-mobile-nav__button:focus-visible {
+  outline: none;
+  box-shadow: var(--lj-ui-focus);
+}
+
 .media-root {
   display: flex;
   flex-direction: column;
@@ -1659,5 +1725,113 @@ onBeforeUnmount(() => {
 .media-cat-option:focus-visible {
   outline: none;
   box-shadow: var(--lj-ui-focus);
+}
+
+@media (max-width: 1000px) {
+  .media-root--mobile .media-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--lj-space-2);
+    padding: var(--lj-space-2) var(--lj-space-4);
+  }
+
+  .media-root--mobile .media-toolbar :deep(.lj-tabs) {
+    min-width: 0;
+  }
+
+  .media-root--mobile .media-toolbar :deep(.lj-tabs__list) {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .media-root--mobile .media-toolbar :deep(.lj-tabs__trigger) {
+    min-height: 40px;
+    flex-shrink: 0;
+  }
+
+  .media-root--mobile .media-add-button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .media-root--mobile .media-library {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .media-root--mobile .media-chips {
+    flex-shrink: 0;
+    max-height: 104px;
+    overflow-y: auto;
+  }
+
+  .media-root--mobile .media-grid {
+    min-height: 0;
+  }
+
+  .media-root--mobile .media-grid-item {
+    padding-inline: var(--lj-space-1);
+  }
+
+  .media-root--mobile .media-grid-item-actions {
+    position: static;
+    justify-content: center;
+    gap: var(--lj-space-1);
+    width: 100%;
+    margin-top: auto;
+    background: transparent;
+    opacity: 1;
+  }
+
+  .media-root--mobile .media-playlist-item-actions {
+    opacity: 1;
+  }
+
+  .media-root--mobile .media-grid-item-actions :deep(.lj-btn),
+  .media-root--mobile .media-playlist-item-actions :deep(.lj-btn) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .media-root--mobile .media-playlist {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .media-root--mobile .media-playlist-item {
+    min-height: 56px;
+  }
+}
+
+@media (max-width: 600px) {
+  .media-root--mobile .media-search :deep(.lj-input) {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 500px) {
+  .media-root--mobile .media-toolbar :deep(.lj-tabs__list) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .media-root--mobile .media-toolbar :deep(.lj-tabs__trigger) {
+    justify-content: center;
+    padding-inline: var(--lj-space-2);
+    border-bottom: 2px solid transparent;
+  }
+
+  .media-root--mobile .media-toolbar :deep(.lj-tabs__trigger[data-state="active"]) {
+    border-bottom-color: var(--lj-ui-accent);
+  }
+
+  .media-root--mobile .media-toolbar :deep(.lj-tabs__indicator) {
+    display: none;
+  }
 }
 </style>

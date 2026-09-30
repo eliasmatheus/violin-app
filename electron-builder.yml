@@ -20,6 +20,8 @@ files:
   - config/**/*
   - package.json
   - public/ico/**/*
+  # O splash usa os mesmos tokens de cor do renderer antes do app montar.
+  - src/assets/styles/tokens.css
 
 # Arquivos compartilhados entre o main process e o renderer process (copiados para o asar e para o build final)
 extraResources: [
@@ -106,7 +108,7 @@ win:
   # são três `.exe`, e o `latest.yml` aponta o combinado — 193MB que todo
   # operador baixaria a cada atualização automática, para usar metade.
   target: nsis
-  icon: build/icon-512.png
+  icon: build/icon.ico
   # Code signing (opcional — requer certificado pago):
   # certificateFile: cert.pfx
   # certificatePassword: ${env.CERT_PWD}
@@ -173,23 +175,9 @@ mac:
   # assets da release adivinha que ele não é pra baixar: existe só porque o
   # Squirrel.Mac exige um .zip (não o .dmg) para o auto-update.
   artifactName: "LouvorJA.Violin-${version}-mac.${ext}"
-  # Ícone próprio do macOS: 1024x1024 com a placa já desenhada — o squircle
-  # branco na grade da Apple (~82% do canvas), margem transparente em volta.
-  #
-  # O macOS 26+ recorta qualquer ícone nessa mesma forma, então lá tanto faz;
-  # medido, um quadrado opaco de borda a borda e esta placa saem pixel a pixel
-  # iguais. O que muda é o macOS 25 e anteriores, que NÃO recortam nada e
-  # desenham o .icns como veio: um quadrado opaco vira um quadrado branco de
-  # cantos vivos no Dock. Entregar a forma pronta serve as duas gerações.
-  #
-  # O que não serve é um desenho que deixe transparência DENTRO da placa (o
-  # icon-512.png é um círculo): aí o macOS 26+ mostra o cinza dele por baixo.
-  # Windows e Linux seguem com o icon-512.png.
-  # O .icns é gerado a partir de icon-mac.png com sips + iconutil, incluindo
-  # os tamanhos normais e Retina. Usá-lo pronto evita o conversor de PNG do
-  # electron-builder, cujas entradas de 16 e 32 px são lidas incorretamente
-  # pelo macOS (faixas coloridas em ícones pequenos).
-  icon: build/icon-mac.icns
+  # O Icon Composer mantém fundo e símbolo em camadas; o electron-builder
+  # compila o .icon em Assets.car e gera um .icns de compatibilidade.
+  icon: build/icon-mac.icon
   category: public.app-category.music
   # Assinatura + notarização (certificado Developer ID + credenciais Apple
   # fornecidas via env no CI: CSC_LINK/CSC_KEY_PASSWORD + APPLE_ID/
@@ -201,6 +189,8 @@ mac:
 
 dmg:
   artifactName: "LouvorJA.Violin-${version}.${ext}"
+  # O ícone do volume DMG ainda precisa do formato estático .icns.
+  icon: build/icon-mac.icns
 
 # ---------------------------------------------------------------------------
 # Linux — AppImage

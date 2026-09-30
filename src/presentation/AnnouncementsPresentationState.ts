@@ -17,6 +17,7 @@ export interface AnnouncementSlide {
     textShadow?: boolean;
     textShadowColor?: string;
     textShadowBlur?: number;
+    mediaFit?: "cover" | "contain" | "fill" | "none";
   };
 }
 
@@ -54,6 +55,8 @@ function validStyle(value: unknown): boolean {
   if (value.align !== undefined && !["left", "center", "right"].includes(value.align as string)) return false;
   if (value.alignY !== undefined && !["flex-start", "center", "flex-end"].includes(value.alignY as string)) return false;
   if (value.textShadow !== undefined && typeof value.textShadow !== "boolean") return false;
+  if (value.mediaFit !== undefined &&
+      !["cover", "contain", "fill", "none"].includes(value.mediaFit as string)) return false;
   return true;
 }
 

@@ -31,7 +31,8 @@
   "added_to_playlist": "Añadido a la lista de reproducción",
   "ribbon": {
     "title_ctx": "Gestionar Biblioteca de Medios",
-    "background": "Fondo de Proyección"
+    "background": "Fondo de Proyección",
+    "transitions_group": "Transición entre medios"
   },
   "bg_color": "Color de fondo",
   "bg_position": "Posición",

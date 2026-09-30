@@ -70,7 +70,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   counter = 0;
   Object.assign(URL, { createObjectURL, revokeObjectURL });
-  mocks.openCustomSong.mockResolvedValue(undefined);
+  mocks.openCustomSong.mockResolvedValue(true);
 });
 
 describe("openSlja", () => {
@@ -138,11 +138,25 @@ describe("openSlja", () => {
     let revogadasQuandoBAssumiu = -1;
     mocks.openCustomSong.mockImplementationOnce(async () => {
       revogadasQuandoBAssumiu = revokeObjectURL.mock.calls.length;
+      return true;
     });
     await openSlja(await pacote());
 
     expect(revogadasQuandoBAssumiu).toBe(0);
     expect(revokeObjectURL.mock.calls.map((c) => c[0])).toEqual(urlsDeA);
+  });
+
+  it("preserva a apresentação anterior quando a nova não consegue projetar", async () => {
+    expect(await openSlja(await pacote())).toBe(true);
+    const urlsDeA = createObjectURL.mock.results.map((r) => r.value);
+    revokeObjectURL.mockClear();
+
+    mocks.openCustomSong.mockResolvedValueOnce(false);
+    expect(await openSlja(await pacote())).toBe(false);
+
+    const revogadas = revokeObjectURL.mock.calls.map((call) => call[0]);
+    expect(revogadas).not.toContain(urlsDeA[0]);
+    expect(revogadas.length).toBeGreaterThan(0);
   });
 
   it("arquivo que não é um pacote vira alerta, não exceção", async () => {

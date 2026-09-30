@@ -2,7 +2,7 @@
   <ModuleContainer
     ref="moduleContainer"
     :manifest="manifest"
-    :style="{ minWidth: '340px' }"
+    :style="{ minWidth: isMobileWeb ? '0' : '340px' }"
     @close="close()"
   >
     <template #right>
@@ -96,6 +96,7 @@
 import { LjButton, LjChip, LjProgress } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ref, computed, watch, nextTick, onBeforeUnmount } from "vue";
+import { useViewport } from "@/composables/useViewport";
 import { module as manifest } from "../manifest";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import ModuleFormatDrawer from "@/components/ModuleFormatDrawer.vue";
@@ -108,6 +109,8 @@ import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import DrawProjection from "./DrawProjection.vue";
 
 const { show_format } = useModuleFormat("draw", manifest);
+const { width: viewportWidth } = useViewport();
+const isMobileWeb = computed(() => viewportWidth.value > 0 && viewportWidth.value <= 700);
 
 const projection = useModuleProjection("draw", {
   onAction(action) {
@@ -408,5 +411,32 @@ onBeforeUnmount(() => {
 }
 .draw-fs-footer-progress {
   width: 400px;
+}
+
+@media (max-width: 700px) {
+  .draw-fs-root {
+    height: 100dvh;
+    gap: var(--lj-space-5);
+    padding: var(--lj-space-4);
+  }
+
+  .draw-fs-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--lj-space-2);
+  }
+
+  .draw-fs-actions :deep(.lj-btn) {
+    min-height: 44px;
+  }
+
+  .draw-fs-footer {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .draw-fs-footer-progress {
+    width: min(400px, 100%);
+  }
 }
 </style>

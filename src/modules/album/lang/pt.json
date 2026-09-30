@@ -1,9 +1,15 @@
 {
   "title": "Álbum",
   "description": "Exibe as músicas de um álbum (função $media.openAlbum)",
+  "track_one": "faixa",
+  "track_many": "faixas",
+  "tracks_region": "Faixas do álbum",
+  "loading": "Carregando faixas",
+  "empty": "Nenhuma música neste álbum.",
   "table": {
     "track": "Faixa",
     "music_name": "Nome",
-    "duration": "Duração"
+    "duration": "Duração",
+    "actions": "Ações"
   }
 }

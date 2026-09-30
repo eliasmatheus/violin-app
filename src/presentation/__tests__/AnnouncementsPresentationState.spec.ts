@@ -52,4 +52,32 @@ describe("AnnouncementsPresentationState", () => {
     expect(gate.accept({ ...second, index: 1 })).toEqual(second);
     expect(readAnnouncementPacket({ ...second, announcement_revision: -1 })).toBeNull();
   });
+
+  const packetWithFit = (mediaFit: unknown) => ({
+    ...intent("fit", 1),
+    announcement_schema: 1,
+    announcement_revision: 1,
+    active: true,
+    slides: [{ id: "m", nome: "M", ordem: 1, style: { mediaFit } }],
+  });
+
+  it("accepts every known mediaFit and slides without it", () => {
+    for (const fit of ["cover", "contain", "fill", "none"]) {
+      expect(readAnnouncementPacket(packetWithFit(fit))?.slides[0].style?.mediaFit).toBe(fit);
+    }
+    const plain = {
+      ...intent("fit", 2),
+      announcement_schema: 1,
+      announcement_revision: 1,
+      active: true,
+      slides: [{ id: "m", nome: "M", ordem: 1 }],
+    };
+    expect(readAnnouncementPacket(plain)).not.toBeNull();
+  });
+
+  it("rejects unknown mediaFit values and wrong types at the boundary", () => {
+    expect(readAnnouncementPacket(packetWithFit("crop"))).toBeNull();
+    expect(readAnnouncementPacket(packetWithFit(123))).toBeNull();
+    expect(readAnnouncementPacket(packetWithFit(["cover"]))).toBeNull();
+  });
 });

@@ -54,8 +54,12 @@ export interface FileProjectionState {
   stage_epoch?: number;
   page?: number;
   totalPages?: number;
+  /** Navegação veio do "anterior" — inverte o modo automático de direção. */
+  backward?: boolean;
   /** Referência para re-resolver URLs blob via IndexedDB na janela alvo. */
   libRef?: { table?: string; id: string };
+  /** HEIC/HEIF validado pelo emissor; cada janela converte seus próprios bytes. */
+  heic?: boolean;
 }
 
 export interface MediaFile {

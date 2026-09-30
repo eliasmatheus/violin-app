@@ -77,8 +77,8 @@ function toggleMaximize() {
   display: flex;
   align-items: stretch;
   height: var(--lj-systembar-height);
-  background: var(--lj-titlebar-bg);
-  color: var(--lj-titlebar-color);
+  background: var(--lj-shell-chrome-bg);
+  color: var(--lj-shell-chrome-color);
   font-size: var(--lj-text-base);
   user-select: none;
   flex-shrink: 0;
@@ -145,13 +145,5 @@ function toggleMaximize() {
 
 .systembar-tools--win {
   padding-right: var(--lj-space-5);
-}
-
-.systembar-tools .shell-tool {
-  height: var(--lj-systembar-height);
-  color: var(--lj-white);
-}
-.systembar-tools .shell-tool:hover {
-  background: var(--lj-white-alpha-18);
 }
 </style>

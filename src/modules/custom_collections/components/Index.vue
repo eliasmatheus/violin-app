@@ -1,7 +1,7 @@
 <template>
   <ModuleContainer ref="moduleContainer" :manifest="manifest" @show="onShow" @close="onClose">
     <template #header>
-      <div class="cc-toolbar">
+      <div class="cc-toolbar" :class="{ 'cc-toolbar--mobile': mobileLayout }">
         <LjTabs v-model="activeTab" :tabs="tabItems" :aria-label="tm('title')" />
         <span class="lj-u-spacer" />
         <template v-if="activeTab === 'songs'">
@@ -19,7 +19,7 @@
     </template>
 
     <!-- Aba: Músicas -->
-    <div v-if="activeTab === 'songs'" class="cc-pane">
+    <div v-if="activeTab === 'songs'" class="cc-pane" :class="{ 'cc-pane--mobile': mobileLayout }">
       <LjEmpty v-if="songs.length === 0" :title="tm('data.empty_songs')" />
       <div v-else class="cc-song-grid">
         <LjCard
@@ -82,8 +82,8 @@
     </div>
 
     <!-- Aba: Coletâneas -->
-    <div v-else class="cc-collections">
-      <div class="cc-col-list">
+    <div v-else class="cc-collections" :class="{ 'cc-collections--mobile': mobileLayout }">
+      <div v-show="!mobileLayout || collectionView === 'list'" class="cc-col-list">
         <ul v-if="collections.length > 0" class="cc-col-items">
           <li
             v-for="c in collections"
@@ -95,7 +95,7 @@
               type="button"
               class="cc-col-item__main"
               :aria-current="selectedCollectionId === c.id ? 'true' : undefined"
-              @click="selectedCollectionId = c.id"
+              @click="openCollection(c.id)"
             >
               <span class="cc-col-dot" :style="{ background: c.cor }" />
               <span class="cc-col-item__text">
@@ -123,7 +123,16 @@
         <p v-else class="cc-col-empty">{{ tm("data.empty_collections") }}</p>
       </div>
 
-      <div class="cc-col-detail">
+      <div v-show="!mobileLayout || collectionView === 'detail'" class="cc-col-detail">
+        <button
+          v-if="mobileLayout"
+          type="button"
+          class="cc-col-back"
+          @click="collectionView = 'list'"
+        >
+          <LjIcon :icon="ICONS.ACTIONS.PREVIOUS" :size="18" />
+          {{ tm("tabs.collections") }}
+        </button>
         <p v-if="!selectedCollection" class="cc-col-hint">←</p>
         <template v-else>
           <div class="cc-col-header">
@@ -208,6 +217,8 @@ import SljaConverter from "@/helpers/SljaConverter";
 import AudioLibrary from "@/helpers/AudioLibrary";
 import $alert from "@/helpers/Alert";
 import Media from "@/composables/useMedia";
+import { useViewport } from "@/composables/useViewport";
+import Platform from "@/helpers/Platform";
 
 const SHARE_KEY = "slide_editor_song_v2";
 
@@ -218,6 +229,14 @@ const activeTab = ref("songs");
 const songs = ref([]);
 const collections = ref([]);
 const selectedCollectionId = ref(null);
+const { width: viewportWidth } = useViewport();
+const mobileLayout = computed(() => !Platform.isDesktop && viewportWidth.value <= 1000);
+const collectionView = ref("list");
+
+function openCollection(id) {
+  selectedCollectionId.value = id;
+  if (mobileLayout.value) collectionView.value = "detail";
+}
 
 // Cache de URLs de imagem do primeiro slide de cada música (preview do card).
 const songPreviewImages = ref(new Map());
@@ -528,6 +547,7 @@ async function actNewCollection() {
   await CustomSongs.saveCollection(c);
   await loadAll();
   selectedCollectionId.value = c.id;
+  if (mobileLayout.value) collectionView.value = "detail";
 }
 
 async function renameCollection(c) {
@@ -828,5 +848,121 @@ async function persistCollectionOrder() {
   display: inline-flex;
   color: var(--lj-text-subtle);
   cursor: grab;
+}
+
+@media (max-width: 1000px) {
+  .cc-toolbar--mobile {
+    flex-wrap: wrap;
+    gap: var(--lj-space-2);
+  }
+
+  .cc-toolbar--mobile :deep(.lj-tabs) {
+    width: 100%;
+  }
+
+  .cc-toolbar--mobile :deep(.lj-tabs__list) {
+    width: 100%;
+  }
+
+  .cc-toolbar--mobile :deep(.lj-tabs__trigger) {
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
+    min-height: 44px;
+    padding-inline: var(--lj-space-2);
+  }
+
+  .cc-toolbar--mobile .lj-u-spacer {
+    display: none;
+  }
+
+  .cc-toolbar--mobile :deep(.lj-btn) {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  .cc-pane--mobile {
+    min-width: 0;
+    padding: var(--lj-space-3);
+  }
+
+  .cc-pane--mobile .cc-song-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: var(--lj-space-3);
+  }
+
+  .cc-pane--mobile .cc-song {
+    width: 100%;
+  }
+
+  .cc-pane--mobile .cc-song__actions :deep(.lj-btn) {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .cc-collections--mobile {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .cc-collections--mobile .cc-col-list,
+  .cc-collections--mobile .cc-col-detail {
+    width: 100%;
+    min-width: 0;
+    border-right: 0;
+  }
+
+  .cc-collections--mobile .cc-col-item__main {
+    min-height: 56px;
+  }
+
+  .cc-collections--mobile .cc-col-item :deep(.lj-btn),
+  .cc-collections--mobile .cc-song-row :deep(.lj-btn) {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .cc-collections--mobile .cc-col-detail {
+    padding: var(--lj-space-3);
+  }
+
+  .cc-collections--mobile .cc-col-back {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lj-space-2);
+    min-height: 44px;
+    margin-bottom: var(--lj-space-2);
+    padding: 0 var(--lj-space-3);
+    border: 0;
+    border-radius: var(--lj-radius-sm);
+    background: var(--lj-surface-bg-soft);
+    color: var(--lj-text);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .cc-collections--mobile .cc-col-header {
+    flex-wrap: wrap;
+    gap: var(--lj-space-2);
+  }
+
+  .cc-collections--mobile .cc-col-header .lj-u-spacer {
+    display: none;
+  }
+
+  .cc-collections--mobile .cc-col-title {
+    width: 100%;
+  }
+
+  .cc-collections--mobile .cc-col-header :deep(.lj-btn) {
+    min-height: 44px;
+  }
+
+  .cc-collections--mobile .cc-song-row {
+    gap: var(--lj-space-2);
+    min-height: 56px;
+    padding-inline: var(--lj-space-2);
+  }
 }
 </style>

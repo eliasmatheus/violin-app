@@ -41,6 +41,8 @@
   "add_auto_created": "{n} itens criados com sucesso.",
   "add_auto_updated": "{n} itens atualizados",
   "add_auto_no_files": "Nenhum arquivo encontrado no padrão.",
+  "add_auto_scanning": "Escaneando arquivos...",
+  "add_auto_error": "Erro ao escanear os arquivos.",
   "add_auto_desktop_only": "Disponível apenas no desktop.",
   "ribbon": {
     "title_ctx": "Gerenciar Itens Agendados",

@@ -50,6 +50,9 @@ const _audio = useAudioPlayback();
 const _slides = useSlides();
 const _lyric = useLyric();
 const _album = useAlbum();
+function _closeAlbumForPresentation(): void {
+  if (_album.loading.value || _album.id_album.value !== null) _album.close();
+}
 let _loadingId: string | number | null = null;
 let _playlistOnEnd: (() => boolean) | null = null;
 // XHR atual de download de áudio — abortado ao trocar de música rapidamente
@@ -1096,11 +1099,12 @@ const _self = {
     _broadcastVideoState();
   },
 
-  async open(params: MediaOpenParams | string | number): Promise<void> {
+  async open(params: MediaOpenParams | string | number): Promise<boolean> {
     params = _openParams(params);
     const requestedId = params.id_music;
     if (!((typeof requestedId === "string" && requestedId.trim().length > 0) ||
-      (typeof requestedId === "number" && Number.isFinite(requestedId)))) return;
+      (typeof requestedId === "number" && Number.isFinite(requestedId)))) return false;
+    _closeAlbumForPresentation();
 
     $dev.write("open media", params);
     const playback_id = _newPlaybackId();
@@ -1186,14 +1190,14 @@ const _self = {
         );
         $alert.error({ text: "modules.remote_control.messages.error", error });
       }
-      return;
+      return false;
     }
 
     const stageEpoch = ++_stageEpoch;
     _dropPendingDownload();
     _opening.value = null;
     await _releaseFileVideoStage(stageEpoch);
-    if (stageEpoch !== _stageEpoch) return;
+    if (stageEpoch !== _stageEpoch) return false;
 
     // Crossfade: se há audio tocando, faz fade out antes de carregar a nova música
     const _existingAudio = _audio.getElement();
@@ -1265,7 +1269,7 @@ const _self = {
         })
       );
       if (_loadingId === id_music && _activePlayback?.playback_id === playback_id) this.close(true);
-      return;
+      return false;
     } finally {
       if (metadataTimeout) clearTimeout(metadataTimeout);
     }
@@ -1287,7 +1291,7 @@ const _self = {
         })
       );
       if (data == null && _loadingId === id_music && isCurrentPlayback) this.close(true);
-      return;
+      return false;
     }
     Telemetry.track("music_opened", {
       playback_id,
@@ -1335,7 +1339,7 @@ const _self = {
         );
         $appdata.set(KEYS.MODULES.MEDIA.LOADING, false);
         this.close(true);
-        return;
+        return false;
       }
       try {
         audioUrl = $path.file(rawAudioPath as string);
@@ -1353,7 +1357,7 @@ const _self = {
         );
         $appdata.set(KEYS.MODULES.MEDIA.LOADING, false);
         this.close(true);
-        return;
+        return false;
       }
     }
 
@@ -1368,6 +1372,7 @@ const _self = {
       mode,
       playbackId: playback_id,
     });
+    return true;
   },
 
   /**
@@ -1590,12 +1595,13 @@ const _self = {
       tamanho_letra_aux?: number;
       tempo_seconds?: number;
     }>;
-  }): Promise<void> {
+  }): Promise<boolean> {
+    _closeAlbumForPresentation();
     const stageEpoch = ++_stageEpoch;
     _dropPendingDownload();
     _opening.value = null;
     await _releaseFileVideoStage(stageEpoch);
-    if (stageEpoch !== _stageEpoch) return;
+    if (stageEpoch !== _stageEpoch) return false;
     $dev.write("open custom song", song?.nome);
     const playback_id = _newPlaybackId();
     const playbackContext: AudioTelemetryContext = {
@@ -1626,7 +1632,7 @@ const _self = {
             "custom_music_open_failed",
             _telemetryFor(playbackContext, { reason: "superseded" })
           );
-          return;
+          return false;
         }
       }
       slidesArray.push({
@@ -1648,7 +1654,7 @@ const _self = {
     }
     if (!slidesArray.length) {
       this.close(true);
-      return;
+      return false;
     }
 
     const audioUrl = song.audio_token
@@ -1659,7 +1665,7 @@ const _self = {
         "custom_music_open_failed",
         _telemetryFor(playbackContext, { reason: "superseded" })
       );
-      return;
+      return false;
     }
 
     if (song.audio_token && !audioUrl) {
@@ -1686,6 +1692,7 @@ const _self = {
       mode: "audio",
       playbackId: playback_id,
     });
+    return true;
   },
 
   /**
@@ -1960,6 +1967,7 @@ const _self = {
     } else if (typeof params != "object") {
       params = { id_music: params };
     }
+    _closeAlbumForPresentation();
     Telemetry.track("music_lyrics_opened", {
       id_music: params.id_music,
       id_album: params.id_album,
@@ -1992,6 +2000,7 @@ const _self = {
 
   async openAudio(params: MediaOpenParams | string | number, preserveProjectionStage = false): Promise<void> {
     params = _openParams(params);
+    _closeAlbumForPresentation();
     const stageEpoch = preserveProjectionStage ? _stageEpoch : ++_stageEpoch;
     if (!preserveProjectionStage) {
       _dropPendingDownload();

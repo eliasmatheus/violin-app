@@ -25,6 +25,11 @@
   "align_y": "Alinhamento vertical",
   "align_top": "Cima",
   "align_bottom": "Baixo",
+  "media_fit": "Disposição da mídia",
+  "fit_cover": "Cover (preencher)",
+  "fit_contain": "Contain (caber)",
+  "fit_fill": "Fill (esticar)",
+  "fit_none": "None (original)",
   "save": "Salvar",
   "cancel": "Cancelar",
   "delete": "Excluir",
@@ -35,5 +40,9 @@
   "project": "Projetar",
   "stop": "Parar",
   "next": "Próximo",
-  "prev": "Anterior"
+  "prev": "Anterior",
+  "ribbon": {
+    "title_ctx": "Transições",
+    "transitions_group": "Transição entre slides"
+  }
 }

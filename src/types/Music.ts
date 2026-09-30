@@ -36,6 +36,8 @@ export interface MusicItem {
 export interface SearchMusicItem extends MusicItem {
   track?: string | number;
   album?: string;
+  custom_song_id?: string;
+  custom_collection_names?: string[];
 }
 
 export interface PlaylistSong {

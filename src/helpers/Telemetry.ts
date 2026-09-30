@@ -1860,6 +1860,7 @@ async function flushPendingMainErrors(): Promise<void> {
 function scheduleDomDiagnostic(posthog: PostHog): void {
   if (typeof document === "undefined") return;
   const report = () => {
+    if (!isEnabled()) return;
     const slide = document.querySelector<HTMLElement>("[data-testid='slide-content']");
     const root = document.querySelector("#app");
     const rect = slide?.getBoundingClientRect();

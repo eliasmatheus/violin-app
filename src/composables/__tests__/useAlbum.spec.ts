@@ -59,4 +59,24 @@ describe("álbum selecionado para exibição", () => {
     expect(state["modules.album.show"]).toBe(false);
     expect(useAlbum().id_album.value).toBeNull();
   });
+
+  it("não reabre um álbum cujo carregamento terminou depois do fechamento", async () => {
+    let finishLoad!: (value: { id_album: number; name: string }) => void;
+    get.mockReturnValue(
+      new Promise((resolve) => {
+        finishLoad = resolve;
+      })
+    );
+
+    const album = useAlbum();
+    const opening = album.open(10);
+    expect(album.loading.value).toBe(true);
+    album.close();
+    finishLoad({ id_album: 10, name: "Álbum tardio" });
+    await opening;
+
+    expect(state["modules.album.show"]).toBe(false);
+    expect(album.loading.value).toBe(false);
+    expect(album.id_album.value).toBeNull();
+  });
 });

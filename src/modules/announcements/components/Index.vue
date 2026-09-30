@@ -7,9 +7,22 @@
     @close="close"
     @keydown="onKeyDown"
   >
-    <div class="an-root">
+    <nav v-if="mobileLayout" class="an-mobile-nav" :aria-label="tm('title')">
+      <button
+        v-for="pane in mobilePanes"
+        :key="pane.value"
+        type="button"
+        :class="{ 'is-active': mobilePane === pane.value }"
+        :aria-current="mobilePane === pane.value ? 'page' : undefined"
+        :disabled="pane.value !== 'list' && !editing"
+        @click="mobilePane = pane.value"
+      >
+        {{ pane.label }}
+      </button>
+    </nav>
+    <div class="an-root" :class="{ 'an-root--mobile': mobileLayout }">
       <!-- Lista ordenada -->
-      <aside class="an-list">
+      <aside v-show="!mobileLayout || mobilePane === 'list'" class="an-list">
         <div class="an-list-head">
           <span>{{ tm("list") }}</span>
           <LjButton
@@ -39,7 +52,7 @@
               <draggable
                 :list="sorted"
                 item-key="id"
-                handle=".an-item"
+                :handle="mobileLayout ? '.an-drag-handle' : '.an-item'"
                 :animation="150"
                 ghost-class="an-item--ghost"
                 @end="onDragEnd"
@@ -48,7 +61,7 @@
                   <div
                     class="an-item"
                     :class="{ 'an-item--active': selectedId === a.id }"
-                    @click="selectedId = a.id"
+                    @click="selectAnnouncement(a.id)"
                     @contextmenu="onContextMenu(a)"
                   >
                     <LjIcon :icon="ICONS.ACTIONS.DRAG" :size="15" class="an-drag-handle" />
@@ -118,7 +131,8 @@
             />
             <LjButton
               size="sm"
-              :icon="ICONS.PLAYER.STOP"
+              variant="danger"
+              :icon="ICONS.PLAYER.STOP_NOW"
               :disabled="!projecting"
               @click="stopProject"
             >
@@ -139,7 +153,7 @@
       </aside>
 
       <!-- Preview -->
-      <div class="an-preview">
+      <div v-show="!mobileLayout || mobilePane === 'preview'" class="an-preview">
         <div
           v-if="editing"
           class="an-preview-box"
@@ -154,8 +168,14 @@
             controls
             muted
             class="an-preview-media"
+            :style="mediaFitStyle"
           />
-          <img v-else-if="editing.imageData" :src="imageObjectUrl" class="an-preview-media" />
+          <img
+            v-else-if="editing.imageData"
+            :src="imageObjectUrl"
+            class="an-preview-media"
+            :style="mediaFitStyle"
+          />
           <div
             v-if="editing.texto"
             class="an-preview-text"
@@ -169,7 +189,7 @@
       </div>
 
       <!-- Inputs -->
-      <aside v-if="editing" class="an-inputs">
+      <aside v-if="editing" v-show="!mobileLayout || mobilePane === 'edit'" class="an-inputs">
         <div class="an-inputs-scroll">
           <LjField layout="column" :label="tm('name')">
             <LjInput v-model="editing.nome" @update:model-value="save" />
@@ -300,10 +320,27 @@
                 @update:model-value="setStyle('alignY', $event)"
               />
             </LjField>
+            <LjField
+              v-if="editing.imageData || editing.videoData"
+              layout="column"
+              :label="tm('media_fit')"
+            >
+              <LjSelect
+                size="sm"
+                :model-value="editing.style?.mediaFit || 'contain'"
+                :items="[
+                  { label: tm('fit_cover'), value: 'cover' },
+                  { label: tm('fit_contain'), value: 'contain' },
+                  { label: tm('fit_fill'), value: 'fill' },
+                  { label: tm('fit_none'), value: 'none' },
+                ]"
+                @update:model-value="setStyle('mediaFit', $event)"
+              />
+            </LjField>
           </div>
         </div>
       </aside>
-      <aside v-else class="an-inputs an-inputs--empty" />
+      <aside v-else v-show="!mobileLayout" class="an-inputs an-inputs--empty" />
     </div>
   </ModuleContainer>
 </template>
@@ -340,6 +377,8 @@ import $broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useFileProjection } from "@/composables/useFileProjection";
 import { beginAnnouncementIntent } from "@/presentation/AnnouncementsPresentationState";
+import { useViewport } from "@/composables/useViewport";
+import Platform from "@/helpers/Platform";
 
 interface AnnStyle {
   bgColor: string;
@@ -350,6 +389,7 @@ interface AnnStyle {
   textShadow?: boolean;
   textShadowColor?: string;
   textShadowBlur?: number;
+  mediaFit?: "cover" | "contain" | "fill" | "none";
 }
 
 interface Announcement {
@@ -366,13 +406,26 @@ interface Announcement {
   style: AnnStyle;
 }
 
-const { t: i18nT } = useI18n();
+const { t: i18nT, locale } = useI18n();
 function tm(key: string): string {
   return i18nT(`modules.announcements.${key}`);
 }
 
 const announcements = ref<Announcement[]>([]);
 const selectedId = ref<string | null>(null);
+const { width: viewportWidth } = useViewport();
+const mobileLayout = computed(() => !Platform.isDesktop && viewportWidth.value <= 1000);
+const mobilePane = ref<"list" | "preview" | "edit">("list");
+const mobilePanes = computed<{ value: "list" | "preview" | "edit"; label: string }[]>(() => [
+  { value: "list", label: tm("list") },
+  { value: "preview", label: locale.value.startsWith("es") ? "Vista previa" : "Prévia" },
+  { value: "edit", label: tm("edit") },
+]);
+
+function selectAnnouncement(id: string): void {
+  selectedId.value = id;
+  if (mobileLayout.value) mobilePane.value = "edit";
+}
 const projecting = ref(false);
 const imageInput = ref<HTMLInputElement | null>(null);
 const videoInput = ref<HTMLInputElement | null>(null);
@@ -415,12 +468,17 @@ const videoObjectUrl = computed(() => {
   return _vidObjUrl;
 });
 
+const mediaFitStyle = computed(() => ({
+  objectFit: editing.value?.style?.mediaFit || "contain",
+}));
+
 const previewTextStyle = computed(() => {
   const hasMedia = !!(editing.value?.videoData || editing.value?.imageData);
   const ay = editing.value?.style?.alignY || "center";
+  const fontSize = editing.value?.style?.fontSize || 64;
   const base: Record<string, string> = {
     color: editing.value?.style?.textColor || "#ffffff",
-    fontSize: `${editing.value?.style?.fontSize || 64}px`,
+    fontSize: `${mobileLayout.value ? Math.max(12, Math.round((fontSize * viewportWidth.value) / 900)) : fontSize}px`,
     textAlign: editing.value?.style?.align || "center",
   };
   if (editing.value?.style?.textShadow) {
@@ -491,15 +549,19 @@ function addAnnouncement(): void {
     },
   };
   announcements.value.push(a);
-  void save();
   selectedId.value = a.id;
+  if (mobileLayout.value) mobilePane.value = "edit";
+  void saveItem(a);
 }
 
 async function removeAnnouncement(a: Announcement): Promise<void> {
   if (!confirm(tm("delete_confirm"))) return;
   await $idb.del(TABLE, a.id);
   announcements.value = announcements.value.filter((x) => x.id !== a.id);
-  if (selectedId.value === a.id) selectedId.value = null;
+  if (selectedId.value === a.id) {
+    selectedId.value = null;
+    if (mobileLayout.value) mobilePane.value = "list";
+  }
 }
 
 async function onDragEnd(): Promise<void> {
@@ -673,8 +735,9 @@ function ctxDuplicate(): void {
     style: { ...dup.style },
   };
   announcements.value.push(plain);
-  void save();
   selectedId.value = plain.id;
+  if (mobileLayout.value) mobilePane.value = "edit";
+  void saveItem(plain);
 }
 
 function ctxDelete(): void {
@@ -832,8 +895,10 @@ function close(): void {
   position: relative;
 }
 .an-preview-media {
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   object-fit: contain;
 }
 .an-preview-text {
@@ -851,7 +916,7 @@ function close(): void {
   pointer-events: none;
 }
 .an-preview-empty {
-  color: var(--lj-white-alpha-25);
+  color: var(--lj-text-on-navy-muted);
   font-size: var(--lj-text-md);
 }
 
@@ -921,6 +986,136 @@ function close(): void {
 }
 .an-color :deep(.lj-input__field) {
   cursor: pointer;
+}
+
+@media (max-width: 1000px) {
+  .an-mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--lj-space-2);
+    flex-shrink: 0;
+    padding: var(--lj-space-2) var(--lj-space-3);
+    border-bottom: 1px solid var(--lj-surface-border);
+  }
+
+  .an-mobile-nav button {
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 var(--lj-space-1);
+    border: 1px solid var(--lj-surface-border);
+    border-radius: var(--lj-radius-sm);
+    background: var(--lj-surface-bg-soft);
+    color: var(--lj-text);
+    font: inherit;
+    font-size: var(--lj-text-sm);
+    cursor: pointer;
+  }
+
+  .an-mobile-nav button.is-active {
+    border-color: var(--lj-ui-accent);
+    background: var(--lj-ui-accent-soft);
+    color: var(--lj-ui-accent-text);
+    font-weight: var(--lj-weight-semibold);
+  }
+
+  .an-mobile-nav button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .an-root--mobile {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    padding: var(--lj-space-3);
+  }
+
+  .an-root--mobile .an-list,
+  .an-root--mobile .an-preview,
+  .an-root--mobile .an-inputs {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .an-root--mobile .an-list-head :deep(.lj-btn),
+  .an-root--mobile .an-project-controls :deep(.lj-btn) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .an-root--mobile .an-item :deep(.an-item-delete.lj-btn) {
+    min-width: 44px;
+    min-height: 44px;
+    opacity: 1;
+  }
+
+  .an-root--mobile .an-item {
+    min-height: 56px;
+    padding-inline: var(--lj-space-2);
+  }
+
+  .an-root--mobile .an-drag-handle {
+    box-sizing: content-box;
+    padding: var(--lj-space-2);
+    margin: calc(-1 * var(--lj-space-2));
+    opacity: 0.7;
+    touch-action: none;
+  }
+
+  .an-root--mobile .an-project {
+    padding-block: var(--lj-space-3);
+    background: var(--lj-surface-bg);
+  }
+
+  .an-root--mobile .an-project > :deep(.lj-btn) {
+    min-height: 44px;
+  }
+
+  .an-root--mobile .an-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--lj-surface-bg-soft);
+    border: 1px solid var(--lj-surface-border);
+  }
+
+  .an-root--mobile .an-preview-box {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    aspect-ratio: 16 / 9;
+    padding: var(--lj-space-3);
+    overflow: hidden;
+    box-shadow: 0 8px 28px var(--lj-black-alpha-40);
+  }
+
+  .an-root--mobile .an-preview-text {
+    padding: var(--lj-space-2);
+  }
+
+  .an-root--mobile .an-inputs-scroll {
+    min-width: 0;
+    padding-bottom: var(--lj-space-4);
+  }
+
+  .an-root--mobile .an-inputs :deep(input),
+  .an-root--mobile .an-inputs :deep(textarea) {
+    font-size: 16px;
+  }
+
+  .an-root--mobile .an-media-row :deep(.lj-btn) {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  .an-root--mobile .an-textarea :deep(.lj-textarea) {
+    min-height: 88px;
+  }
 }
 </style>
 

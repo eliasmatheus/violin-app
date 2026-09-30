@@ -7,7 +7,7 @@
     @close="onClose"
   >
     <template #header>
-      <div class="se-statusbar-inline">
+      <div class="se-statusbar-inline" :class="{ 'se-statusbar-inline--mobile': mobileLayout }">
         <button class="se-rename-btn" :title="tm('labels.name')" @click="renameSong">
           <LjIcon size="14" :icon="ICONS.ACTIONS.EDIT_OUTLINE" />
         </button>
@@ -38,10 +38,23 @@
       </div>
     </template>
 
+    <nav v-if="mobileLayout" class="se-mobile-nav" :aria-label="tm('title')">
+      <button
+        v-for="pane in mobilePanes"
+        :key="pane.value"
+        type="button"
+        :class="{ 'is-active': mobilePane === pane.value }"
+        :aria-current="mobilePane === pane.value ? 'page' : undefined"
+        @click="mobilePane = pane.value"
+      >
+        {{ pane.label }}
+      </button>
+    </nav>
+
     <!-- Workspace -->
-    <div class="se-workspace">
+    <div class="se-workspace" :class="{ 'se-workspace--mobile': mobileLayout }">
       <!-- Coluna esquerda: lista de slides -->
-      <aside class="se-slide-list">
+      <aside v-show="!mobileLayout || mobilePane === 'slides'" class="se-slide-list">
         <div class="se-slide-list-header">
           <span class="se-slide-list-title">{{ tm("labels.slides") }}</span>
           <span class="se-slide-list-count">{{ slides.length }}</span>
@@ -53,7 +66,10 @@
                 class="se-thumb"
                 :class="{ 'is-active': index === current }"
                 :style="thumbStyle(element)"
-                @click="goSlide(index)"
+                role="button"
+                tabindex="0"
+                @click="selectSlide(index)"
+                @keydown.enter="selectSlide(index)"
               >
                 <span class="se-thumb-num">{{ index + 1 }}</span>
                 <span v-if="element.tempo_seconds > 0" class="se-thumb-time">
@@ -77,7 +93,7 @@
       </aside>
 
       <!-- Coluna central: preview + player ao pé -->
-      <section class="se-center">
+      <section v-show="!mobileLayout || mobilePane === 'preview'" class="se-center">
         <div class="se-preview-stage">
           <div class="se-preview-frame" :class="`is-${aspectRatio}`">
             <div class="se-preview" :style="previewStyle">
@@ -153,7 +169,7 @@
       </section>
 
       <!-- Coluna direita: painel de propriedades (accordions) -->
-      <aside class="se-editor-side">
+      <aside v-show="!mobileLayout || mobilePane === 'format'" class="se-editor-side">
         <!-- ===== Texto ===== -->
         <details class="se-panel" open>
           <summary class="se-panel-head">
@@ -436,10 +452,20 @@ import { useSlideStyle } from "@/composables/useSlideStyle";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import Media from "@/composables/useMedia";
 import { readMusicPresentationPacket } from "@/presentation/MusicPresentationPacket";
+import { useViewport } from "@/composables/useViewport";
+import Platform from "@/helpers/Platform";
 
 const SESSION_KEY = "slide_editor_song_v2";
 
 const moduleContainer = ref(null);
+const { width: viewportWidth } = useViewport();
+const mobileLayout = computed(() => !Platform.isDesktop && viewportWidth.value <= 1000);
+const mobilePane = ref("slides");
+const mobilePanes = computed(() => [
+  { value: "slides", label: tm("tabs.slides") },
+  { value: "preview", label: tm("tabs.view") },
+  { value: "format", label: tm("tabs.format") },
+]);
 const audioEl = ref(null);
 const fileSlja = ref(null);
 const fileTxt = ref(null);
@@ -636,6 +662,11 @@ function goSlide(idx) {
     audioEl.value.currentTime = ts;
     audioCurrentTime.value = ts;
   }
+}
+
+function selectSlide(idx) {
+  goSlide(idx);
+  if (mobileLayout.value) mobilePane.value = "preview";
 }
 
 function onReorder() {
@@ -2208,5 +2239,150 @@ function replicateText(scope) {
   white-space: nowrap;
   opacity: 0.85;
   flex-shrink: 0;
+}
+
+@media (max-width: 1000px) {
+  .se-statusbar-inline--mobile {
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: var(--lj-space-2);
+    padding: 0;
+  }
+
+  .se-statusbar-inline--mobile .se-rename-btn {
+    width: 40px;
+    height: 40px;
+    opacity: 1;
+  }
+
+  .se-statusbar-inline--mobile .se-status-cell {
+    white-space: nowrap;
+  }
+
+  .se-mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--lj-space-2);
+    flex-shrink: 0;
+    padding: var(--lj-space-2) var(--lj-space-3);
+    border-bottom: 1px solid var(--lj-surface-border);
+  }
+
+  .se-mobile-nav button {
+    min-width: 0;
+    min-height: 44px;
+    padding-inline: var(--lj-space-1);
+    border: 1px solid var(--lj-surface-border);
+    border-radius: var(--lj-radius-sm);
+    background: var(--lj-surface-bg-soft);
+    color: var(--lj-text);
+    font: inherit;
+    font-size: var(--lj-text-sm);
+    cursor: pointer;
+  }
+
+  .se-mobile-nav button.is-active {
+    border-color: var(--lj-ui-accent);
+    background: var(--lj-ui-accent-soft);
+    color: var(--lj-ui-accent-text);
+    font-weight: var(--lj-weight-semibold);
+  }
+
+  .se-workspace--mobile {
+    display: flex;
+    flex: 1;
+    height: auto;
+    min-height: 0;
+  }
+
+  .se-workspace--mobile .se-slide-list,
+  .se-workspace--mobile .se-center,
+  .se-workspace--mobile .se-editor-side {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+  }
+
+  .se-workspace--mobile .se-slide-list-body {
+    padding: var(--lj-space-3);
+  }
+
+  .se-workspace--mobile .se-slide-list-body > :first-child {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--lj-space-2);
+  }
+
+  .se-workspace--mobile .se-thumb {
+    min-width: 0;
+    margin: 0;
+  }
+
+  .se-workspace--mobile .se-thumb:focus-visible {
+    outline: 2px solid var(--lj-ui-accent);
+    outline-offset: 2px;
+  }
+
+  .se-workspace--mobile .se-slide-list-add,
+  .se-workspace--mobile .se-player-play {
+    min-height: 44px;
+  }
+
+  .se-workspace--mobile .se-preview-stage {
+    padding: var(--lj-space-3);
+  }
+
+  .se-workspace--mobile .se-editor-side {
+    padding: var(--lj-space-3);
+  }
+
+  .se-workspace--mobile .se-panel-head,
+  .se-workspace--mobile .se-checkbox-row {
+    min-height: 44px;
+    font-size: var(--lj-text-sm);
+  }
+
+  .se-workspace--mobile .se-textarea,
+  .se-workspace--mobile .se-select,
+  .se-workspace--mobile .se-num-input {
+    font-size: 16px;
+  }
+
+  .se-workspace--mobile .se-select,
+  .se-workspace--mobile .se-num-input,
+  .se-workspace--mobile .se-color-input,
+  .se-workspace--mobile .se-seg-btn,
+  .se-workspace--mobile .se-act-btn {
+    min-height: 44px;
+  }
+
+  .se-workspace--mobile .se-num-input {
+    width: 60px;
+  }
+
+  .se-workspace--mobile .se-color-input {
+    width: 44px;
+  }
+
+  .se-workspace--mobile .se-seg-btn {
+    width: 44px;
+  }
+
+  .se-workspace--mobile .se-row-inline > .se-field-label {
+    min-width: 72px;
+    max-width: 72px;
+  }
+
+  .se-workspace--mobile .se-field-label {
+    font-size: var(--lj-text-xs);
+  }
+
+  .se-workspace--mobile .se-act-btn {
+    flex: 1;
+    justify-content: center;
+    font-size: var(--lj-text-sm);
+  }
 }
 </style>

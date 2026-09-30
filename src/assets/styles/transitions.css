@@ -1,0 +1,130 @@
+/**
+ * Transições entre slides/mídia — mecanismo compartilhado pelas projeções
+ * (Anúncios, Biblioteca de Mídia). Os elementos entram/saem com as classes
+ * `lj-t-<efeito>-enter/leave-*` do <Transition :name="lj-t-<efeito>"> e leem
+ * as variáveis da stage (`--trans-dur`, `--trans-ease`, direções…).
+ *
+ * "lj-t-none" (padrão) não tem regra: as classes entram, nada anima e a
+ * troca é instantânea. Importar este arquivo nos SFCs que animam.
+ */
+
+/* Base da cena — perspectiva para o Girar; o slide é absoluto sobre a stage
+   para que o vnode saindo e o entrante se sobreponham no mesmo retângulo. */
+.lj-tstage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  perspective: 1200px;
+}
+
+.lj-tslide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Fade — estilo do fade por vars: desfoque, janela separada ("através do
+   fundo", com delay na entrada) e deslocamento vertical. */
+.lj-t-fade-enter-active {
+  transition:
+    opacity var(--trans-dur) var(--trans-ease) var(--fade-delay),
+    filter var(--trans-dur) var(--trans-ease) var(--fade-delay),
+    transform var(--trans-dur) var(--trans-ease) var(--fade-delay);
+}
+.lj-t-fade-leave-active {
+  transition:
+    opacity var(--trans-dur) var(--trans-ease),
+    filter var(--trans-dur) var(--trans-ease),
+    transform var(--trans-dur) var(--trans-ease);
+}
+.lj-t-fade-enter-from {
+  opacity: 0;
+  filter: blur(var(--fade-blur));
+  transform: translateY(var(--fade-y));
+}
+.lj-t-fade-leave-to {
+  opacity: 0;
+  filter: blur(calc(var(--fade-blur) / 2));
+  transform: translateY(calc(var(--fade-y) * -1));
+}
+
+/* Zoom — escala e origem configuráveis */
+.lj-t-zoom-enter-active,
+.lj-t-zoom-leave-active {
+  transition:
+    opacity var(--trans-dur) var(--trans-ease),
+    transform var(--trans-dur) var(--trans-ease);
+}
+.lj-t-zoom-enter-active,
+.lj-t-zoom-enter-from {
+  transform-origin: var(--zoom-origin);
+}
+.lj-t-zoom-enter-from {
+  opacity: 0;
+  transform: scale(var(--zoom-from));
+}
+.lj-t-zoom-leave-to {
+  opacity: 0;
+}
+
+/* Deslizar — entra por --ent-x/--ent-y, sai por --lv-x/--lv-y */
+.lj-t-slide-enter-active,
+.lj-t-slide-leave-active {
+  transition: transform var(--trans-dur) var(--trans-ease);
+}
+.lj-t-slide-enter-from {
+  transform: translate(var(--ent-x), var(--ent-y));
+}
+.lj-t-slide-leave-to {
+  transform: translate(var(--lv-x), var(--lv-y));
+}
+
+/* Cortina — clip-path sempre definido na base para interpolabilidade */
+.lj-t-wipe-enter-active,
+.lj-t-wipe-leave-active {
+  clip-path: inset(0);
+  transition: clip-path var(--trans-dur) var(--trans-ease);
+}
+.lj-t-wipe-enter-from {
+  clip-path: var(--wipe-enter);
+}
+.lj-t-wipe-leave-to {
+  clip-path: var(--wipe-leave);
+}
+
+/* Girar — eixo e sentido por var, com perspectiva na stage */
+.lj-t-flip-enter-active,
+.lj-t-flip-leave-active {
+  transition: transform var(--trans-dur) var(--trans-ease);
+}
+.lj-t-flip-enter-from {
+  transform: var(--flip-enter);
+}
+.lj-t-flip-leave-to {
+  transform: var(--flip-leave);
+}
+
+/* Círculo — iris que abre/fecha da origem escolhida */
+.lj-t-circle-enter-active,
+.lj-t-circle-leave-active {
+  clip-path: circle(150% at var(--circle-pos));
+  transition: clip-path var(--trans-dur) var(--trans-ease);
+}
+.lj-t-circle-enter-from,
+.lj-t-circle-leave-to {
+  clip-path: circle(0% at var(--circle-pos));
+}
+
+/* Dividido — abre/fecha do centro (horizontal ou vertical) */
+.lj-t-split-enter-active,
+.lj-t-split-leave-active {
+  clip-path: inset(0);
+  transition: clip-path var(--trans-dur) var(--trans-ease);
+}
+.lj-t-split-enter-from,
+.lj-t-split-leave-to {
+  clip-path: var(--split-enter);
+}

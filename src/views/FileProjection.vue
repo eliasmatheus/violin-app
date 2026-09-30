@@ -3,56 +3,70 @@
   <ProjectionClearScreen />
   <div class="fp-wallpaper" :style="fallbackStyle"></div>
   <div v-if="fileProjection.active" class="file-projection">
-    <img
-      v-if="fileProjection.type === 'image'"
-      :src="fileProjection.url"
-      class="file-projection__media"
-      alt=""
-    />
-    <template v-else-if="fileProjection.type === 'video'">
-      <video
-        v-show="!videoFailed"
-        ref="videoRef"
-        :src="fileProjection.url"
-        class="file-projection__media"
-        :style="{ backgroundColor: wpColor }"
-        autoplay
-        muted
-        playsinline
-        @loadedmetadata="onVideoReady"
-        @canplay="onVideoReady"
-        @seeked="onVideoSeeked"
-        @playing="onVideoPlaying"
-        @waiting="onVideoBuffering"
-        @stalled="onVideoBuffering"
-        @error="onVideoError"
-      />
-      <div v-if="videoFailed" class="video-unavailable">
-        <span class="video-unavailable__title">{{ $t("projection.video_unavailable") }}</span>
-        <span class="video-unavailable__hint">{{ $t("projection.video_unavailable_hint") }}</span>
-      </div>
-    </template>
-    <template v-else-if="fileProjection.type === 'youtube'">
-      <div v-show="!ytFailed" ref="ytContainer" class="file-projection__youtube" />
-      <div v-if="ytFailed" class="video-unavailable">
-        <span class="video-unavailable__title">{{ $t("projection.video_unavailable") }}</span>
-        <span class="video-unavailable__hint">{{ $t("projection.video_unavailable_hint") }}</span>
-      </div>
-    </template>
-    <canvas
-      v-else-if="fileProjection.type === 'pdf'"
-      ref="pdfCanvas"
-      class="file-projection__pdf"
-    />
+    <!-- Cena da transição: mídia anterior e nova se sobrepõem durante a animação -->
+    <div class="lj-tstage" :style="stageStyle">
+      <Transition :name="transitionName">
+        <div :key="mediaKey" class="lj-tslide">
+          <img
+            v-if="fileProjection.type === 'image'"
+            :src="fileProjection.url"
+            class="file-projection__media"
+            alt=""
+          />
+          <template v-else-if="fileProjection.type === 'video'">
+            <video
+              v-show="!videoFailed"
+              ref="videoRef"
+              :src="fileProjection.url"
+              class="file-projection__media"
+              :style="{ backgroundColor: wpColor }"
+              autoplay
+              muted
+              playsinline
+              @loadedmetadata="onVideoReady"
+              @canplay="onVideoReady"
+              @seeked="onVideoSeeked"
+              @playing="onVideoPlaying"
+              @waiting="onVideoBuffering"
+              @stalled="onVideoBuffering"
+              @error="onVideoError"
+            />
+            <div v-if="videoFailed" class="video-unavailable">
+              <span class="video-unavailable__title">{{ $t("projection.video_unavailable") }}</span>
+              <span class="video-unavailable__hint">
+                {{ $t("projection.video_unavailable_hint") }}
+              </span>
+            </div>
+          </template>
+          <template v-else-if="fileProjection.type === 'youtube'">
+            <div v-show="!ytFailed" ref="ytContainer" class="file-projection__youtube" />
+            <div v-if="ytFailed" class="video-unavailable">
+              <span class="video-unavailable__title">{{ $t("projection.video_unavailable") }}</span>
+              <span class="video-unavailable__hint">
+                {{ $t("projection.video_unavailable_hint") }}
+              </span>
+            </div>
+          </template>
+          <canvas
+            v-else-if="fileProjection.type === 'pdf'"
+            ref="pdfCanvas"
+            class="file-projection__pdf"
+          />
+        </div>
+      </Transition>
+    </div>
   </div>
   <div v-else class="file-projection__empty"></div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from "vue";
+import "@/assets/styles/transitions.css";
 import { estiloDeFundo } from "@/helpers/BackgroundStyle";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { useProjectionCloseNotice } from "@/composables/useProjectionCloseNotice";
+import { useTransitionStage } from "@/composables/useTransitionStage";
+import { createTransitionContext } from "@/config/Transitions";
 import { PROJECTION_TYPE } from "@/constants/Projection";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import Broadcast from "@/helpers/Broadcast";
@@ -71,10 +85,11 @@ import { loadYtApi } from "@/composables/useYouTubeApi";
 import { loadPdfDocument, type PDFDocumentProxy } from "@/helpers/PdfRuntime";
 import $userdata from "@/helpers/UserData";
 import { getSetting } from "@/helpers/SettingsStorage";
-import { Settings } from "@/types/Settings";
+import { DEFAULT_BACKGROUND_COLOR, Settings } from "@/types/Settings";
 import { KEYS } from "@/constants/UserDataKeys";
 import { SETTINGS_TABLE } from "@/constants/DbTables";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
+import { heicToJpeg, isHeic } from "@/helpers/ImageConvert";
 import Telemetry from "@/helpers/Telemetry";
 import {
   mediaElementDetails,
@@ -106,6 +121,19 @@ const fileProjection = reactive<FileProjectionState>({
   page: 1,
   totalPages: 0,
 });
+
+/** Identidade da mídia na cena — a página do PDF fica de fora para re-render
+ * no mesmo canvas; playback_id novo conta como mídia nova. */
+const mediaKey = computed(
+  () => `${fileProjection.type}:${fileProjection.url}:${fileProjection.playback_id ?? ""}`
+);
+
+/** Nome da classe + variáveis da stage — configuração própria da Biblioteca de
+ * Mídia; `backward` (próximo/anterior) inverte o modo automático de direção. */
+const { transitionName, stageStyle } = useTransitionStage(
+  createTransitionContext(KEYS.MODULES.MEDIA_LIBRARY),
+  { isBackward: () => fileProjection.backward === true }
+);
 
 const videoRef = ref<HTMLVideoElement | null>(null);
 const videoFailed = ref(false);
@@ -142,7 +170,7 @@ const _YT_SYNC_INTERVAL = 500;
 
 /* ── Wallpaper via IndexedDB ── */
 
-const wpColor = ref("#000033");
+const wpColor = ref(DEFAULT_BACKGROUND_COLOR);
 const wpImageUrl = ref("");
 const wpPosition = ref("cover");
 let wpBlobUrl: string | null = null;
@@ -275,13 +303,16 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
   // a referência da biblioteca, recria o objeto localmente lendo o IDB.
   if (p.libRef?.id && p.url?.startsWith("blob:")) {
     try {
-      const rec = await $idb.get<{ data?: ArrayBuffer; mime?: string }>(
+      const rec = await $idb.get<{ data?: ArrayBuffer; mime?: string; name?: string }>(
         p.libRef.table || DB_TABLE.MEDIA_LIBRARY,
         p.libRef.id
       );
       sourceDiagnostics.blob_resolution = "library_record_missing";
       if (rec?.data && rec.mime) {
-        const blob = new Blob([rec.data], { type: rec.mime });
+        let blob = new Blob([rec.data], { type: rec.mime });
+        if (p.type === "image" && (p.heic || isHeic(rec.name, rec.mime))) {
+          blob = await heicToJpeg(blob);
+        }
         sourceDiagnostics = {
           ...sourceDiagnostics,
           blob_resolution: "resolved",
@@ -301,6 +332,21 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
       );
     }
   }
+  if (p.type === "image" && p.heic && !resolvedBlobUrl && !p.url?.startsWith("blob:")) {
+    try {
+      const response = await fetchWithTimeout(p.url, {
+        timeout: NET_TIMEOUT.MEDIA,
+        source: "file",
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      resolvedBlobUrl = URL.createObjectURL(await heicToJpeg(await response.blob()));
+      p = { ...p, url: resolvedBlobUrl };
+    } catch (error) {
+      sourceDiagnostics.blob_resolution = "heic_conversion_failed";
+      console.warn("[FileProjection] conversão de HEIC falhou:", error);
+      p = { ...p, url: "" };
+    }
+  }
   if (generation !== activationGeneration) {
     if (resolvedBlobUrl) URL.revokeObjectURL(resolvedBlobUrl);
     return;
@@ -314,6 +360,7 @@ async function _activateProjection(p: FileProjectionState): Promise<void> {
   fileProjection.url = p.url || "";
   fileProjection.title = p.title || "";
   fileProjection.playback_id = p.playback_id;
+  fileProjection.backward = p.backward === true;
   videoStateGate.begin(p.playback_id);
   videoFirstFrame.begin(p.type === "video" ? p.playback_id : null);
   Telemetry.setRuntimeContext({ playback_id: p.playback_id ?? null });
@@ -500,7 +547,12 @@ function onVideoError(event: Event): void {
 }
 
 watch(
-  () => [fileProjection.active, fileProjection.type, fileProjection.url],
+  () => [
+    fileProjection.active,
+    fileProjection.type,
+    fileProjection.url,
+    fileProjection.playback_id,
+  ],
   async ([active, type]) => {
     if (active && type === "video") {
       await nextTick();
@@ -936,7 +988,7 @@ async function reloadWallpaper(): Promise<void> {
   const id = useCustom ? SETTINGS_TABLE.FILE_PROJECTION_BACKGROUND : SETTINGS_TABLE.MAIN_BACKGROUND;
   const s = await getSetting<Settings>(id).catch(() => null);
   if (s) {
-    wpColor.value = s.color || "#000033";
+    wpColor.value = s.color || DEFAULT_BACKGROUND_COLOR;
     wpPosition.value = s.position || "cover";
     if (s.image) {
       if (wpBlobUrl) URL.revokeObjectURL(wpBlobUrl);

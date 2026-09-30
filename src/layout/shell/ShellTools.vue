@@ -28,10 +28,15 @@
       :text="isBgPlaying ? 'Desativar projeção de fundo' : 'Ativar projeção de fundo'"
       side="bottom"
     >
-      <button type="button" class="shell-tool" @click="toggleBackgroundProjection">
+      <button
+        type="button"
+        class="shell-tool"
+        :aria-label="isBgPlaying ? 'Desativar projeção de fundo' : 'Ativar projeção de fundo'"
+        @click="toggleBackgroundProjection"
+      >
         <LjIcon
           :icon="!isBgPlaying ? ICONS.PROJECTION.START : ICONS.PROJECTION.STOP"
-          :color="!isBgPlaying ? COLORS.SURFACE : COLORS.DANGER"
+          :color="isBgPlaying ? COLORS.DANGER : undefined"
           :size="sizeIcon"
         />
       </button>
@@ -46,6 +51,7 @@
         type="button"
         class="shell-tool"
         :class="{ 'shell-tool--active': isLibrasEnabled }"
+        :aria-label="isLibrasEnabled ? 'Desativar Libras' : 'Ativar Libras'"
         @click="toggleLibras"
       >
         <LjIcon
@@ -59,7 +65,12 @@
     </LjTooltip>
 
     <LjTooltip v-if="hasUpdate" :text="$t('shell.appmenu_items.check_update')" side="bottom">
-      <button type="button" class="shell-tool shell-tool--update" @click="openUpdates">
+      <button
+        type="button"
+        class="shell-tool shell-tool--update"
+        :aria-label="$t('shell.appmenu_items.check_update')"
+        @click="openUpdates"
+      >
         <LjIcon :icon="ICONS.UI.DOWNLOAD_CIRCLE" :size="sizeIcon" class="shell-tool--update-icon" />
       </button>
     </LjTooltip>
@@ -70,6 +81,7 @@
         type="button"
         class="shell-tool"
         :class="{ 'shell-tool--active': chatOpen }"
+        :aria-label="t('chat.toggle')"
         @click="toggleChat"
       >
         <LjIcon :icon="ICONS.UI.MESSAGE_BULLETED" :size="sizeIcon" />
@@ -146,42 +158,72 @@
 
     <!--    Pesquisa Rápida-->
     <LjTooltip :text="$t('shell.quick_search')" side="bottom">
-      <button type="button" class="shell-tool" @click="openCommandPalette">
+      <button
+        type="button"
+        class="shell-tool"
+        :aria-label="$t('shell.quick_search')"
+        @click="openCommandPalette"
+      >
         <LjIcon :icon="ICONS.ACTIONS.SEARCH" :size="sizeIcon" />
       </button>
     </LjTooltip>
 
     <!--    Pesquisa Bíblia-->
     <LjTooltip :text="$t('shell.bible_quick_search')" side="bottom">
-      <button type="button" class="shell-tool" @click="openBibleSearch">
+      <button
+        type="button"
+        class="shell-tool"
+        :aria-label="$t('shell.bible_quick_search')"
+        @click="openBibleSearch"
+      >
         <LjIcon :icon="ICONS.MODULES.BIBLE" :size="sizeIcon" />
       </button>
     </LjTooltip>
 
     <!--    Favoritos-->
     <LjTooltip :text="$t('ribbon.btn.favorites')" side="bottom">
-      <button type="button" class="shell-tool" @click="openFavorites">
+      <button
+        type="button"
+        class="shell-tool"
+        :aria-label="$t('ribbon.btn.favorites')"
+        @click="openFavorites"
+      >
         <LjIcon :icon="ICONS.UI.STAR" :size="sizeIcon" />
       </button>
     </LjTooltip>
 
     <!--    Modo de cor-->
     <LjTooltip :text="$t('shell.toggle_theme')" side="bottom">
-      <button type="button" class="shell-tool" @click="toggleDark">
+      <button
+        type="button"
+        class="shell-tool"
+        :aria-label="$t('shell.toggle_theme')"
+        @click="toggleDark"
+      >
         <LjIcon :icon="isDark ? ICONS.UI.THEME_LIGHT : ICONS.UI.THEME_DARK" :size="sizeIcon" />
       </button>
     </LjTooltip>
 
     <!--    Sobre-->
     <LjTooltip :text="$t('shell.appmenu_items.about')" side="bottom">
-      <button type="button" class="shell-tool" @click="openAbout">
+      <button
+        type="button"
+        class="shell-tool"
+        :aria-label="$t('shell.appmenu_items.about')"
+        @click="openAbout"
+      >
         <LjIcon :icon="ICONS.UI.INFORMATION_OUTLINE" :size="sizeIcon" />
       </button>
     </LjTooltip>
 
     <!--    Hotkeys-->
     <LjTooltip :text="$t('hotkeys.title')" side="bottom">
-      <button type="button" class="shell-tool" @click="openHotkeys">
+      <button
+        type="button"
+        class="shell-tool"
+        :aria-label="$t('hotkeys.title')"
+        @click="openHotkeys"
+      >
         <LjIcon :icon="ICONS.UI.HELP" :size="sizeIcon" />
       </button>
     </LjTooltip>
@@ -347,6 +389,7 @@ function toggleLibras() {
   align-items: stretch;
 }
 .shell-tool {
+  position: relative;
   width: 34px;
   display: flex;
   align-items: center;
@@ -357,13 +400,14 @@ function toggleLibras() {
   outline: none;
   font-family: inherit;
   opacity: 0.8;
-  color: var(--lj-white);
+  color: var(--lj-shell-chrome-color);
   transition:
     background var(--lj-transition-fast),
     opacity var(--lj-transition-fast);
 }
 .shell-tool:hover {
   opacity: 1;
+  background: var(--lj-shell-chrome-hover);
 }
 
 .shell-tool--update {
@@ -387,7 +431,7 @@ function toggleLibras() {
 .shell-tool__badge {
   position: absolute;
   top: 2px;
-  right: 235px;
+  right: 2px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -398,6 +442,16 @@ function toggleLibras() {
   font-weight: 600;
   line-height: 16px;
   text-align: center;
+}
+
+.shell-tools--compact-web {
+  width: max-content;
+}
+
+.shell-tools--compact-web .shell-tool {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
 }
 </style>
 

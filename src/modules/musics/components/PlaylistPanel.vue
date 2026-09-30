@@ -1,5 +1,5 @@
 <template>
-  <div class="playlist-panel">
+  <div class="playlist-panel" :class="{ 'playlist-panel--mobile': mobile }">
     <div class="playlist-panel-header">
       <span class="playlist-panel-title">{{ tm("playlists.title") }}</span>
       <div class="playlist-panel-actions">
@@ -7,6 +7,7 @@
           type="button"
           class="playlist-panel-btn"
           :title="tm('playlists.import')"
+          :aria-label="tm('playlists.import')"
           @click="onImport"
         >
           <LjIcon :icon="ICONS.ACTIONS.UPLOAD" size="16" />
@@ -15,6 +16,7 @@
           type="button"
           class="playlist-panel-btn playlist-panel-btn--primary"
           :title="tm('playlists.create')"
+          :aria-label="tm('playlists.create')"
           @click="showCreate = true"
         >
           <LjIcon :icon="ICONS.ACTIONS.ADD" size="16" />
@@ -32,10 +34,20 @@
           @keydown.esc="cancelCreate"
         />
       </div>
-      <button type="button" class="playlist-panel-btn" @click="create">
+      <button
+        type="button"
+        class="playlist-panel-btn"
+        :aria-label="tm('playlists.create')"
+        @click="create"
+      >
         <LjIcon :icon="ICONS.UI.CHECK" size="16" />
       </button>
-      <button type="button" class="playlist-panel-btn" @click="cancelCreate">
+      <button
+        type="button"
+        class="playlist-panel-btn"
+        :aria-label="tm('playlists.close')"
+        @click="cancelCreate"
+      >
         <LjIcon :icon="ICONS.ACTIONS.CLOSE" size="16" />
       </button>
     </div>
@@ -50,10 +62,20 @@
           @keydown.esc="cancelRename"
         />
       </div>
-      <button type="button" class="playlist-panel-btn" @click="confirmRename">
+      <button
+        type="button"
+        class="playlist-panel-btn"
+        :aria-label="tm('playlists.rename')"
+        @click="confirmRename"
+      >
         <LjIcon :icon="ICONS.UI.CHECK" size="16" />
       </button>
-      <button type="button" class="playlist-panel-btn" @click="cancelRename">
+      <button
+        type="button"
+        class="playlist-panel-btn"
+        :aria-label="tm('playlists.close')"
+        @click="cancelRename"
+      >
         <LjIcon :icon="ICONS.ACTIONS.CLOSE" size="16" />
       </button>
     </div>
@@ -64,7 +86,7 @@
         :key="playlist.id"
         class="playlist-panel-item"
         :class="{ 'playlist-panel-item--active': playlist.id === selectedPlaylistId }"
-        @click="selectPlaylist(playlist.id)"
+        @click="openPlaylist(playlist.id)"
       >
         <div class="playlist-panel-item-info">
           <span class="playlist-panel-item-name">{{ playlist.name }}</span>
@@ -78,6 +100,7 @@
             type="button"
             class="playlist-panel-btn playlist-panel-btn--sm"
             :title="tm('playlists.export')"
+            :aria-label="tm('playlists.export')"
             @click.stop="onExport(playlist)"
           >
             <LjIcon :icon="ICONS.ACTIONS.DOWNLOAD" size="14" />
@@ -86,6 +109,7 @@
             type="button"
             class="playlist-panel-btn playlist-panel-btn--sm"
             :title="tm('playlists.rename')"
+            :aria-label="tm('playlists.rename')"
             @click.stop="startRename(playlist)"
           >
             <LjIcon :icon="ICONS.ACTIONS.EDIT" size="14" />
@@ -94,6 +118,7 @@
             type="button"
             class="playlist-panel-btn playlist-panel-btn--sm playlist-panel-btn--danger"
             :title="tm('playlists.delete')"
+            :aria-label="tm('playlists.delete')"
             @click.stop="onDelete(playlist)"
           >
             <LjIcon :icon="ICONS.ACTIONS.DELETE" size="14" />
@@ -120,6 +145,8 @@ import type { Playlist } from "@/types/Music";
 import Telemetry from "@/helpers/Telemetry";
 
 const { t: i18nT } = useI18n();
+defineProps<{ mobile?: boolean }>();
+const emit = defineEmits<{ select: [id: string] }>();
 const tm = (key: string, named?: Record<string, unknown>) =>
   named ? i18nT(`modules.musics.${key}`, named) : i18nT(`modules.musics.${key}`);
 const {
@@ -153,6 +180,11 @@ const showCreate = ref(false);
 const newName = ref("");
 const showRenameId = ref<string | null>(null);
 const renameName = ref("");
+
+function openPlaylist(id: string): void {
+  selectPlaylist(id);
+  emit("select", id);
+}
 
 function formatDuration(seconds: number): string {
   return DateTime.shortTime(seconds);
@@ -396,5 +428,23 @@ function onImport(): void {
 .playlist-panel-btn--sm {
   width: 22px;
   height: 22px;
+}
+
+.playlist-panel--mobile {
+  min-width: 0;
+}
+
+.playlist-panel--mobile .playlist-panel-item {
+  min-height: 56px;
+}
+
+.playlist-panel--mobile .playlist-panel-item-actions {
+  opacity: 1;
+}
+
+.playlist-panel--mobile .playlist-panel-btn,
+.playlist-panel--mobile .playlist-panel-btn--sm {
+  width: 40px;
+  height: 40px;
 }
 </style>

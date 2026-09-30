@@ -1,79 +1,124 @@
 <template>
-  <ModuleContainer ref="moduleContainer" :manifest="manifest" min-width="380px" @close="close()">
+  <ModuleContainer :manifest="manifest">
     <template #header>
-      <div class="dx-header">
-        <div class="dx-search-wrap">
-          <LjIcon :icon="ICONS.ACTIONS.SEARCH" size="16" class="dx-search-icon" />
-          <input v-model="search" type="text" class="dx-search-input" :placeholder="tm('search')" />
-          <button v-if="search" type="button" class="dx-search-clear" @click="search = ''">
-            <LjIcon :icon="ICONS.ACTIONS.CLOSE" size="14" />
-          </button>
-        </div>
+      <div class="dx-toolbar">
+        <LjInput
+          ref="searchInput"
+          v-model="search"
+          clearable
+          :icon="ICONS.ACTIONS.SEARCH"
+          :placeholder="selectedAlbum ? tm('search_musics') : tm('search_albums')"
+          :aria-label="selectedAlbum ? tm('search_musics') : tm('search_albums')"
+          autocomplete="off"
+        />
       </div>
     </template>
 
-    <div class="dx-root">
-      <LjProgress v-if="loading" indeterminate :height="4" />
-      <LjAlert v-if="error" variant="danger" :text="error" class="dx-error" />
+    <div ref="pageEl" class="dx-page" :class="{ 'dx-page--narrow': narrowPanel }">
+      <h2 v-if="selectedAlbum" class="dx-heading dx-album-heading">
+        <LjButton
+          class="dx-album-back"
+          :icon="ICONS.UI.ARROW_LEFT"
+          :title="tm('back_to_albums')"
+          :aria-label="`${tm('back_to_albums')}: ${selectedAlbum.name}`"
+          @click="goBack"
+        >
+          {{ selectedAlbum.name }}
+        </LjButton>
+      </h2>
+      <h2 v-else class="dx-heading">{{ tm("albums") }}</h2>
 
-      <!-- Nível 2: Músicas do álbum -->
-      <template v-if="selectedAlbum">
-        <div class="dx-back">
-          <LjButton variant="ghost" size="sm" icon="None" icon-only @click="goBack">
-            <LjIcon :icon="ICONS.UI.ARROW_LEFT" />
-          </LjButton>
-          <span class="dx-back-title">{{ selectedAlbum.name }}</span>
-        </div>
-        <div class="dx-section-title">{{ tm("musics") }}</div>
-        <div v-if="!filteredMusics.length && !loading" class="dx-empty">
-          {{ tm("empty_musics") }}
-        </div>
-        <div class="dx-list">
-          <div v-for="(m, i) in filteredMusics" :key="m.id_music ?? i" class="dx-list-item">
-            <button class="dx-list-play" :title="tm('play')" @click="openMusicFor(m)">
-              <LjIcon :icon="ICONS.PLAYER.PLAY" size="26" color="primary" />
-            </button>
-            <span class="dx-list-name" @click="openMusicFor(m)">{{ m.name }}</span>
-            <span v-if="m.duration" class="dx-list-duration">{{ m.duration }}</span>
-            <MusicMenuTable
-              :id_music="Number(m.id_music)"
-              :name="m.name"
-              :has_instrumental_music="m.has_instrumental_music ?? false"
-            />
-          </div>
-        </div>
+      <LjProgress
+        v-if="loading"
+        indeterminate
+        :height="4"
+        :label="selectedAlbum ? tm('loading_musics') : tm('loading_albums')"
+      />
+      <div v-else-if="error" class="dx-state">
+        <LjAlert variant="danger" :text="error" />
+        <LjButton :icon="ICONS.ACTIONS.REFRESH" @click="retry">{{ tm("retry") }}</LjButton>
+      </div>
+
+      <template v-else-if="selectedAlbum">
+        <LjEmpty
+          v-if="!filteredMusics.length"
+          :icon="query ? ICONS.ACTIONS.SEARCH : ICONS.MUSIC.NOTE"
+          :title="query ? tm('no_music_matches') : tm('empty_musics')"
+        />
+        <LjTable v-else hover class="dx-tracks" :class="{ 'dx-tracks--compact': compactActions }">
+          <colgroup>
+            <col class="dx-col-track" />
+            <col />
+            <col class="dx-col-duration" />
+            <col class="dx-col-actions" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col" class="dx-track-number">{{ tm("track") }}</th>
+              <th scope="col">{{ tm("music_name") }}</th>
+              <th scope="col" class="dx-duration">{{ tm("duration") }}</th>
+              <th scope="col">
+                <span class="dx-visually-hidden">{{ tm("actions") }}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="music in filteredMusics" :key="music.id_music">
+              <td class="dx-track-number">{{ music.track }}</td>
+              <td>
+                <span class="dx-music-name">{{ music.name }}</span>
+              </td>
+              <td class="dx-duration">{{ formatDuration(music.duration) }}</td>
+              <td>
+                <div class="dx-actions">
+                  <MusicMenuTable
+                    :id_music="music.id_music"
+                    :name="music.name"
+                    :album-id="selectedAlbum.id_album"
+                    :has_instrumental_music="music.has_instrumental_music"
+                    :compact-breakpoint="menuBreakpoint"
+                    defer-quick-actions
+                  />
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </LjTable>
       </template>
 
-      <!-- Nível 1: Álbuns -->
       <template v-else>
-        <div class="dx-section-title">{{ tm("albums") }}</div>
-        <div v-if="!filteredAlbums.length && !loading" class="dx-empty">
-          {{ tm("empty_albums") }}
-        </div>
-        <div class="dx-grid">
-          <div
+        <LjEmpty
+          v-if="!filteredAlbums.length"
+          :icon="query ? ICONS.ACTIONS.SEARCH : ICONS.MUSIC.ALBUM"
+          :title="query ? tm('no_album_matches') : tm('empty_albums')"
+        />
+        <div v-else class="dx-albums">
+          <button
             v-for="album in filteredAlbums"
             :key="album.id_album"
-            class="dx-card"
+            type="button"
+            class="dx-album"
+            :data-album-id="album.id_album"
             @click="openAlbum(album)"
           >
-            <div class="dx-card-cover">
+            <span class="dx-cover" aria-hidden="true">
               <img
-                v-if="!coverFailed.has(String(album.id_album)) && album.url_image"
-                :src="album.url_image"
+                v-if="album.coverUrl && !coverFailed.has(album.id_album)"
+                :src="album.coverUrl"
                 alt=""
                 loading="lazy"
-                @error="coverFailed.add(String(album.id_album))"
+                @error="coverFailed.add(album.id_album)"
               />
-              <div v-else class="dx-card-cover-fallback">
-                <LjIcon :icon="ICONS.MUSIC.VINYL" size="32" color="#8e44ad" />
-              </div>
-              <div class="dx-card-overlay">
-                <LjIcon :icon="ICONS.PLAYER.PLAY" size="36" color="#fff" />
-              </div>
-            </div>
-            <div class="dx-card-name">{{ album.name }}</div>
-          </div>
+              <LjIcon v-else :icon="ICONS.MUSIC.ALBUM" :size="28" />
+            </span>
+            <span class="dx-album__name">{{ album.name }}</span>
+            <LjIcon
+              :icon="ICONS.ACTIONS.NEXT"
+              :size="16"
+              class="dx-album__arrow"
+              aria-hidden="true"
+            />
+          </button>
         </div>
       </template>
     </div>
@@ -81,37 +126,44 @@
 </template>
 
 <script setup lang="ts">
-import { LjAlert, LjButton, LjIcon, LjProgress } from "@/components/ui";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { module as manifest } from "../manifest";
+import { LjAlert, LjButton, LjEmpty, LjIcon, LjInput, LjProgress, LjTable } from "@/components/ui";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import MusicMenuTable from "@/components/MusicMenuTable.vue";
-import Media from "@/composables/useMedia";
-import $database from "@/helpers/Database";
-import { MusicActionEnum } from "@/enums/MusicActionEnum";
-import { ICONS } from "@/config/Icons";
 import { useDisabledAlbums } from "@/composables/useMusicCatalog";
+import { ICONS } from "@/config/Icons";
+import DateTime from "@/helpers/DateTime";
+import $database from "@/helpers/Database";
+import Path from "@/helpers/Path";
 import { isAlbumEnabled } from "@root/config/musicCatalog.mjs";
+import { module as manifest } from "../manifest";
 
 interface DoxAlbum {
-  id_album: number | string;
+  id_album: number;
   name: string;
-  url_image?: string;
-  color?: string;
-  order?: number;
+  coverUrl: string;
 }
 
 interface AlbumMusic {
   id_music: number;
   name: string;
-  duration?: string;
-  track?: number;
-  has_instrumental_music?: boolean | number;
+  duration?: number;
+  track: number;
+  has_instrumental_music: boolean;
 }
 
 const { t: i18nT, locale } = useI18n();
 const tm = (key: string): string => i18nT(`modules.doxology.${key}`);
+
+const pageEl = ref<HTMLElement | null>(null);
+const searchInput = ref<{ focus: () => void } | null>(null);
+const panelWidth = ref(0);
+const compactActions = computed(() => panelWidth.value <= 760);
+const narrowPanel = computed(() => panelWidth.value <= 580);
+const menuBreakpoint = computed(() => (compactActions.value ? Number.MAX_SAFE_INTEGER : 550));
+let pageResizeObserver: ResizeObserver | null = null;
+let requestRevision = 0;
 
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -119,276 +171,411 @@ const search = ref("");
 const albums = ref<DoxAlbum[]>([]);
 const selectedAlbum = ref<DoxAlbum | null>(null);
 const musics = ref<AlbumMusic[]>([]);
-const coverFailed = ref(new Set<string>());
-
-const q = computed(() => search.value.trim().toLowerCase());
+const coverFailed = ref(new Set<number>());
 const disabledAlbums = useDisabledAlbums();
 
+const query = computed(() => search.value.trim().toLocaleLowerCase(locale.value));
 const filteredAlbums = computed(() =>
   albums.value.filter(
-    (a) =>
-      isAlbumEnabled(a.id_album, disabledAlbums.value) &&
-      (!q.value || a.name.toLowerCase().includes(q.value))
+    (album) =>
+      isAlbumEnabled(album.id_album, disabledAlbums.value) &&
+      (!query.value || album.name.toLocaleLowerCase(locale.value).includes(query.value))
   )
 );
-
 const filteredMusics = computed(() =>
-  !q.value ? musics.value : musics.value.filter((m) => m.name.toLowerCase().includes(q.value))
+  query.value
+    ? musics.value.filter((music) =>
+        music.name.toLocaleLowerCase(locale.value).includes(query.value)
+      )
+    : musics.value
 );
+
+function positiveId(value: unknown): number | null {
+  if (typeof value !== "number" && !(typeof value === "string" && /^\d+$/.test(value))) {
+    return null;
+  }
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function durationSeconds(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  }
+  if (typeof value !== "string") return undefined;
+  const duration = value.trim();
+  if (/^\d+$/.test(duration)) {
+    const seconds = Number(duration);
+    return Number.isSafeInteger(seconds) ? seconds : undefined;
+  }
+  if (!/^\d+:\d{2}(?::\d{2})?$/.test(duration)) return undefined;
+  const parts = duration.split(":").map(Number);
+  if (parts.length === 2 && parts[1] < 60) {
+    const seconds = parts[0] * 60 + parts[1];
+    return Number.isSafeInteger(seconds) ? seconds : undefined;
+  }
+  if (parts.length === 3 && parts[1] < 60 && parts[2] < 60) {
+    const seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return Number.isSafeInteger(seconds) ? seconds : undefined;
+  }
+  return undefined;
+}
+
+function coverUrl(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) return "";
+  try {
+    return Path.file(value);
+  } catch {
+    return "";
+  }
+}
+
+function parseAlbums(value: unknown): DoxAlbum[] | null {
+  if (!Array.isArray(value)) return null;
+  const unique = new Map<number, DoxAlbum>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const album = item as Record<string, unknown>;
+    const id = positiveId(album.id_album);
+    const name = typeof album.name === "string" ? album.name.trim() : "";
+    if (!id || !name || unique.has(id)) continue;
+    unique.set(id, { id_album: id, name, coverUrl: coverUrl(album.url_image) });
+  }
+  return value.length > 0 && unique.size === 0 ? null : [...unique.values()];
+}
+
+function parseMusics(value: unknown, albumId: number): AlbumMusic[] | null {
+  if (!value || typeof value !== "object") return null;
+  const detail = value as Record<string, unknown>;
+  if (!Array.isArray(detail.musics)) return null;
+  if (detail.id_album != null && positiveId(detail.id_album) !== albumId) return null;
+  const unique = new Map<number, AlbumMusic>();
+  const rawMusics = detail.musics as unknown[];
+  for (const item of rawMusics) {
+    if (!item || typeof item !== "object") continue;
+    const music = item as Record<string, unknown>;
+    const id = positiveId(music.id_music);
+    const name = typeof music.name === "string" ? music.name.trim() : "";
+    if (!id || !name || unique.has(id)) continue;
+    const duration = durationSeconds(music.duration);
+    const track = positiveId(music.track) ?? unique.size + 1;
+    unique.set(id, {
+      id_music: id,
+      name,
+      duration,
+      track,
+      has_instrumental_music:
+        music.has_instrumental_music === true ||
+        music.has_instrumental_music === 1 ||
+        music.has_instrumental_music === "1",
+    });
+  }
+  return rawMusics.length > 0 && unique.size === 0 ? null : [...unique.values()];
+}
+
+function formatDuration(duration: number | undefined): string {
+  return duration === undefined ? "" : DateTime.shortTime(duration);
+}
 
 function openAlbum(album: DoxAlbum): void {
   if (!isAlbumEnabled(album.id_album, disabledAlbums.value)) return;
-  search.value = "";
   selectedAlbum.value = album;
+  search.value = "";
   void loadMusics(album);
+  void nextTick(() => searchInput.value?.focus());
 }
 
-async function loadMusics(album: DoxAlbum): Promise<void> {
+async function loadMusics(album: DoxAlbum, fresh = false): Promise<void> {
+  const revision = ++requestRevision;
   loading.value = true;
+  error.value = null;
+  musics.value = [];
   try {
-    const detail = await $database.get<{ musics?: AlbumMusic[] }>(`album_${album.id_album}`, {
+    const detail = await $database.get<unknown>(`album_${album.id_album}`, {
       silent: true,
+      fresh,
     });
-    musics.value = detail?.musics ?? [];
+    if (revision !== requestRevision) return;
+    const parsed = parseMusics(detail, album.id_album);
+    if (parsed === null) error.value = tm("load_musics_error");
+    else musics.value = parsed;
+  } catch {
+    if (revision === requestRevision) error.value = tm("load_musics_error");
   } finally {
-    loading.value = false;
+    if (revision === requestRevision) loading.value = false;
   }
 }
 
 function goBack(): void {
-  search.value = "";
+  const albumId = selectedAlbum.value?.id_album;
+  requestRevision++;
   selectedAlbum.value = null;
   musics.value = [];
+  error.value = null;
+  loading.value = false;
+  search.value = "";
+  if (albumId) {
+    void nextTick(() =>
+      pageEl.value?.querySelector<HTMLButtonElement>(`[data-album-id="${albumId}"]`)?.focus()
+    );
+  }
+}
+
+async function loadData(fresh = false): Promise<void> {
+  const revision = ++requestRevision;
+  selectedAlbum.value = null;
+  musics.value = [];
+  albums.value = [];
+  coverFailed.value = new Set();
+  search.value = "";
+  loading.value = true;
+  error.value = null;
+  try {
+    const data = await $database.get<unknown>(`${locale.value}_doxology_albums`, {
+      silent: true,
+      fresh,
+    });
+    if (revision !== requestRevision) return;
+    const parsed = parseAlbums(data);
+    if (parsed === null) error.value = tm("load_error");
+    else albums.value = parsed;
+  } catch {
+    if (revision === requestRevision) error.value = tm("load_error");
+  } finally {
+    if (revision === requestRevision) loading.value = false;
+  }
+}
+
+function retry(): void {
+  if (selectedAlbum.value) void loadMusics(selectedAlbum.value, true);
+  else void loadData(true);
 }
 
 watch(disabledAlbums, () => {
-  if (selectedAlbum.value && !isAlbumEnabled(selectedAlbum.value.id_album, disabledAlbums.value))
+  if (selectedAlbum.value && !isAlbumEnabled(selectedAlbum.value.id_album, disabledAlbums.value)) {
     goBack();
-});
-
-/** Ação rápida da linha: abre a letra/mídia no modo padrão (cantado). */
-function openMusicFor(m: AlbumMusic): void {
-  if (!selectedAlbum.value) return;
-  Media.open({ id_music: m.id_music, mode: MusicActionEnum.AUDIO });
-}
-
-async function loadData(): Promise<void> {
-  loading.value = true;
-  error.value = null;
-
-  // Cache em camadas (memória → tabela doxology_albums no IDB → rota REST).
-  const data = await $database.get<DoxAlbum[]>(`${locale.value}_doxology_albums`, {
-    silent: true,
-  });
-  if (data && Array.isArray(data)) {
-    albums.value = data;
-  } else {
-    console.warn("[doxology] falha ao carregar álbuns");
-    error.value = tm("load_error");
   }
-  loading.value = false;
-}
-
-onMounted(loadData);
-
-watch(locale, () => {
-  selectedAlbum.value = null;
-  musics.value = [];
-  loadData();
 });
+watch(locale, () => void loadData());
 
-function close(): void {
-  // Sem projeção própria — playback usa os módulos Letra/Mídia existentes.
-}
+watch(
+  pageEl,
+  (element) => {
+    pageResizeObserver?.disconnect();
+    if (!element || typeof ResizeObserver === "undefined") return;
+    panelWidth.value = element.getBoundingClientRect().width;
+    pageResizeObserver = new ResizeObserver(([entry]) => {
+      panelWidth.value = entry.target.getBoundingClientRect().width;
+    });
+    pageResizeObserver.observe(element);
+  },
+  { flush: "post" }
+);
+onMounted(() => void loadData());
+onBeforeUnmount(() => {
+  requestRevision++;
+  pageResizeObserver?.disconnect();
+});
 </script>
 
 <style scoped>
-.dx-root {
+.dx-toolbar {
+  width: 100%;
+  min-width: 0;
+}
+
+.dx-toolbar :deep(.lj-input) {
+  width: min(100%, 360px);
+}
+
+.dx-page {
   display: flex;
   flex-direction: column;
-  padding: 12px;
-  gap: 8px;
-  height: 100%;
-  overflow-y: auto;
-}
-.dx-error {
-  margin: var(--lj-space-4);
-  max-height: 70px;
-}
-.dx-header {
+  gap: var(--lj-space-5);
   width: 100%;
-  padding: 0 4px;
+  min-width: 0;
+  padding: var(--lj-space-6);
 }
-.dx-search-wrap {
-  position: relative;
-  width: 100%;
+
+.dx-heading {
+  margin: 0;
+  min-width: 0;
+  color: var(--lj-text);
+  font-size: var(--lj-text-lg);
+  font-weight: var(--lj-weight-semibold);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.dx-album-heading {
+  max-width: 100%;
+}
+
+.dx-album-back {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--lj-ui-h-md);
+  padding-block: var(--lj-space-2);
+  justify-content: flex-start;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  text-align: left;
+  white-space: normal;
+}
+
+.dx-album-back :deep(.lj-btn__label) {
+  min-width: 0;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.dx-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--lj-space-4);
+}
+
+.dx-albums {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+  gap: var(--lj-space-4);
+}
+
+.dx-album {
   display: flex;
   align-items: center;
-}
-.dx-search-icon {
-  position: absolute;
-  left: 8px;
-  color: rgba(var(--lj-on-surface-ch), 0.4);
-  pointer-events: none;
-}
-.dx-search-input {
-  width: 100%;
-  padding: 6px 28px 6px 30px;
-  border: 1px solid rgba(var(--lj-on-surface-ch), 0.15);
+  gap: var(--lj-space-5);
+  min-width: 0;
+  min-height: 88px;
+  padding: var(--lj-space-4);
+  border: var(--lj-ui-border);
   border-radius: var(--lj-radius-md);
-  background: rgba(var(--lj-on-surface-ch), 0.04);
+  background: var(--lj-surface-bg);
   color: var(--lj-text);
   font-family: inherit;
-  font-size: 12px;
-  outline: none;
-}
-.dx-search-input:focus {
-  border-color: rgba(var(--lj-on-surface-ch), 0.35);
-}
-.dx-search-input::placeholder {
-  color: rgba(var(--lj-on-surface-ch), 0.4);
-}
-.dx-search-clear {
-  position: absolute;
-  right: 6px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: rgba(var(--lj-on-surface-ch), 0.4);
-  display: flex;
-  align-items: center;
-  padding: 2px;
-}
-.dx-back {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.dx-back-title {
-  font-size: 13px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dx-section-title {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: rgba(var(--lj-on-surface-ch), 0.6);
-}
-.dx-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 10px;
-}
-.dx-card {
-  border-radius: var(--lj-radius-md);
-  overflow: hidden;
-  background: rgba(var(--lj-on-surface-ch), 0.04);
-  cursor: pointer;
+  text-align: left;
   transition:
-    transform var(--lj-transition-normal),
-    box-shadow var(--lj-transition-normal);
+    background var(--lj-transition-fast),
+    border-color var(--lj-transition-fast),
+    box-shadow var(--lj-transition-fast);
 }
-.dx-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+
+.dx-album:hover {
+  background: var(--lj-surface-bg-hover);
+  border-color: var(--lj-ui-accent);
 }
-.dx-card-cover {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  background: #1a1a1a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+
+.dx-album:focus-visible {
+  outline: none;
+  border-color: var(--lj-ui-accent);
+  box-shadow: var(--lj-ui-focus);
+}
+
+.dx-cover {
+  display: grid;
+  flex: 0 0 70px;
+  width: 70px;
+  height: 70px;
+  place-items: center;
   overflow: hidden;
+  border: 1px solid var(--lj-surface-border);
+  border-radius: var(--lj-radius-sm);
+  background: var(--lj-surface-bg-soft);
+  color: var(--lj-text-muted);
 }
-.dx-card-cover img {
+
+.dx-cover img {
+  display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
-.dx-card-cover-fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.dx-card-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity var(--lj-transition-normal);
-  background: rgba(0, 0, 0, 0.35);
-}
-.dx-card:hover .dx-card-overlay {
-  opacity: 1;
-}
-.dx-card-name {
-  font-size: 18px;
-  padding: 6px 8px 6px;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.dx-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.dx-list-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: var(--lj-radius-md);
-  border: 1px solid rgba(var(--lj-on-surface-ch), 0.14);
-  background: rgba(var(--lj-on-surface-ch), 0.03);
-  cursor: pointer;
-  transition:
-    background var(--lj-transition-normal),
-    border-color var(--lj-transition-normal),
-    transform var(--lj-transition-normal),
-    box-shadow var(--lj-transition-normal);
-}
-.dx-list-item:hover {
-  background: rgba(var(--lj-on-surface-ch), 0.06);
-  border-color: rgba(142, 68, 173, 0.5);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-}
-.dx-list-item:hover {
-  background: rgba(var(--lj-on-surface-ch), 0.06);
-}
-.dx-list-play {
-  display: flex;
-  align-items: center;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-}
-.dx-list-name {
-  font-size: 13px;
+
+.dx-album__name {
   flex: 1;
   min-width: 0;
+  font-size: var(--lj-text-lg);
+  font-weight: var(--lj-weight-medium);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.dx-album__arrow {
+  flex-shrink: 0;
+  color: var(--lj-text-subtle);
+}
+
+.dx-tracks {
+  --dx-actions-width: 260px;
+}
+
+.dx-tracks--compact {
+  --dx-actions-width: 44px;
+}
+
+.dx-tracks :deep(.lj-table__table) {
+  table-layout: fixed;
+}
+
+.dx-col-track {
+  width: 52px;
+}
+
+.dx-col-duration {
+  width: 82px;
+}
+
+.dx-col-actions {
+  width: var(--dx-actions-width);
+}
+
+.dx-track-number,
+.dx-duration {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dx-duration {
   white-space: nowrap;
+  color: var(--lj-text-muted);
+}
+
+.dx-music-name {
+  color: var(--lj-text);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.dx-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.dx-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
-.dx-list-duration {
-  font-size: 11px;
-  color: rgba(var(--lj-on-surface-ch), 0.55);
+
+.dx-page--narrow .dx-col-track,
+.dx-page--narrow .dx-track-number,
+.dx-page--narrow .dx-col-duration,
+.dx-page--narrow .dx-duration {
+  display: none;
 }
-.dx-empty {
-  font-size: 12px;
-  color: rgba(var(--lj-on-surface-ch), 0.5);
-  padding: 12px 0;
+
+.dx-page--narrow {
+  padding: var(--lj-space-5);
 }
 </style>

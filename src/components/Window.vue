@@ -165,14 +165,15 @@ const compact_screen = computed(() => viewport.width.value <= 600);
 const compact_height = computed(() => viewport.height.value <= 600);
 
 const w_width = computed(() => {
-  if (compact_screen.value) return "100%";
+  if (compact_screen.value) return "100vw";
   if (props.size == "small") return "500px";
   if (props.size == "large") return "95%";
   return "90%";
 });
 
 const w_height = computed(() => {
-  if (compact_screen.value || compact_height.value) return "100%";
+  if (compact_screen.value) return "100dvh";
+  if (compact_height.value) return "100%";
   if (props.size == "small") return "550px";
   return "90%";
 });
@@ -502,6 +503,49 @@ function listenerResize(active) {
   from {
     opacity: 0;
     transform: translate(-50%, calc(-50% + var(--lj-ui-float-shift))) scale(0.97);
+  }
+}
+
+@media (max-width: 600px) {
+  .lj-window {
+    top: 0;
+    left: 0;
+    max-width: none;
+    max-height: none;
+    transform: none;
+  }
+
+  .lj-window[data-state="open"] {
+    animation: none;
+  }
+
+  .lj-window-card {
+    border-radius: 0;
+  }
+
+  .lj-window-toolbar {
+    min-height: calc(56px + env(safe-area-inset-top));
+    padding: calc(var(--lj-space-3) + env(safe-area-inset-top)) var(--lj-space-5) var(--lj-space-3);
+  }
+
+  .lj-window-btn {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+
+  .lj-window-main:not(.lj-window-main--compact) {
+    min-width: 0;
+    padding: var(--lj-space-5);
+  }
+
+  .lj-window-footer {
+    flex-wrap: wrap;
+    padding-bottom: calc(var(--lj-space-4) + env(safe-area-inset-bottom));
+  }
+
+  .lj-window-footer--compact {
+    padding: 0 0 env(safe-area-inset-bottom);
   }
 }
 

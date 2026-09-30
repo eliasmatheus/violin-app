@@ -196,4 +196,39 @@ function formatTime(seconds: number): string {
 .bgs-volume-slider :deep(.lj-slider__track) {
   background: var(--lj-white-alpha-25);
 }
+
+@media (max-width: 700px) {
+  .bgs-footer,
+  .bgs-footer-row {
+    height: 44px;
+  }
+
+  .bgs-footer-row {
+    gap: var(--lj-space-2);
+    padding-inline: var(--lj-space-2);
+  }
+
+  .bgs-footer-info {
+    min-width: 0;
+    flex: 1 1 80px;
+  }
+
+  .bgs-footer-time,
+  .bgs-footer-volume {
+    display: none;
+  }
+
+  .bgs-footer-progress {
+    min-width: 40px;
+  }
+
+  .bgs-footer-actions {
+    gap: 0;
+  }
+
+  .bgs-footer-actions :deep(.lj-btn) {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
 </style>

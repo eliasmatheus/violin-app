@@ -17,6 +17,8 @@ Este é o rito usado para publicar uma versão do LouvorJA Violin.
    npm run lint
    npx playwright install chromium
    npm run test:e2e
+   npm run test:e2e:build
+   npm run test:e2e:mobile:build
    npm run build
    ```
 
@@ -38,19 +40,24 @@ git add <arquivos do escopo validado desta versão>
 git diff --cached --check
 git commit -m "release: atualizar versão para <versão>"
 npm run git:tag
-git push origin main
 git push origin v<versão>
 ```
 
-A tag deve ser anotada e não deve ser forçada. O push da tag dispara o workflow de release.
+A tag deve ser anotada e não deve ser forçada. O push da tag dispara o workflow de release,
+que cria um rascunho. A versão nova só deve ser enviada para `main` depois da publicação
+da release, para que o convite de download da PWA não aponte para um instalador ausente.
 
 ## Depois do workflow
 
 Confirme no GitHub:
 
 - os três builds terminaram com sucesso;
-- o release está marcado como prévia quando a versão contém `-beta`, `-preview` ou outro sufixo;
+- no rascunho, todos os arquivos `latest*.yml` têm versão, caminho, tamanho e SHA-512
+  iguais aos instaladores baixados, e os formatos têm as assinaturas esperadas;
 - as notas exibidas são as do arquivo versionado, sem mensagens de commit;
 - Windows, macOS, Linux x64 e Linux ARM têm os instaladores esperados;
-- cada `latest*.yml` aponta para um arquivo publicado com o mesmo nome;
-- os links de download e a atualização automática funcionam.
+- o release está marcado como prévia quando a versão contém `-beta`, `-preview` ou outro sufixo.
+
+Depois dessa conferência, publique o rascunho com `gh release edit v<versão> --draft=false`
+e envie o commit para `main` com `git push origin main`. Confira os links permanentes de
+todos os arquivos e o HTML e bundle servidos da PWA na nova versão.

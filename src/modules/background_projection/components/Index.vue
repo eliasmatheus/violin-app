@@ -1,9 +1,5 @@
 <template>
-  <ModuleContainer
-    ref="moduleContainer"
-    :manifest="manifest"
-    :style="{ minWidth: '700px', minHeight: '400px' }"
-  >
+  <ModuleContainer ref="moduleContainer" class="bg-module-container" :manifest="manifest">
     <div
       class="bg-root"
       :class="{ 'bg-root--drag-over': isDragOver }"
@@ -890,6 +886,11 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.bg-module-container {
+  min-width: 700px;
+  min-height: 400px;
+}
+
 .bg-root {
   height: 100%;
   flex-direction: column;
@@ -1158,5 +1159,61 @@ onMounted(async () => {
 
 .bg-file-input {
   display: none;
+}
+
+@media (max-width: 600px) {
+  .bg-module-container {
+    min-width: 0;
+    min-height: 0;
+    max-width: 100%;
+  }
+
+  .bg-root {
+    display: flex;
+    min-width: 0;
+  }
+
+  .bg-toolbar {
+    min-width: 0;
+    padding-inline: var(--lj-space-4);
+  }
+
+  .bg-toolbar :deep(.lj-tabs__trigger) {
+    min-height: 44px;
+  }
+
+  .bg-category-chips {
+    flex-wrap: nowrap;
+    min-width: 0;
+    padding-inline: var(--lj-space-4);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .bg-chip {
+    flex: 0 0 auto;
+    min-height: 44px;
+  }
+
+  .bg-grid {
+    min-height: 0;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    grid-auto-rows: max-content;
+    align-content: start;
+  }
+
+  .bg-grid-actions {
+    opacity: 1;
+  }
+
+  .bg-grid-actions :deep(.lj-btn) {
+    min-width: 44px;
+    min-height: 44px;
+    background: var(--lj-surface-bg-hover);
+  }
+
+  .bg-catlist__item {
+    min-height: 44px;
+  }
 }
 </style>

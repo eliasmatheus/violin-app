@@ -13,7 +13,7 @@
         'rtab--ctx-active': page.contextual && store.activePage === page.id,
       }"
       :aria-selected="store.activePage === page.id"
-      @click.stop="store.selectPage(page.id)"
+      @click.stop="selectPage(page.id)"
     >
       {{ $t(page.title) }}
     </button>
@@ -33,6 +33,12 @@ withDefaults(
 );
 
 const store = useRibbonStore();
+const emit = defineEmits<{ select: [id: string] }>();
+
+function selectPage(id: string) {
+  store.selectPage(id);
+  emit("select", id);
+}
 </script>
 
 <style scoped>
@@ -57,7 +63,7 @@ const store = useRibbonStore();
   font-size: var(--rtab-font-size, 13px);
   font-weight: var(--rtab-font-weight, 500);
   cursor: pointer;
-  color: var(--lj-tabs-color);
+  color: var(--lj-shell-chrome-color);
   transition:
     background var(--lj-transition-fast),
     color var(--lj-transition-fast);
@@ -68,8 +74,8 @@ const store = useRibbonStore();
   font-family: inherit;
 }
 .rtab:hover:not(.rtab--active) {
-  background: var(--lj-tabs-hover-bg);
-  color: var(--lj-tabs-color-hover);
+  background: var(--lj-shell-chrome-hover);
+  color: var(--lj-shell-chrome-color);
 }
 .rtab--active {
   background: var(--lj-tabs-active-bg);
@@ -86,7 +92,7 @@ const store = useRibbonStore();
 }
 .rtab--ctx.rtab--ctx-active {
   background: var(--lj-tabs-active-bg);
-  color: var(--lj-orange-darker);
+  color: var(--lj-tabs-ctx-active-color);
   font-weight: var(--lj-weight-bold);
 }
 .rtab--ctx-active::before {
@@ -97,5 +103,17 @@ const store = useRibbonStore();
   top: 0;
   height: 2px;
   background: var(--lj-orange);
+}
+
+.rtabs--compact-web {
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity;
+}
+
+.rtabs--compact-web .rtab {
+  min-height: 44px;
+  padding-inline: var(--lj-space-4);
+  font-size: var(--lj-text-base);
+  scroll-snap-align: start;
 }
 </style>

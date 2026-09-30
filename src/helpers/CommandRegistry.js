@@ -18,6 +18,9 @@
 import Fuse from "fuse.js";
 import Modules from "@/helpers/Modules";
 import Media from "@/composables/useMedia";
+import Platform from "@/helpers/Platform";
+import { loadCustomMusicCatalog } from "@/helpers/CustomMusicCatalog";
+import { getSong } from "@/helpers/CustomSongs";
 import { currentMediaKind, openMediaWindow } from "@/helpers/ProjectionWindows";
 import { ICONS } from "@/config/Icons";
 import { hymnalTracks } from "@/helpers/Hymnal";
@@ -36,6 +39,8 @@ let _commands = [];
 let _fuse = null;
 let _externalCommands = [];
 let _visibleCommands = [];
+let _initialLoad = null;
+let _customRevision = 0;
 
 function _buildIndex() {
   _fuse = new Fuse(_visibleCommands, {
@@ -77,7 +82,7 @@ export function visibleCommands(disabled = []) {
             music,
             title: musicTitle(music),
             tracks: hymnalTracks(music),
-            subtitle: musicAlbumLabel(music),
+            subtitle: musicAlbumLabel(music, command.customLabel),
           },
         ]
       : [];
@@ -317,16 +322,39 @@ async function dynamicCommands($database, $userdata) {
   return dynamic;
 }
 
-/** Retorna lista completa para uso no Command Palette. Cacheia após primeira carga. */
+/** Cacheia o catálogo remoto e relê o acervo pessoal a cada abertura da paleta. */
 export async function getAll($database, $userdata, t) {
   const saved = $userdata.get(KEYS.OPTIONS.DISABLED_ALBUMS, []);
   const disabled = Array.isArray(saved) ? [...saved] : [];
   if (!$userdata.get(moduleShowInMainMenu("hymnal_1996"), false)) disabled.push(629);
-  if (_loaded) return visibleCommands(disabled);
-  const stat = staticCommands(t);
-  const dyn = await dynamicCommands($database, $userdata);
-  _commands = [...stat, ...dyn, ..._externalCommands];
-  _loaded = true;
+  if (!_loaded && !_initialLoad) {
+    _initialLoad = dynamicCommands($database, $userdata).then((dyn) => {
+      _commands = [...staticCommands(t), ...dyn, ..._externalCommands];
+      _loaded = true;
+    });
+  }
+  const revision = ++_customRevision;
+  const custom = Platform.isRemote ? [] : await loadCustomMusicCatalog();
+  await _initialLoad;
+  if (revision === _customRevision) {
+    const customLabel = t("components.music_search.custom_album");
+    _commands = [
+      ..._commands.filter((command) => !command.id.startsWith("custom-music:")),
+      ...custom.map((music) => ({
+        id: `custom-music:${music.custom_song_id}`,
+        title: music.name,
+        keywords: ["musica", ...(music.custom_collection_names || [])],
+        music,
+        customLabel,
+        icon: ICONS.MUSIC.NOTE,
+        category: "music",
+        run: async () => {
+          const song = await getSong(music.custom_song_id);
+          if (song) await Media.openCustomSong(song);
+        },
+      })),
+    ];
+  }
   return visibleCommands(disabled);
 }
 

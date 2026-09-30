@@ -104,12 +104,17 @@ export async function openSlja(
     // projeção; revogá-las antes deixaria o fundo do slide em cena sem imagem.
     const previous = liveUrls;
     liveUrls = urls;
+    let projected = false;
     try {
-      await $media.openCustomSong(song);
+      projected = await $media.openCustomSong(song);
     } finally {
-      previous.forEach((url) => URL.revokeObjectURL(url));
+      if (projected) previous.forEach((url) => URL.revokeObjectURL(url));
+      else {
+        liveUrls = previous;
+        urls.forEach((url) => URL.revokeObjectURL(url));
+      }
     }
-    return true;
+    return projected;
   } catch (error) {
     Telemetry.captureException(error, { source: "slja.open", origin: options.origin });
     Telemetry.track("slja_open_failed", {

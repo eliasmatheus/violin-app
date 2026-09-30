@@ -3,7 +3,7 @@ import { getSetting } from "@/helpers/SettingsStorage";
 import { estiloDeFundo } from "@/helpers/BackgroundStyle";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
-import { MAIN_BACKGROUND_ID, type Settings } from "@/types/Settings";
+import { DEFAULT_BACKGROUND_COLOR, MAIN_BACKGROUND_ID, type Settings } from "@/types/Settings";
 
 /**
  * Fundo configurado em Opções → Geral (cor, imagem e ajuste), pronto para
@@ -12,10 +12,8 @@ import { MAIN_BACKGROUND_ID, type Settings } from "@/types/Settings";
  * É o mesmo fundo que a projeção mostra quando não há conteúdo: usar ele na
  * "tela limpa" mantém o telão com a cara que o operador escolheu.
  */
-const DEFAULT_COLOR = "#000033";
-
 export function useMainBackground(): { style: ComputedRef<Record<string, string>> } {
-  const color = ref(DEFAULT_COLOR);
+  const color = ref(DEFAULT_BACKGROUND_COLOR);
   const position = ref("cover");
   const imageUrl = ref("");
   let blobUrl: string | null = null;
@@ -27,7 +25,7 @@ export function useMainBackground(): { style: ComputedRef<Record<string, string>
 
   async function reload(): Promise<void> {
     const s = await getSetting<Settings>(MAIN_BACKGROUND_ID).catch(() => undefined);
-    color.value = s?.color || DEFAULT_COLOR;
+    color.value = s?.color || DEFAULT_BACKGROUND_COLOR;
     position.value = s?.position || "cover";
     releaseBlob();
     if (s?.image) {

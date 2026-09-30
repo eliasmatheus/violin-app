@@ -64,6 +64,7 @@ import { pickImageData } from "@/helpers/FilePicker";
 import { getSetting, saveSetting } from "@/helpers/SettingsStorage";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import Broadcast from "@/helpers/Broadcast";
+import { DEFAULT_BACKGROUND_COLOR } from "@/types/Settings";
 
 const { t: i18nT } = useI18n();
 const modulePrefix = $modules.getPath(ModuleEnum.MEDIA_LIBRARY);
@@ -73,7 +74,7 @@ const currentBgImage = computed(() => wpImageUrl.value);
 const STORAGE_ID = "file_projection_background";
 
 const enabled = ref(false);
-const wpColor = ref("#000033");
+const wpColor = ref(DEFAULT_BACKGROUND_COLOR);
 const wpImageUrl = ref("");
 const wpPosition = ref("cover");
 let wpBlobUrl: string | null = null;
@@ -153,7 +154,7 @@ onMounted(async () => {
     $userdata.get<boolean>("options.file_projection.background_enabled", false) === true;
   const s = await getSetting<any>(STORAGE_ID).catch(() => null);
   if (s) {
-    wpColor.value = s.color || "#000033";
+    wpColor.value = s.color || DEFAULT_BACKGROUND_COLOR;
     wpPosition.value = s.position || "cover";
     if (s.image) {
       const blob = new Blob([s.image], { type: s.mime || "image/png" });

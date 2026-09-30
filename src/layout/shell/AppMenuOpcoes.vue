@@ -28,16 +28,6 @@
       </div>
 
       <div class="opt-row">
-        <label class="opt-label" for="opt-ui-style">{{ $t("options.general.ui_style") }}</label>
-        <LjSelect
-          id="opt-ui-style"
-          :items="opcoesEstiloUi"
-          :model-value="getUserData(KEYS.OPTIONS.UI_STYLE, THEMES.CLASSIC)"
-          @update:model-value="saveUserData(KEYS.OPTIONS.UI_STYLE, $event)"
-        />
-      </div>
-
-      <div class="opt-row">
         <label class="opt-label" for="opt-font">{{ $t("options.general.font") }}</label>
         <SelectFont
           id="opt-font"
@@ -61,6 +51,17 @@
           :default-font="FONT.PROJECTION.FALLBACK"
           @update:model-value="saveUserData(KEYS.OPTIONS.PROJECTION_FONT, $event)"
         />
+      </div>
+
+      <div class="opt-row">
+        <label class="opt-checkbox">
+          <input
+            type="checkbox"
+            :checked="getUserData<boolean>(KEYS.SHELL.LITURGY_VISIBLE, true) !== false"
+            @change="saveUserData(KEYS.SHELL.LITURGY_VISIBLE, $c($event))"
+          />
+          <span>{{ $t("options.general.show_liturgy_sidebar") }}</span>
+        </label>
       </div>
 
       <div v-if="isDesktop" class="opt-row">
@@ -1544,8 +1545,7 @@ import $alert from "@/helpers/Alert";
 import { DEFAULT_MAX_HEIGHT, MAX_HEIGHTS, normalizeMaxHeight } from "@/helpers/OnlineVideo";
 import { ICONS } from "@/config/Icons";
 import { KEYS } from "@/constants/UserDataKeys";
-import { MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
-import { THEMES } from "@/config/Theme";
+import { DEFAULT_BACKGROUND_COLOR, MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
 import { AUTO_THEME_ID, isThemePreference, THEME_IDS } from "@/config/Themes";
 import { SLIDE_STYLE_DEFAULT } from "@/config/SlideStyle";
 import { estiloDeFundo } from "@/helpers/BackgroundStyle";
@@ -1651,16 +1651,6 @@ const opcoesIdioma = computed(() => [
   { value: "pt", label: "Português" },
   { value: "es", label: "Español" },
 ]);
-
-const opcoesEstiloUi = computed(() =>
-  Object.values(THEMES).map((estilo) => ({
-    value: estilo,
-    // O valor gravado continua sendo o enum minúsculo — RibbonBar compara com
-    // THEMES.VIOLIN. Só o rótulo passou a vir do i18n, em vez do enum cru em
-    // caixa alta.
-    label: t(`options.general.ui_styles.${estilo}`),
-  }))
-);
 
 const opcoesPosicaoFundo = computed(() => [
   { value: "cover", label: t("options.slides.pos_cover") },
@@ -1792,7 +1782,7 @@ function saveUserData(key: string, value: unknown): void {
 
 /* ── Wallpaper via IndexedDB ── */
 
-const bgColor = ref("#000033");
+const bgColor = ref(DEFAULT_BACKGROUND_COLOR);
 const bgPosition = ref("cover");
 let wallpaperBlobUrl = ref("");
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1865,7 +1855,7 @@ async function removeBgImage(): Promise<void> {
 onMounted(async () => {
   const s = await getSetting<any>(MAIN_BACKGROUND_ID).catch(() => null);
   if (s) {
-    bgColor.value = s.color || "#000033";
+    bgColor.value = s.color || DEFAULT_BACKGROUND_COLOR;
     bgPosition.value = s.position || "cover";
     if (s.image) {
       const blob = new Blob([s.image], { type: s.mime || "image/png" });
@@ -2172,7 +2162,7 @@ const fileProjBgEnabled: ComputedRef<boolean> = computed(
   () => $userdata.get(KEYS.OPTIONS.FILE_PROJECTION.BACKGROUND_ENABLED, false) as boolean
 );
 
-const fileProjBgColor = ref("#000033");
+const fileProjBgColor = ref(DEFAULT_BACKGROUND_COLOR);
 const fileProjBgPosition = ref("cover");
 const fileProjBgImageUrl = ref("");
 let fileProjBlobUrl: string | null = null;
@@ -2195,7 +2185,7 @@ async function saveFileProjBg(): Promise<void> {
 async function loadFileProjBg(): Promise<void> {
   const s = await getSetting<any>(FP_STORAGE_ID).catch(() => null);
   if (s) {
-    fileProjBgColor.value = s.color || "#000033";
+    fileProjBgColor.value = s.color || DEFAULT_BACKGROUND_COLOR;
     fileProjBgPosition.value = s.position || "cover";
     if (s.image) {
       if (fileProjBlobUrl) URL.revokeObjectURL(fileProjBlobUrl);
@@ -2210,7 +2200,7 @@ async function loadFileProjBg(): Promise<void> {
       fileProjBgImageUrl.value = "";
     }
   } else {
-    fileProjBgColor.value = "#000033";
+    fileProjBgColor.value = DEFAULT_BACKGROUND_COLOR;
     fileProjBgPosition.value = "cover";
     fileProjBgImageUrl.value = "";
   }
@@ -2491,5 +2481,85 @@ onMounted(async () => {
 
 .opt-bg-fields .opt-row:last-child {
   margin-bottom: 0;
+}
+
+@media (max-width: 600px) {
+  .opt--settings {
+    min-width: 0;
+    --lj-opt-scroll-pad: var(--lj-space-5);
+  }
+
+  .opt--settings .opt-section,
+  .opt--settings .opt-bg {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .opt--settings .opt-row {
+    min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--lj-space-2);
+  }
+
+  .opt--settings .opt-section .opt-row:not(.opt-row--col) > .opt-label,
+  .opt--settings .opt-label {
+    min-width: 0;
+    width: 100%;
+    flex: 0 0 auto;
+  }
+
+  .opt--settings
+    .opt-section
+    .opt-row
+    :is(.opt-select, .select-font, .lj-monitor-select, .lj-select) {
+    width: 100%;
+    max-width: none;
+  }
+
+  .opt--settings .opt-row :deep(.lj-select),
+  .opt--settings .opt-row .opt-select,
+  .opt--settings .opt-row .opt-input,
+  .opt--settings .opt-row .opt-btn {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .opt--settings .opt-checkbox {
+    min-height: 44px;
+  }
+
+  .opt--settings .opt-row--clock > .opt-hint {
+    flex: 0 0 auto;
+  }
+
+  .opt--settings .opt-format-block {
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .fmt-top,
+  .fmt-params,
+  .opt-format-row {
+    min-width: 0;
+  }
+
+  .fmt-top {
+    overflow-x: auto;
+  }
+
+  .fmt-params {
+    padding-left: 0;
+  }
+
+  .opt--settings .opt-bg-preview-wrap,
+  .opt--settings .opt-bg-pick {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .opt--settings .opt-bg-empty-text {
+    white-space: normal;
+  }
 }
 </style>

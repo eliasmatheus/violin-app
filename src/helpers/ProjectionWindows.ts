@@ -280,7 +280,7 @@ export async function openFileProjectionWindows(): Promise<void> {
 /**
  * Abre a janela de projeção de Anúncios (reutiliza preferências de arquivo).
  */
-export async function openAnnouncementsWindow(): Promise<void> {
+export async function openAnnouncementsWindow(): Promise<boolean> {
   const fullscreen = $userdata.get(KEYS.OPTIONS.FILE_PROJECTION.FULLSCREEN, true) as boolean;
   const alwaysOnTop = $userdata.get(
     KEYS.OPTIONS.FILE_PROJECTION.ALWAYS_ON_TOP,
@@ -288,15 +288,15 @@ export async function openAnnouncementsWindow(): Promise<void> {
   ) as boolean;
   let target = await _target(PROJECTION_TYPE.FILE);
   if (!target.open) target = await _target(PROJECTION_TYPE.MUSIC);
-  if (target.open) {
-    await _open(
-      PROJECTION_URL.ANNOUNCEMENTS,
-      PROJECTION_TYPE.ANNOUNCEMENTS,
-      target.monitorId,
-      fullscreen,
-      alwaysOnTop
-    );
-  }
+  if (!target.open) return false;
+  await _open(
+    PROJECTION_URL.ANNOUNCEMENTS,
+    PROJECTION_TYPE.ANNOUNCEMENTS,
+    target.monitorId,
+    fullscreen,
+    alwaysOnTop
+  );
+  return isWindowOpen(PROJECTION_TYPE.ANNOUNCEMENTS);
 }
 
 export async function closeAnnouncementsWindow(): Promise<void> {

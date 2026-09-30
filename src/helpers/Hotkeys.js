@@ -102,6 +102,15 @@ function _focusIsInForm() {
   return false;
 }
 
+/** Space pertence ao controle focado: cancelá-lo impediria o clique nativo do botão. */
+function _focusOwnsSpace() {
+  return Boolean(
+    document.activeElement?.closest?.(
+      'button, select, summary, [role="button"], [role="checkbox"], [role="radio"], [role="switch"], [role="menuitem"], [role="option"], [role="tab"], [role="slider"]'
+    )
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Handler global de keydown
 // ---------------------------------------------------------------------------
@@ -118,13 +127,14 @@ function _onKeyDown(e) {
   // desligava todos os atalhos enquanto o operador passasse o mouse por um
   // botão da barra — inaceitável num app conduzido ao vivo.
   //
-  // Exceção: Window dialogs (.lj-window) usam reka-ui DialogContent que
-  // também adiciona data-dismissable-layer, mas são janelas de módulo, não
-  // popups flutuantes. Atalhos devem funcionar normalmente com elas abertas.
+  // Janelas de módulo (.lj-window ou .lj-dialog--module) também usam DialogContent,
+  // mas mantêm os atalhos globais. Menus abertos dentro delas seguem bloqueando
+  // atalhos porque o foco fica no próprio portal do menu.
   const _layerEl = document.activeElement?.closest?.("[data-dismissable-layer]");
-  if (_layerEl && !_layerEl.closest(".lj-window")) return;
+  if (_layerEl && !_layerEl.closest(".lj-window, .lj-dialog--module")) return;
 
   const combo = _comboFromEvent(e);
+  if (combo === "space" && _focusOwnsSpace()) return;
   const handlers = _registry.get(combo);
   if (!handlers || handlers.length === 0) return;
 

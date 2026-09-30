@@ -130,4 +130,16 @@ const groups = [
   flex: 1;
   background: var(--lj-navy);
 }
+
+@media (max-width: 700px) {
+  .theme-swatch {
+    width: 44px;
+    height: 44px;
+  }
+
+  .theme-swatch__color {
+    width: 28px;
+    height: 28px;
+  }
+}
 </style>

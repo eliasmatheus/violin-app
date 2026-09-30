@@ -1,8 +1,26 @@
 <template>
   <ModuleContainer ref="moduleContainer" :manifest="manifest" min-width="700px">
-    <div class="si-root">
+    <nav v-if="mobileLayout" class="si-mobile-nav" :aria-label="tm('title')">
+      <button
+        type="button"
+        :class="{ 'is-active': mobileView === 'categories' }"
+        :aria-current="mobileView === 'categories' ? 'page' : undefined"
+        @click="mobileView = 'categories'"
+      >
+        {{ tm("categories") }}
+      </button>
+      <button
+        type="button"
+        :class="{ 'is-active': mobileView === 'calendar' }"
+        :aria-current="mobileView === 'calendar' ? 'page' : undefined"
+        @click="mobileView = 'calendar'"
+      >
+        {{ tm("calendar") }}
+      </button>
+    </nav>
+    <div class="si-root" :class="{ 'si-root--mobile': mobileLayout }">
       <!-- Categorias -->
-      <aside class="si-cats">
+      <aside v-show="!mobileLayout || mobileView === 'categories'" class="si-cats">
         <div class="si-cats-head">
           <span>{{ tm("categories") }}</span>
           <LjButton
@@ -20,7 +38,7 @@
           class="si-cat"
           :class="{ 'si-cat--active': String(selectedCategoryId) === String(cat.id) }"
           :style="{ '--cat-color': (cat.color as string) || '#1976d2' }"
-          @click="selectedCategoryId = cat.id"
+          @click="selectCategory(cat.id)"
         >
           <LjIcon :icon="ICONS.MODULES.SCHEDULED_ITEMS" :size="16" />
           <span class="si-cat-name">{{ cat.nome }}</span>
@@ -52,7 +70,7 @@
       </aside>
 
       <!-- Calendário -->
-      <div class="si-cal">
+      <div v-show="!mobileLayout || mobileView === 'calendar'" class="si-cal">
         <div class="si-cal-toolbar">
           <LjButton
             size="md"
@@ -106,7 +124,7 @@
           :events="calendarEvents"
           event-start="start"
           event-end="end"
-          :max-events="5"
+          :max-events="mobileLayout ? 1 : 5"
           :event-height="calendarType === 'week' ? 20 : 18"
           :event-more-text="moreEventsText"
           :locale="calLocale"
@@ -285,10 +303,14 @@
 
       <div class="si-auto-hint" v-html="tm('add_auto_hint')" />
 
+      <div v-if="autoPopulateScanning" class="si-auto-result si-auto-result--busy" role="status">
+        <LjSpinner :size="14" />
+        <span>{{ tm("add_auto_scanning") }}</span>
+      </div>
       <div
-        v-if="autoPopulateResult"
+        v-else-if="autoPopulateResult"
         class="si-auto-result"
-        :class="{ 'si-auto-result--ok': autoPopulateResult.includes('sucesso') }"
+        :class="{ 'si-auto-result--ok': autoPopulateResultOk }"
       >
         {{ autoPopulateResult }}
       </div>
@@ -300,6 +322,7 @@
           size="sm"
           variant="primary"
           :icon="ICONS.ACTIONS.SEARCH"
+          :loading="autoPopulateScanning"
           :disabled="!autoPopulateFolder || !autoPopulateTargetCat || !Platform.isDesktop"
           @click="executeAutoPopulate"
         >
@@ -315,7 +338,15 @@ import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, 
 import { useI18n } from "vue-i18n";
 import { module as manifest } from "../manifest";
 import ModuleContainer from "@/components/ModuleContainer.vue";
-import { LjButton, LjCalendar, LjDialog, LjField, LjIcon, LjInput } from "@/components/ui";
+import {
+  LjButton,
+  LjCalendar,
+  LjDialog,
+  LjField,
+  LjIcon,
+  LjInput,
+  LjSpinner,
+} from "@/components/ui";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
 import type {
   LjCalendarDayClick,
@@ -327,15 +358,27 @@ import ScheduledStore from "@/helpers/ScheduledStore";
 import Platform from "@/helpers/Platform";
 import $path from "@/helpers/Path";
 import $alert from "@/helpers/Alert";
+import $snackbar from "@/helpers/Snackbar";
+import { useBackgroundTasks } from "@/composables/useBackgroundTasks";
 import { ICONS } from "@/config/Icons";
 import { isHeic, heicToJpeg } from "@/helpers/ImageConvert";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
+import { useViewport } from "@/composables/useViewport";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import type { ScheduledCategory, ScheduledItem } from "@/types/Liturgy";
 import { AUDIO_EXT, IMAGE_EXT, VIDEO_EXT } from "@/constants/FileTypes";
 
 const { t, locale } = useI18n();
+const { width: viewportWidth } = useViewport();
+const mobileLayout = computed(() => !Platform.isDesktop && viewportWidth.value <= 1000);
+const mobileView = ref<"categories" | "calendar">("categories");
+
+function selectCategory(id: string | number): void {
+  selectedCategoryId.value = id;
+  if (mobileLayout.value) mobileView.value = "calendar";
+}
+
 function tm(key: string): string {
   return t(`modules.scheduled_items.${key}`);
 }
@@ -531,7 +574,26 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
 const autoPopulateDialog = ref(false);
 const autoPopulateFolder = ref("");
 const autoPopulateResult = ref("");
+const autoPopulateResultOk = ref(true);
+const autoPopulateScanning = ref(false);
 const autoPopulateTargetCat = ref<string | number>("");
+
+const bgTasks = useBackgroundTasks();
+const SCAN_TASK_ID = "scheduled-items:populate";
+
+function isScanTaskRunning(): boolean {
+  return bgTasks.tasks.value.some((t) => t.id === SCAN_TASK_ID && t.status === "running");
+}
+
+/**
+ * O modal é o feedback primário; quando ele já foi fechado, o resultado
+ * final da varredura vai para a snackbar (verde = ok, vermelho = erro).
+ */
+function notifyScanResult(): void {
+  if (autoPopulateDialog.value) return;
+  if (autoPopulateResultOk.value) $snackbar.success(autoPopulateResult.value);
+  else $snackbar.error(autoPopulateResult.value);
+}
 
 function openAutoPopulate(): void {
   if (!Platform.isDesktop) {
@@ -543,6 +605,7 @@ function openAutoPopulate(): void {
   const cat = categories.value.find((c) => String(c.id) === String(autoPopulateTargetCat.value));
   autoPopulateFolder.value = (cat?.auto_folder as string) || "";
   autoPopulateResult.value = "";
+  autoPopulateResultOk.value = true;
   autoPopulateDialog.value = true;
 }
 
@@ -553,68 +616,113 @@ async function chooseAutoFolder(): Promise<void> {
 
 async function executeAutoPopulate(): Promise<void> {
   if (!autoPopulateFolder.value || !autoPopulateTargetCat.value) return;
-  const catId = String(autoPopulateTargetCat.value);
-  const files = await Platform.readDir(autoPopulateFolder.value);
-  if (!files || !files.length) {
-    autoPopulateResult.value = tm("add_auto_no_files");
+  if (isScanTaskRunning()) {
+    autoPopulateScanning.value = true;
     return;
   }
-  let created = 0;
-  let updated = 0;
-  const PADRAO = /(\d{2})-(\d{2})-(\d{2})_(.+)\.\w+$/;
-  const existingItems = $liturgy.scheduledItems();
-  for (const file of files) {
-    const m = file.match(PADRAO);
-    if (!m) continue;
-    const [, dd, mm, yy] = m;
-    const year = `20${yy}`;
-    const date = `${year}-${mm}-${dd}`;
-    const path = `${autoPopulateFolder.value}/${file}`;
-    const nome =
-      m[4] ||
-      (path
-        ? path
-            .split(/[\\/]/)
-            .pop()
-            ?.replace(/\.[^.]+$/, "") || ""
-        : "");
-    // Verifica se já existe item para essa categoria+dia — se sim, sobrescreve.
-    const existing = existingItems.find((i) => i.data === date && String(i.categoria) === catId);
-    if (existing) {
-      await ScheduledStore.saveItem({ ...existing, arquivo: path, nome });
-      updated++;
+  autoPopulateScanning.value = true;
+  autoPopulateResult.value = "";
+  autoPopulateResultOk.value = true;
+
+  let cancelled = false;
+  bgTasks.registerTask(SCAN_TASK_ID, "shell.background_tasks.scheduled_scan", () => {
+    cancelled = true;
+  });
+
+  try {
+    const catId = String(autoPopulateTargetCat.value);
+    const files = await Platform.readDir(autoPopulateFolder.value);
+    if (cancelled) return;
+    if (!files || !files.length) {
+      autoPopulateResultOk.value = false;
+      autoPopulateResult.value = tm("add_auto_no_files");
+      bgTasks.completeTask(SCAN_TASK_ID);
+      notifyScanResult();
+      return;
+    }
+    let created = 0;
+    let updated = 0;
+    let lastPct = 0;
+    const PADRAO = /(\d{2})-(\d{2})-(\d{2})_(.+)\.\w+$/;
+    const existingItems = $liturgy.scheduledItems();
+    for (let idx = 0; idx < files.length; idx++) {
+      if (cancelled) break;
+      const file = files[idx];
+      // Progresso por arquivo, atualizado só quando o percentual inteiro muda.
+      const pct = Math.round(((idx + 1) / files.length) * 100);
+      if (pct !== lastPct) {
+        lastPct = pct;
+        bgTasks.updateTask(SCAN_TASK_ID, {
+          progress: pct,
+          detail: `${idx + 1}/${files.length} — ${tm("add_auto_scanning")}`,
+        });
+      }
+      const m = file.match(PADRAO);
+      if (!m) continue;
+      const [, dd, mm, yy] = m;
+      const year = `20${yy}`;
+      const date = `${year}-${mm}-${dd}`;
+      const path = `${autoPopulateFolder.value}/${file}`;
+      const nome =
+        m[4] ||
+        (path
+          ? path
+              .split(/[\\/]/)
+              .pop()
+              ?.replace(/\.[^.]+$/, "") || ""
+          : "");
+      // Verifica se já existe item para essa categoria+dia — se sim, sobrescreve.
+      const existing = existingItems.find((i) => i.data === date && String(i.categoria) === catId);
+      if (existing) {
+        await ScheduledStore.saveItem({ ...existing, arquivo: path, nome });
+        updated++;
+      } else {
+        const id = uid("sch_");
+        await ScheduledStore.saveItem({
+          id,
+          categoria: catId,
+          data: date,
+          nome,
+          arquivo: path,
+          arquivo_info: "E",
+        });
+        created++;
+      }
+    }
+    if (cancelled) return;
+    if (created > 0 || updated > 0) {
+      // Salva a pasta na categoria para pré-preenchimento futuro.
+      const cat = $liturgy
+        .scheduledCategories()
+        .find((c) => String(c.id) === String(autoPopulateTargetCat.value));
+      if (cat) {
+        await ScheduledStore.saveCategory({
+          ...cat,
+          auto_folder: autoPopulateFolder.value,
+        });
+      }
+      const parts: string[] = [];
+      if (created) parts.push(tm("add_auto_created").replace("{n}", String(created)));
+      if (updated) parts.push(tm("add_auto_updated").replace("{n}", String(updated)));
+      autoPopulateResultOk.value = true;
+      autoPopulateResult.value = parts.join(". \n") + ".";
+      await refresh();
+      selectedCategoryId.value = catId;
     } else {
-      const id = uid("sch_");
-      await ScheduledStore.saveItem({
-        id,
-        categoria: catId,
-        data: date,
-        nome,
-        arquivo: path,
-        arquivo_info: "E",
-      });
-      created++;
+      autoPopulateResultOk.value = false;
+      autoPopulateResult.value = tm("add_auto_no_files");
     }
-  }
-  if (created > 0 || updated > 0) {
-    // Salva a pasta na categoria para pré-preenchimento futuro.
-    const cat = $liturgy
-      .scheduledCategories()
-      .find((c) => String(c.id) === String(autoPopulateTargetCat.value));
-    if (cat) {
-      await ScheduledStore.saveCategory({
-        ...cat,
-        auto_folder: autoPopulateFolder.value,
-      });
+    bgTasks.completeTask(SCAN_TASK_ID);
+    notifyScanResult();
+  } catch {
+    if (!cancelled) {
+      autoPopulateResultOk.value = false;
+      autoPopulateResult.value = tm("add_auto_error");
+      bgTasks.updateTask(SCAN_TASK_ID, { status: "error", completedAt: Date.now() });
+      notifyScanResult();
     }
-    const parts: string[] = [];
-    if (created) parts.push(tm("add_auto_created").replace("{n}", String(created)));
-    if (updated) parts.push(tm("add_auto_updated").replace("{n}", String(updated)));
-    autoPopulateResult.value = parts.join(". \n") + ".";
-    await refresh();
-    selectedCategoryId.value = catId;
-  } else {
-    autoPopulateResult.value = tm("add_auto_no_files");
+  } finally {
+    autoPopulateScanning.value = false;
   }
 }
 
@@ -1071,6 +1179,95 @@ async function removeEntry(): Promise<void> {
   font-weight: var(--lj-weight-semibold);
 }
 
+@media (max-width: 1000px) {
+  .si-mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--lj-space-2);
+    flex-shrink: 0;
+    padding: var(--lj-space-2) var(--lj-space-3);
+    border-bottom: 1px solid var(--lj-surface-border);
+  }
+
+  .si-mobile-nav button {
+    min-width: 0;
+    min-height: 44px;
+    border: 1px solid var(--lj-surface-border);
+    border-radius: var(--lj-radius-sm);
+    background: var(--lj-surface-bg-soft);
+    color: var(--lj-text);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .si-mobile-nav button.is-active {
+    border-color: var(--lj-ui-accent);
+    background: var(--lj-ui-accent-soft);
+    color: var(--lj-ui-accent-text);
+    font-weight: var(--lj-weight-semibold);
+  }
+
+  .si-root--mobile {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    padding: var(--lj-space-3);
+  }
+
+  .si-root--mobile .si-cats,
+  .si-root--mobile .si-cal {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    border-right: 0;
+    padding-right: 0;
+  }
+
+  .si-root--mobile .si-cats-head :deep(.lj-btn),
+  .si-root--mobile .si-cat-actions :deep(.lj-btn) {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .si-root--mobile .si-cat {
+    min-height: 56px;
+    padding-inline: var(--lj-space-2);
+  }
+
+  .si-root--mobile .si-cat-actions,
+  .si-root--mobile .si-cat:hover .si-cat-actions {
+    display: inline-flex;
+  }
+
+  .si-root--mobile .si-cal-toolbar {
+    display: grid;
+    grid-template-columns: 44px 44px minmax(0, 1fr);
+    align-items: center;
+    gap: var(--lj-space-2);
+    padding: 0 0 var(--lj-space-3);
+  }
+
+  .si-root--mobile .si-cal-toolbar :deep(.lj-btn) {
+    min-height: 44px;
+  }
+
+  .si-root--mobile .si-cal-type,
+  .si-root--mobile .si-cal-title {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .si-root--mobile .si-cal-type :deep(.lj-btn) {
+    flex: 1;
+  }
+
+  .si-root--mobile .si-cal-toolbar .si-cal-title {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
 /* ── Controles nativos ainda sem primitivo ─────────────────────────────
    O <select> nativo permanece por escolha: o painel flutuante do LjSelect
    é desenhado abaixo do diálogo (z-index 2400 contra 2501), e aqui ele
@@ -1256,5 +1453,12 @@ async function removeEntry(): Promise<void> {
 .si-auto-result--ok {
   background: var(--lj-success-soft);
   color: var(--lj-success);
+}
+.si-auto-result--busy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lj-space-2);
+  background: var(--lj-surface-bg-soft);
+  color: var(--lj-text-muted);
 }
 </style>

@@ -24,6 +24,7 @@ vi.mock("@/helpers/UserData", () => ({
 }));
 vi.mock("@/helpers/Modules", () => ({ default: {} }));
 vi.mock("@/composables/useMedia", () => ({ default: { open: vi.fn() } }));
+vi.mock("@/helpers/CustomMusicCatalog", () => ({ loadCustomMusicCatalog: async () => [] }));
 
 const registry = await import("@/helpers/CommandRegistry");
 const CONFIG = KEYS.MODULES.MEDIA.CONFIG;

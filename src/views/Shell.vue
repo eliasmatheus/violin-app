@@ -1,5 +1,8 @@
 <template>
-  <div class="shell-root" :class="{ 'shell-fading-in': !ready }">
+  <div
+    class="shell-root"
+    :class="{ 'shell-fading-in': !ready, 'shell-root--web': !Platform.isDesktop }"
+  >
     <AppSystemBar />
 
     <RibbonBar />
@@ -7,13 +10,11 @@
     <!-- PageControl interno (tabs dos módulos abertos) -->
     <OpenModulesTabs v-show="!isShellExpanded" />
 
-    <main
-      class="shell-main"
-      :class="{ 'shell-main--active': footerActive }"
-      :style="{ '--footer-height': footerHeight }"
-    >
-      <div class="shell-grid">
-        <ChatDrawer v-if="Platform.isDesktop && (isChatOpen || isPinned)" />
+    <main class="shell-main">
+      <div class="shell-grid" :class="{ 'shell-grid--with-sidebar': showLiturgySidebar }">
+        <Transition name="chat-drawer-slide">
+          <ChatDrawer v-if="Platform.isDesktop && (isChatOpen || isPinned)" />
+        </Transition>
 
         <div
           class="shell-center"
@@ -29,14 +30,15 @@
             <AppAlert />
             <AppSnackbar />
             <DesktopDownloadPrompt v-if="showDesktopDownload" />
+            <HomeStart v-if="showHome" />
             <AppModules />
           </div>
         </div>
 
-        <!-- Sidebar Liturgia: oculta quando o módulo Liturgia já está aberto
-             (evita duplicar conteúdo) e com o Modo apresentação aberto, cujo
-             programa do culto substitui o painel -->
-        <ShellLiturgyPanel v-if="showLiturgyPanel" class="shell-sidebar" />
+        <!-- O painel lateral aparece nos demais módulos conforme a preferência do
+             usuário; some com o módulo Liturgia aberto (duplicaria) e com o Modo
+             apresentação aberto, cujo programa do culto substitui o painel. -->
+        <ShellLiturgyPanel v-if="showLiturgySidebar" class="shell-sidebar" />
       </div>
     </main>
 
@@ -45,7 +47,7 @@
 
     <CommandPalette v-if="cmdPaletteOpen" v-model="cmdPaletteOpen" />
     <MusicSpotlight v-if="musicSearchOpen" v-model="musicSearchOpen" />
-    <BibleSpotlight v-if="bibleSearchOpen" v-model="bibleSearchOpen" @select="onBibleSelect" />
+    <BibleSpotlight v-if="bibleSearchOpen" v-model="bibleSearchOpen" />
     <HotkeysCheatsheet v-if="hotkeysOpen" v-model="hotkeysOpen" />
     <ReleaseNotesDialog
       v-if="releaseNotesOpen"
@@ -97,6 +99,7 @@ const UpdateAvailableDialog = defineAsyncComponent(
   () => import("@/components/UpdateAvailableDialog.vue")
 );
 import DesktopDownloadPrompt from "@/components/DesktopDownloadPrompt.vue";
+import HomeStart from "@/layout/shell/HomeStart.vue";
 import packageJson from "@root/package.json";
 import $appdata from "@/helpers/AppData";
 import $userdata from "@/helpers/UserData";
@@ -108,13 +111,11 @@ import { ModuleEnum } from "@/enums/ModuleEnum";
 import $popup from "@/helpers/Popup";
 import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
-import type { BibleSearchResult } from "@/types/Bible";
 
 import { registerShell } from "@/composables/useShell";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { useViewport } from "@/composables/useViewport";
 import { useShellExpanded } from "@/composables/useModuleExpanded";
-import { useFileProjection } from "@/composables/useFileProjection";
 import { useProjectionShutdown } from "@/composables/useProjectionShutdown";
 import { useBackgroundTasks } from "@/composables/useBackgroundTasks";
 import { hasOpenWebWindows } from "@/helpers/projection/webWindow";
@@ -154,10 +155,27 @@ const showDesktopDownload = computed(() => {
   );
 });
 
-const showLiturgyPanel = computed(() => {
-  if ($appdata.get<boolean>(KEYS.MODULES.LITURGY.SHOW, false) === true) return false;
-  return $appdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.SHOW, false) !== true;
+const showHome = computed(
+  () =>
+    !showDesktopDownload.value &&
+    !$appdata.get<string | null>("active_module", null) &&
+    $appdata.get<boolean>("import_modules", false)
+);
+
+const liturgyModuleOpen = computed(() => {
+  return $appdata.get<boolean>(KEYS.MODULES.LITURGY.SHOW, false) === true;
 });
+
+const presentationModuleOpen = computed(
+  () => $appdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.SHOW, false) === true
+);
+
+const showLiturgySidebar = computed(
+  () =>
+    !liturgyModuleOpen.value &&
+    !presentationModuleOpen.value &&
+    $userdata.get<boolean>(KEYS.SHELL.LITURGY_VISIBLE, true) !== false
+);
 
 const { activeModule, isExpanded: isShellExpanded } = useShellExpanded();
 
@@ -165,30 +183,7 @@ const { activeModule, isExpanded: isShellExpanded } = useShellExpanded();
 // ar; o mini-player do rodapé seria um segundo painel dos mesmos botões.
 const presentationActive = computed(() => activeModule.value === ModuleEnum.PRESENTATION_MODE);
 
-const fp = useFileProjection();
-
 useProjectionShutdown();
-
-const playerMinimized = computed(() => {
-  try {
-    return $appdata.get<boolean>(KEYS.MODULES.MEDIA.MINIMIZED, false) === true;
-  } catch (_) {
-    return false;
-  }
-});
-
-const hasProjection = computed(() => fp.isProjecting.value);
-
-const footerActive = computed(
-  () => !presentationActive.value && (playerMinimized.value || hasProjection.value)
-);
-
-const footerHeight = computed(() => {
-  if (presentationActive.value) return "0px";
-  if (playerMinimized.value) return "var(--lj-player-height)";
-  if (hasProjection.value) return "36px";
-  return "0px";
-});
 
 // Listeners externos (eventos globais que substituem acoplamento direto via shell._ref)
 const onOpenCommandPalette = () => {
@@ -554,14 +549,6 @@ function onUpdateDialogClose() {
 // Registra ações do shell no composable (substitui `$appdata.set("shell._ref")`)
 registerShell({ openCommandPalette, openHotkeysCheatsheet, openMusicSearch, openBibleSearch });
 
-function onBibleSelect(res: BibleSearchResult) {
-  Broadcast.send(BROADCAST_TYPE.BIBLE_VERSE_INTENT, {
-    text: res.text,
-    reference: res.reference,
-    active: true,
-  });
-}
-
 onMounted(() => {
   // Re-registra no mount (importante após HMR)
   registerShell({ openCommandPalette, openHotkeysCheatsheet, openMusicSearch, openBibleSearch });
@@ -759,6 +746,7 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 100vh;
   min-height: 100dvh;
+  overflow: hidden;
   backface-visibility: hidden;
   transition: opacity 120ms ease-out;
 }
@@ -781,11 +769,8 @@ onBeforeUnmount(() => {
   min-height: 0;
   max-width: 100%;
   overflow: hidden;
+  padding-bottom: var(--lj-dock-offset, 0px);
   transition: padding-bottom 0.3s ease;
-}
-
-.shell-main--active {
-  padding-bottom: var(--footer-height);
 }
 .shell-grid {
   position: relative;
@@ -810,31 +795,33 @@ onBeforeUnmount(() => {
   flex: 1;
   overflow: auto;
   position: relative;
-  /* Fundo clean: navy gradient suave do topo pro fundo, sem vinheta.
-     --lj-navy* acompanha a cor escolhida em todos os temas (inclusive os
-     "claros", que só trocam a marca — ver tokens.css), então esta tela nunca
-     destoa do resto do shell nem do texto branco do DesktopDownloadPrompt. */
-  background: linear-gradient(180deg, var(--lj-navy-dark) 0%, var(--lj-navy-darker) 100%);
-  color: var(--lj-text-on-navy-muted);
+  /* O fundo inicial acompanha a luminosidade real da superfície do tema. */
+  background: var(--lj-home-bg);
+  color: var(--lj-home-text);
 }
 
-.shell-content::before {
-  /* Logo nítido e discreto no centro. */
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url("/ico/favicon-180x180.png");
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-size: 140px 140px;
-  pointer-events: none;
-  transition: opacity 120ms ease-out;
-}
-
-.shell-content--desktop-download::before {
-  opacity: 0;
-}
 .shell-sidebar {
   flex-shrink: 0;
+}
+
+@media (max-width: 700px) {
+  .shell-root {
+    --lj-sidebar-collapsed: 44px;
+    min-height: 0;
+  }
+
+  .shell-grid--with-sidebar .shell-center {
+    margin-right: var(--lj-sidebar-collapsed);
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1000px) and (pointer: coarse) {
+  .shell-root--web {
+    --lj-sidebar-collapsed: 45px;
+  }
+
+  .shell-root--web .shell-grid--with-sidebar .shell-center {
+    margin-right: var(--lj-sidebar-collapsed);
+  }
 }
 </style>

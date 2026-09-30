@@ -1,36 +1,55 @@
 <template>
+  <OverlayRenderer />
   <div
     class="ann-root"
     :style="{
-      background: current?.style?.bgColor || '#000',
       justifyContent: current?.style?.alignY || 'center',
     }"
   >
     <template v-if="current">
-      <!-- Vídeo -->
-      <video
-        v-if="mediaUrl('video')"
-        :src="mediaUrl('video')"
-        class="ann-media"
-        autoplay
-        loop
-        playsinline
-      />
+      <!-- Cena da transição: slide anterior e novo se sobrepõem durante a animação -->
+      <div v-if="hasContent" class="lj-tstage" :style="stageStyle">
+        <Transition :name="transitionName">
+          <!-- O fundo é do slide, não da raiz: o vnode saindo fica com a cor
+               antiga congelada e as duas cores acompanham a animação juntas. -->
+          <div
+            :key="slideKey"
+            class="lj-tslide"
+            :style="{ background: current?.style?.bgColor || '#000' }"
+          >
+            <!-- Vídeo -->
+            <video
+              v-if="mediaUrl('video')"
+              :src="mediaUrl('video')"
+              class="ann-media"
+              :style="mediaFitStyle"
+              autoplay
+              loop
+              playsinline
+            />
 
-      <!-- Imagem -->
-      <img v-else-if="mediaUrl('image')" :src="mediaUrl('image')" class="ann-media" alt="" />
+            <!-- Imagem -->
+            <img
+              v-else-if="mediaUrl('image')"
+              :src="mediaUrl('image')"
+              class="ann-media"
+              :style="mediaFitStyle"
+              alt=""
+            />
 
-      <!-- Texto (sempre acima de imagem/vídeo) -->
-      <div
-        v-if="current.texto"
-        class="ann-text"
-        :class="{ 'ann-text--over-media': mediaUrl('video') || mediaUrl('image') }"
-        :style="textStyle"
-      >
-        {{ current.texto }}
+            <!-- Texto (sempre acima de imagem/vídeo) -->
+            <div
+              v-if="current.texto"
+              class="ann-text"
+              :class="{ 'ann-text--over-media': mediaUrl('video') || mediaUrl('image') }"
+              :style="textStyle"
+            >
+              {{ current.texto }}
+            </div>
+          </div>
+        </Transition>
       </div>
-
-      <div v-if="!mediaUrl('video') && !mediaUrl('image') && !current.texto" class="ann-empty" />
+      <div v-else class="ann-empty" />
     </template>
     <div v-else class="ann-empty" />
     <ProjectionClearScreen />
@@ -44,12 +63,17 @@
  * setas/espaço e pelo módulo (ANNOUNCEMENTS_CONTROL).
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import "@/assets/styles/transitions.css";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { useProjectionCloseNotice } from "@/composables/useProjectionCloseNotice";
 import ProjectionClearScreen from "@/components/ProjectionClearScreen.vue";
+import { useTransitionStage } from "@/composables/useTransitionStage";
 import { PROJECTION_TYPE } from "@/constants/Projection";
 import Broadcast from "@/helpers/Broadcast";
+import OverlayRenderer from "@/components/OverlayRenderer.vue";
+import { KEYS } from "@/constants/UserDataKeys";
+import { createTransitionContext } from "@/config/Transitions";
 import {
   AnnouncementsPresentationGate,
   type AnnouncementPacket,
@@ -58,12 +82,36 @@ import {
 
 const slides = ref<AnnouncementSlide[]>([]);
 const index = ref(0);
+const session = ref("");
+const isBackward = ref(false);
 let currentPacket: AnnouncementPacket | null = null;
 const stateGate = new AnnouncementsPresentationGate();
 
 const objectUrls: string[] = [];
 
 const current = computed(() => slides.value[index.value] || null);
+
+/** Marca o índice/sessão recebidos e decide a direção da transição:
+ * sessão nova ou avanço → frente; índice menor na mesma sessão → trás. */
+function setSlideIndex(next: number, nextSession: string): void {
+  const sessionChanged = nextSession !== session.value;
+  session.value = nextSession;
+  isBackward.value = !sessionChanged && next < index.value;
+  index.value = next;
+}
+
+const slideKey = computed(() => `${session.value}:${index.value}`);
+
+/** Nome da classe Vue Transition + variáveis da stage — tabela e chaves por
+ * módulo; `isBackward` alimenta o modo automático de direção. */
+const { transitionName, stageStyle } = useTransitionStage(
+  createTransitionContext(KEYS.MODULES.ANNOUNCEMENTS),
+  { isBackward: () => isBackward.value }
+);
+
+const hasContent = computed(
+  () => !!(mediaUrl("video") || mediaUrl("image") || current.value?.texto)
+);
 
 /** Cache de object URLs por slide+tipo — criado sob demanda, sem efeitos
  * colaterais dentro de computeds. */
@@ -92,6 +140,10 @@ function mediaUrl(kind: "image" | "video"): string {
   objectUrls.push(url);
   return url;
 }
+
+const mediaFitStyle = computed(() => ({
+  objectFit: current.value?.style?.mediaFit || "contain",
+}));
 
 const textStyle = computed(() => {
   const s = current.value?.style || {};
@@ -134,6 +186,7 @@ function applyState(payload: unknown): void {
   if (!packet.active) {
     slides.value = [];
     clearMediaCache();
+    session.value = packet.announcement_session;
     return;
   }
   const newIds = packet.slides.map((s) => s.id).join(",");
@@ -142,7 +195,7 @@ function applyState(payload: unknown): void {
     clearMediaCache();
   }
   slides.value = packet.slides;
-  index.value = packet.index;
+  setSlideIndex(packet.index, packet.announcement_session);
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -176,7 +229,7 @@ useBroadcastListener(BROADCAST_TYPE.ANNOUNCEMENTS_POSITION, (payload: unknown) =
   const packet = stateGate.acceptPosition(payload);
   if (packet) {
     currentPacket = packet;
-    index.value = packet.index;
+    setSlideIndex(packet.index, packet.announcement_session);
   }
 });
 
@@ -205,6 +258,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Base neutra quando não há slide — o fundo do deck é do .lj-tslide */
+  background: #000;
 }
 .ann-media {
   width: 100%;

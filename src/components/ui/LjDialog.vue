@@ -4,7 +4,7 @@
       <DialogOverlay class="lj-dialog__overlay" />
       <DialogContent
         class="lj-dialog"
-        :class="`lj-dialog--${size}`"
+        :class="[`lj-dialog--${size}`, { 'lj-dialog--module': allowGlobalHotkeys }]"
         v-bind="description ? {} : { 'aria-describedby': undefined }"
         @open-auto-focus="onOpenAutoFocus"
         @escape-key-down="onDismiss"
@@ -19,7 +19,12 @@
             class="lj-dialog__icon"
             :class="iconVariant && `lj-dialog__icon--${iconVariant}`"
           />
-          <DialogTitle class="lj-dialog__title">{{ title }}</DialogTitle>
+          <DialogTitle class="lj-dialog__title">
+            <span :aria-hidden="accessibleTitle ? true : undefined">{{ title }}</span>
+            <span v-if="accessibleTitle" class="lj-dialog__accessible-title">
+              {{ accessibleTitle }}
+            </span>
+          </DialogTitle>
           <DialogClose v-if="!persistent" class="lj-dialog__close" :aria-label="t('actions.close')">
             <LjIcon :icon="ICONS.ACTIONS.CLOSE" :size="15" />
           </DialogClose>
@@ -58,6 +63,10 @@ const props = withDefaults(
   defineProps<{
     modelValue?: boolean;
     title: string;
+    /** Nome anunciado por leitores de tela quando o título visual é genérico. */
+    accessibleTitle?: string;
+    /** Mantém atalhos globais em diálogos que representam uma janela de módulo. */
+    allowGlobalHotkeys?: boolean;
     description?: string;
     icon?: string;
     /** Tinge o ícone do cabeçalho — use para diferenciar aviso, risco e êxito. */
@@ -66,10 +75,13 @@ const props = withDefaults(
     /** Sem botão de fechar — a saída tem de ser por uma ação do rodapé. */
     persistent?: boolean;
   }>(),
-  { size: "md" }
+  { accessibleTitle: "", size: "md" }
 );
 
-const emit = defineEmits<{ "update:modelValue": [value: boolean] }>();
+const emit = defineEmits<{
+  "update:modelValue": [value: boolean];
+  openAutoFocus: [event: Event];
+}>();
 
 const open = computed({
   get: () => !!props.modelValue,
@@ -80,6 +92,8 @@ const open = computed({
 // o que atrapalha em diálogos de confirmação. O contêiner recebe o foco e a
 // navegação por Tab segue funcionando.
 function onOpenAutoFocus(event: Event): void {
+  emit("openAutoFocus", event);
+  if (event.defaultPrevented) return;
   event.preventDefault();
   (event.currentTarget as HTMLElement | null)?.focus?.();
 }
@@ -183,6 +197,18 @@ function onDismiss(event: Event): void {
   font-weight: var(--lj-weight-semibold);
 }
 
+.lj-dialog__accessible-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .lj-dialog__close {
   display: inline-flex;
   align-items: center;
@@ -228,6 +254,19 @@ function onDismiss(event: Event): void {
   padding: var(--lj-space-4) var(--lj-space-6);
   border-top: 1px solid var(--lj-surface-divider);
   background: var(--lj-surface-bg-soft);
+}
+
+@media (max-width: 600px) {
+  .lj-dialog__footer {
+    flex-wrap: wrap;
+    padding-inline: var(--lj-space-4);
+    padding-bottom: calc(var(--lj-space-4) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .lj-dialog__footer > button,
+  .lj-dialog__footer > [role="button"] {
+    min-height: 44px;
+  }
 }
 
 @keyframes lj-dialog-fade {

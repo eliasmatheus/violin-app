@@ -83,7 +83,7 @@
 
 <script setup lang="ts">
 import { ICONS } from "@/config/Icons";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import {
   DialogContent,
   DialogOverlay,
@@ -95,11 +95,12 @@ import {
 import { useI18n } from "vue-i18n";
 import { LjIcon, LjSpinner } from "@/components/ui";
 import Database from "@/helpers/Database";
+import AppData from "@/helpers/AppData";
 import UserData from "@/helpers/UserData";
 import Modules from "@/helpers/Modules";
 import ProjectionWindows from "@/helpers/ProjectionWindows";
 import Broadcast from "@/helpers/Broadcast";
-import type { BibleBook, BibleSearchResult, BibleVersePayload } from "@/types/Bible";
+import type { BibleBook, BibleSearchResult, BibleVersePayload, BibleVersion } from "@/types/Bible";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { KEYS } from "@/constants/UserDataKeys";
 
@@ -109,10 +110,11 @@ const props = withDefaults(
   defineProps<{
     modelValue: boolean;
     initialBuffer?: string;
+    versionId?: number | null;
     /** O controle remoto envia a seleção ao host pelo evento select. */
     projectLocally?: boolean;
   }>(),
-  { projectLocally: true }
+  { projectLocally: true, versionId: null }
 );
 
 const emit = defineEmits<{
@@ -135,17 +137,24 @@ const activeStep = ref(0);
 const selectedBook = ref<BibleBook | null>(null);
 const selectedChapter = ref<number>(0);
 const chapterVerses = ref<Record<string, string>>({});
+const chapterLoading = ref(false);
+const selectedVersion = ref<BibleVersion | null>(null);
 const cardRef = ref<HTMLElement | null>(null);
 const inputRef = ref<HTMLInputElement | null>(null);
-let chapterTimer: ReturnType<typeof setTimeout> | null = null;
+let chapterGeneration = 0;
+let chapterLoad: Promise<void> | null = null;
+let selectionGeneration = 0;
 let _composing = false;
 let _lastInput = "";
 
 // Data
 const books = ref<BibleBook[] | null>(null);
+const versions = ref<BibleVersion[]>([]);
 let _booksLang = "";
 
 function reset(): void {
+  chapterGeneration++;
+  selectionGeneration++;
   state.value = "book";
   buffer.value = "";
   feedback.value = "";
@@ -153,10 +162,10 @@ function reset(): void {
   selectedBook.value = null;
   selectedChapter.value = 0;
   chapterVerses.value = {};
-  if (chapterTimer) {
-    clearTimeout(chapterTimer);
-    chapterTimer = null;
-  }
+  chapterLoading.value = false;
+  chapterLoad = null;
+  selectedVersion.value = null;
+  _composing = false;
 }
 
 function normalize(str: string): string {
@@ -214,29 +223,53 @@ function commitBook(b: BibleBook): void {
   feedback.value = `${b.name} → cap. `;
 }
 
-async function commitChapter(val: number): Promise<void> {
-  if (!selectedBook.value) return;
+function commitChapter(val: number): void {
+  const book = selectedBook.value;
+  const version = selectedVersion.value;
+  if (!book || !version) return;
+  const generation = ++chapterGeneration;
   selectedChapter.value = val;
   state.value = "verse";
   buffer.value = "";
   activeStep.value = 2;
-  feedback.value = `${feedback.value.replace(/ → cap\.\s*$/, "").trim()} ${val}:`;
-  const lang = locale.value === "es" ? "es" : "pt";
-  const versionId = UserData.get<number>("modules.bible.id_bible_version") || 1;
-  const bibleFile = `bible_${versionId}_${selectedBook.value.id_bible_book}_${val}`;
-  const data = await Database.get<Record<string, string>>(bibleFile);
-  if (data) chapterVerses.value = data;
+  feedback.value = `${book.name} ${val}:`;
+  chapterVerses.value = {};
+  chapterLoading.value = true;
+  const bibleFile = `bible_${version.id_bible_version}_${book.id_bible_book}_${val}`;
+  chapterLoad = (async () => {
+    try {
+      const data = await Database.get(bibleFile);
+      if (generation !== chapterGeneration) return;
+      chapterVerses.value =
+        data && typeof data === "object" && !Array.isArray(data)
+          ? Object.fromEntries(
+              Object.entries(data).filter(
+                ([key, text]) => /^[1-9]\d*$/.test(key) && typeof text === "string"
+              )
+            )
+          : {};
+    } catch (error) {
+      if (generation !== chapterGeneration) return;
+      console.error("[BibleSpotlight] Erro ao carregar capítulo:", error);
+    } finally {
+      if (generation === chapterGeneration) chapterLoading.value = false;
+    }
+  })();
 }
 
-function commitVerse(val: number): void {
-  if (!selectedBook.value) return;
+async function commitVerse(val: number): Promise<void> {
+  const generation = chapterGeneration;
+  const typedVerse = buffer.value;
+  await chapterLoad;
+  if (generation !== chapterGeneration || state.value !== "verse" || buffer.value !== typedVerse)
+    return;
+  if (!selectedBook.value || !selectedVersion.value) return;
   const text = chapterVerses.value[String(val)];
   if (!text) return;
   const reference = `${selectedBook.value.name} ${selectedChapter.value}:${val}`;
-  const versionId = UserData.get<number>("modules.bible.id_bible_version") || 1;
   const result: BibleSearchResult = {
     id_bible_book: selectedBook.value.id_bible_book,
-    id_bible_version: versionId,
+    id_bible_version: selectedVersion.value.id_bible_version,
     book: selectedBook.value.name,
     chapter: selectedChapter.value,
     verse: val,
@@ -246,7 +279,6 @@ function commitVerse(val: number): void {
   selectResult(result);
 }
 
-let selectionGeneration = 0;
 async function selectResult(res: BibleSearchResult): Promise<void> {
   const generation = ++selectionGeneration;
   if (props.projectLocally && res.text && res.reference) {
@@ -256,6 +288,8 @@ async function selectResult(res: BibleSearchResult): Promise<void> {
       book_id: res.id_bible_book,
       chapter: res.chapter,
       verses: [res.verse],
+      version_id: res.id_bible_version,
+      version: selectedVersion.value?.abbreviation,
       active: true,
     };
     UserData.set(KEYS.MODULES.BIBLE.IS_PLAYING, true);
@@ -273,17 +307,38 @@ async function loadBooks(): Promise<void> {
   const lang = locale.value === "es" ? "es" : "pt";
   if (books.value && _booksLang === lang) return;
   try {
-    const data = await Database.get<BibleBook[]>(`${lang}_bible_book`);
-    if (data) {
+    const [data, versionData] = await Promise.all([
+      Database.get(`${lang}_bible_book`),
+      Database.get(`${lang}_bible_version`).catch(() => null),
+    ]);
+    if (Array.isArray(data)) {
       _booksLang = lang;
-      books.value = data;
+      books.value = data.filter(
+        (book): book is BibleBook =>
+          Number.isSafeInteger(book?.id_bible_book) &&
+          book.id_bible_book > 0 &&
+          typeof book.name === "string" &&
+          (book.abbreviation === undefined || typeof book.abbreviation === "string") &&
+          Number.isSafeInteger(book.chapters) &&
+          book.chapters > 0
+      );
     }
+    versions.value = Array.isArray(versionData)
+      ? versionData.filter(
+          (version): version is BibleVersion =>
+            Number.isSafeInteger(version?.id_bible_version) &&
+            version.id_bible_version > 0 &&
+            typeof version.name === "string" &&
+            typeof version.abbreviation === "string"
+        )
+      : [];
   } catch (e) {
     console.error("[BibleSpotlight] Erro ao carregar livros:", e);
   }
 }
 
 function handleKeydown(e: KeyboardEvent): void {
+  if (_composing || e.isComposing) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
 
   if (e.key === "Escape") {
@@ -330,14 +385,8 @@ function handleKeydown(e: KeyboardEvent): void {
       const val = parseInt(candidate, 10);
       if (val < 1 || val > max) return;
       buffer.value = candidate;
-      if (chapterTimer) clearTimeout(chapterTimer);
       if (val * 10 > max) {
         commitChapter(val);
-      } else {
-        chapterTimer = setTimeout(() => {
-          if (buffer.value) commitChapter(parseInt(buffer.value, 10));
-          chapterTimer = null;
-        }, 600);
       }
       return;
     }
@@ -345,8 +394,6 @@ function handleKeydown(e: KeyboardEvent): void {
       e.preventDefault();
       e.stopPropagation();
       buffer.value = buffer.value.slice(0, -1);
-      if (chapterTimer) clearTimeout(chapterTimer);
-      chapterTimer = null;
       if (buffer.value.length === 0) {
         state.value = "book";
         activeStep.value = 0;
@@ -354,7 +401,7 @@ function handleKeydown(e: KeyboardEvent): void {
       }
       return;
     }
-    if (e.key === " " || e.key === "." || e.key === "Enter") {
+    if (e.key === " " || e.key === "." || e.key === ":" || e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
       if (buffer.value.length > 0) {
@@ -373,7 +420,7 @@ function handleKeydown(e: KeyboardEvent): void {
       e.stopPropagation();
       const candidate = buffer.value + e.key;
       const val = parseInt(candidate, 10);
-      if (val < 1 || val > max) return;
+      if (!Number.isSafeInteger(val) || val < 1 || (!chapterLoading.value && val > max)) return;
       buffer.value = candidate;
       const base = feedback.value.replace(/:(\s*\d*)$/, "");
       feedback.value = `${base}:${val}`;
@@ -384,9 +431,13 @@ function handleKeydown(e: KeyboardEvent): void {
       e.stopPropagation();
       buffer.value = buffer.value.slice(0, -1);
       if (buffer.value.length === 0) {
+        chapterGeneration++;
+        chapterLoad = null;
+        chapterLoading.value = false;
+        chapterVerses.value = {};
         state.value = "chapter";
         activeStep.value = 1;
-        feedback.value = feedback.value.replace(/:.*$/, "").trim() + " → cap. ";
+        feedback.value = `${selectedBook.value?.name} → cap. `;
       } else {
         const base = feedback.value.replace(/:(\s*\d*)$/, "");
         feedback.value = `${base}:${buffer.value}`;
@@ -434,58 +485,47 @@ function onInput(e: Event): void {
 
 function _handleChars(chars: string): void {
   for (const ch of chars) {
-    if (state.value === "book") {
-      if (/^[a-zA-Z]$/.test(ch)) {
-        buffer.value += ch.toLowerCase();
-        checkBookMatch();
-      }
-    } else if (state.value === "chapter") {
-      if (/^[0-9]$/.test(ch)) {
-        const max = selectedBook.value?.chapters ?? 0;
-        const candidate = buffer.value + ch;
-        const val = parseInt(candidate, 10);
-        if (val < 1 || val > max) continue;
-        buffer.value = candidate;
-        if (chapterTimer) clearTimeout(chapterTimer);
-        if (val * 10 > max) {
-          commitChapter(val);
-        } else {
-          chapterTimer = setTimeout(() => {
-            if (buffer.value) commitChapter(parseInt(buffer.value, 10));
-            chapterTimer = null;
-          }, 600);
-        }
-      }
-    } else if (state.value === "verse") {
-      if (/^[0-9]$/.test(ch)) {
-        const keys = Object.keys(chapterVerses.value).map(Number);
-        const max = keys.length > 0 ? Math.max(...keys) : 0;
-        const candidate = buffer.value + ch;
-        const val = parseInt(candidate, 10);
-        if (val < 1 || val > max) continue;
-        buffer.value = candidate;
-        const base = feedback.value.replace(/:(\s*\d*)$/, "");
-        feedback.value = `${base}:${val}`;
-      }
-    }
+    handleKeydown(new KeyboardEvent("keydown", { key: ch }));
   }
 }
 
-watch(model, async (val: boolean) => {
-  if (val) {
-    const initial = props.initialBuffer;
+watch(
+  model,
+  async (val: boolean) => {
     reset();
-    await loadBooks();
-    await nextTick();
-    cardRef.value?.focus();
-    inputRef.value?.focus();
-    _lastInput = "";
-    if (initial) {
-      buffer.value = initial;
-      checkBookMatch();
+    if (val) {
+      const initial = props.initialBuffer;
+      const generation = chapterGeneration;
+      await loadBooks();
+      if (generation !== chapterGeneration) return;
+      const requestedVersion =
+        props.versionId ??
+        (props.projectLocally
+          ? AppData.get<number>(KEYS.MODULES.BIBLE.DATA.ID_BIBLE_VERSION)
+          : null);
+      const versionId =
+        typeof requestedVersion === "number" &&
+        Number.isSafeInteger(requestedVersion) &&
+        requestedVersion > 0
+          ? requestedVersion
+          : (versions.value[0]?.id_bible_version ?? 1);
+      selectedVersion.value = versions.value.find(
+        (version) => version.id_bible_version === versionId
+      ) ?? { id_bible_version: versionId, abbreviation: "", name: "" };
+      await nextTick();
+      cardRef.value?.focus();
+      inputRef.value?.focus();
+      _lastInput = "";
+      if (initial) {
+        buffer.value = initial;
+        checkBookMatch();
+      }
     }
-  }
-});
+  },
+  { immediate: true }
+);
+
+onUnmounted(reset);
 </script>
 
 <!-- Sem `scoped`: o cartao vai para um portal no <body> e o Vue nao carimba o

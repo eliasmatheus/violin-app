@@ -7,6 +7,7 @@ import { ICONS } from "@/config/Icons"
 import { ModuleEnum } from "@/enums/ModuleEnum"
 import { getModulePath } from "@/helpers/ModulePath"
 import { KEYS } from "@/constants/UserDataKeys";
+import { createTransitionButtons, createTransitionContext } from "@/config/Transitions";
 const RibbonFileProjectionSettings = defineAsyncComponent(
   () => import("./components/RibbonFileProjectionSettings.vue")
 );
@@ -14,6 +15,13 @@ const RibbonFileProjectionSettings = defineAsyncComponent(
 const moduleId = ModuleEnum.MEDIA_LIBRARY;
 const modulePath = getModulePath(moduleId);
 const moduleCtxId = "ctx_" + moduleId;
+
+/** Efeito, Duração, Curva, um select por efeito (filtrado por `dependsOnOption`
+ * na ribbon) e a origem do zoom — mesma tabela dos Anúncios, chaves próprias. */
+const transitionButtons = createTransitionButtons(
+  moduleId,
+  createTransitionContext(KEYS.MODULES.MEDIA_LIBRARY),
+);
 
 export const module: Module = {
   id: moduleId,
@@ -115,6 +123,11 @@ export const contextualPages: RibbonPage[] = [
             color: "#1b4f8a",
           },
         ],
+      },
+      {
+        id: `${moduleCtxId}_transitions`,
+        title: `${modulePath}.ribbon.transitions_group`,
+        buttons: transitionButtons,
       },
       {
         id: `${moduleCtxId}_background`,

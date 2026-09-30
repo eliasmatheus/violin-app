@@ -4,7 +4,10 @@
        o atraso compartilhado, para que passar o mouse de um botão a outro não
        reinicie a contagem a cada elemento. -->
   <TooltipProvider :delay-duration="400" :skip-delay-duration="300">
-    <div id="app-container" :class="{ 'is-transparente': semFundoProprio }">
+    <div
+      id="app-container"
+      :class="{ 'is-transparente': semFundoProprio, 'app-container--shell': route.path === '/' }"
+    >
       <router-view />
       <WebFullscreenPrompt v-if="isProjectionRoute" />
     </div>
@@ -56,6 +59,7 @@ const semFundoProprio = computed(() => {
   flex-direction: column;
   max-width: 100%;
   height: 100vh;
+  height: 100dvh;
   background: var(--lj-surface-bg);
   color: var(--lj-text);
   backface-visibility: hidden;
@@ -63,5 +67,12 @@ const semFundoProprio = computed(() => {
 
 #app-container.is-transparente {
   background: transparent;
+}
+
+@media (max-width: 700px) {
+  #app-container.app-container--shell {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+  }
 }
 </style>

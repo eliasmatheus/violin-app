@@ -74,6 +74,8 @@ export const useUserDataStore = defineStore("userData", {
         fade_audio: false,
       },
     },
+    /** Preferências persistidas da interface principal, como o painel lateral. */
+    shell: {},
     /**
      * @type {Record<string, any>}
      * Preferências da tela "Opções" (custom_background, custom_text_format,

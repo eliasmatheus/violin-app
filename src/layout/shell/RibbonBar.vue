@@ -1,24 +1,43 @@
 <template>
-  <div class="ribbon">
+  <div
+    class="ribbon"
+    :class="{
+      'ribbon--compact-web': isMobileWeb,
+      'ribbon--mobile-closed': isMobileWeb && !mobileActionsOpen,
+    }"
+  >
     <!-- Linha de tabs: só no web/PWA (desktop usa SystemBar) -->
     <template v-if="!Platform.isDesktop">
       <div class="ribbon-tabs-row">
-        <AppMenu class="ribbon-app-menu" />
+        <AppMenu class="ribbon-app-menu" :class="{ 'app-menu--compact-web': isMobileWeb }" />
 
         <div class="ribbon-tabs-wrap">
           <RibbonTabs
             id-prefix="ribbon"
+            :class="{ 'rtabs--compact-web': isMobileWeb }"
             style="
               --rtab-padding-x: var(--lj-space-6);
               --rtab-font-size: var(--lj-text-md);
               --rtab-font-weight: var(--lj-weight-medium);
             "
+            @select="mobileActionsOpen = true"
           />
         </div>
 
         <div class="ribbon-tools">
+          <button
+            v-if="isMobileWeb"
+            type="button"
+            class="ribbon-mobile-actions"
+            :aria-expanded="mobileActionsOpen"
+            aria-controls="ribbon-tabpanel"
+            @click="mobileActionsOpen = !mobileActionsOpen"
+          >
+            {{ $t("ribbon.groups.actions") }}
+            <span aria-hidden="true">{{ mobileActionsOpen ? "⌃" : "⌄" }}</span>
+          </button>
           <div class="ribbon-tools-web">
-            <ShellTools />
+            <ShellTools :class="{ 'shell-tools--compact-web': isMobileWeb }" />
           </div>
         </div>
       </div>
@@ -30,7 +49,9 @@
       ref="corpoRibbon"
       class="ribbon-body"
       role="tabpanel"
-      tabindex="0"
+      :tabindex="isMobileWeb && !mobileActionsOpen ? -1 : 0"
+      :aria-hidden="isMobileWeb && !mobileActionsOpen ? 'true' : undefined"
+      :inert="isMobileWeb && !mobileActionsOpen"
       :aria-labelledby="'ribbon-tab-' + ribbonStore.activePage"
       :class="{
         'ribbon-body--ctx': isContextualActive,
@@ -272,19 +293,28 @@ import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { getRibbonModules, isModuleVisible } from "@/config/modules";
 import { KEYS } from "@/constants/UserDataKeys";
-import { COLORS } from "@constants/Colors";
 import type { RibbonButton, RibbonGroup, RibbonPage } from "@/types/Ribbon";
 import RibbonButtonComponent from "@/layout/shell/RibbonButtonComponent.vue";
 import RibbonGroupComponent from "@/layout/shell/RibbonGroupComponent.vue";
 import RibbonTabs from "@/components/RibbonTabs.vue";
+import { useViewport } from "@/composables/useViewport";
 import { LjSlider, LjSwitch } from "@/components/ui";
-import { THEMES } from "@/config/Theme";
 import { prefetchModule } from "@/helpers/ModulePrefetch";
 import { setModuleExpanded, useShellExpanded } from "@/composables/useModuleExpanded";
 import { ensureContrastOnDark } from "@/helpers/ColorContrast";
 
 const { t } = useI18n();
 const shell = useShell();
+const { width: viewportWidth } = useViewport();
+const coarsePointer =
+  typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+const isMobileWeb = computed(
+  () =>
+    !Platform.isDesktop &&
+    viewportWidth.value > 0 &&
+    (viewportWidth.value <= 700 || (coarsePointer && viewportWidth.value <= 1000))
+);
+const mobileActionsOpen = ref(false);
 const modules: RibbonPage[] = getRibbonModules;
 const ribbonStore = useRibbonStore();
 
@@ -559,6 +589,7 @@ watch(openModuleIds, (now: string[]) => {
 watch(
   computed(() => $appdata.get<string | null>("active_module")),
   (moduleId: string | null) => {
+    if (isMobileWeb.value) mobileActionsOpen.value = false;
     selectContextualPageForModule(moduleId);
   }
 );
@@ -646,14 +677,6 @@ function resolveBtnIcon(btn: RibbonButton): string {
 }
 
 function resolveBtnColor(btn: RibbonButton): string | undefined {
-  // Estilo de interface "Electron": todos os botões da ribbon usam a cor
-  // primária do tema ativo (stateBinding também — estado indicado por ícone).
-  // Em tema escuro os ícones ficam brancos para contraste na ribbon escura.
-  const uiStyle = $userdata.get<string>(KEYS.OPTIONS.UI_STYLE, THEMES.CLASSIC);
-  if (uiStyle === THEMES.VIOLIN) {
-    const isDark = $appdata.get<boolean>(KEYS.SHELL.IS_DARK, false);
-    return isDark ? "#FFFFFF" : COLORS.PRIMARY;
-  }
   let color: string | undefined;
   if (btn.stateBinding) {
     const val = $userdata.get(btn.stateBinding.watchPath);
@@ -661,7 +684,7 @@ function resolveBtnColor(btn: RibbonButton): string | undefined {
   } else {
     color = btn.color;
   }
-  // A paleta "classic" vem do Delphi, pensada pra fundo claro: no tema escuro
+  // A paleta dos ícones vem do Delphi, pensada para fundo claro: no tema escuro
   // parte dela cai abaixo do contraste mínimo contra o corpo do ribbon e o
   // ícone some. Clareia só quem precisa, sem reescrever cada manifest.
   if (!color) return color;
@@ -819,7 +842,7 @@ useBroadcastListener(BROADCAST_TYPE.RIBBON_SELECT_PAGE, (payload: unknown) => {
   display: flex;
   align-items: stretch;
   height: var(--lj-tab-height);
-  background: var(--lj-tabs-bg);
+  background: var(--lj-shell-chrome-bg);
   position: relative;
   z-index: 2;
 }
@@ -841,13 +864,75 @@ useBroadcastListener(BROADCAST_TYPE.RIBBON_SELECT_PAGE, (payload: unknown) => {
   display: flex;
   align-items: stretch;
 }
-.ribbon-tools-web .shell-tool {
-  height: 100%;
-  color: var(--lj-tabs-color);
+
+.ribbon--compact-web .ribbon-tabs-row {
+  display: grid;
+  grid-template-columns: var(--lj-appmenu-width) minmax(0, 1fr);
+  grid-template-rows: 44px 44px;
+  height: 88px;
 }
-.ribbon-tools-web .shell-tool:hover {
-  background: var(--lj-tabs-hover-bg);
-  color: var(--lj-tabs-color-hover);
+
+.ribbon--compact-web .ribbon-app-menu,
+.ribbon--compact-web .ribbon-tabs-wrap {
+  height: 44px;
+}
+
+.ribbon--compact-web .ribbon-tools {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border-top: 1px solid var(--lj-shell-chrome-hover);
+}
+
+.ribbon--compact-web .ribbon-tools-web {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.ribbon--compact-web .ribbon-tools-web::-webkit-scrollbar {
+  display: none;
+}
+
+.ribbon--compact-web .ribbon-mobile-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--lj-space-2);
+  min-width: 90px;
+  min-height: 44px;
+  padding: 0 var(--lj-space-3);
+  border: 0;
+  border-right: 1px solid var(--lj-shell-chrome-hover);
+  background: transparent;
+  color: var(--lj-shell-chrome-color);
+  font: inherit;
+  font-size: var(--lj-text-base);
+  font-weight: var(--lj-weight-medium);
+}
+
+.ribbon--compact-web .ribbon-mobile-actions[aria-expanded="true"] {
+  background: var(--lj-tabs-active-bg);
+  color: var(--lj-tabs-active-color);
+}
+
+.ribbon--compact-web .ribbon-mobile-actions:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -3px;
+}
+
+.ribbon--mobile-closed .ribbon-body {
+  height: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  visibility: hidden;
+  overflow: hidden;
 }
 
 /* ============ Body ============ */

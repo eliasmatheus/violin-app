@@ -27,13 +27,13 @@
           variant="ghost"
           icon-only
           :icon="ICONS.UI.DOTS_VERTICAL"
-          :title="t('shell.appmenu')"
-          :aria-label="t('shell.appmenu')"
+          :title="menuTitle"
+          :aria-label="menuTitle"
         />
       </template>
 
-      <!-- Nas larguras estreitas os botões rápidos saem da linha e entram no
-           menu, como no layout original. Cada um é um item do menu (`as-child`):
+      <!-- No modo compacto os botões rápidos saem da linha e entram no menu.
+           Cada um é um item do menu (`as-child`):
            é o que mantém a navegação por teclado e o fechamento ao acionar. -->
       <template v-if="compact">
         <div class="mmt-quick">
@@ -152,15 +152,18 @@ const props = withDefaults(
   defineProps<{
     id_music: number;
     name: string;
+    albumId?: number | null;
     musicSubtitle?: string;
     has_instrumental_music: boolean | number;
     color?: string;
     extraMenu?: ExtraMenuItem[];
     showPlaylistMenu?: boolean;
+    /** Largura máxima para recolher os atalhos no menu; pode variar com a tabela. */
+    compactBreakpoint?: number;
     /** Monta ações rápidas apenas quando a linha é explorada, reduzindo o custo da tabela. */
     deferQuickActions?: boolean;
   }>(),
-  { deferQuickActions: true, musicSubtitle: "" }
+  { albumId: null, compactBreakpoint: 550, deferQuickActions: true, musicSubtitle: "" }
 );
 
 // Quantos botões rápidos `buttons` devolve; o espaço reservado antes de montá-los
@@ -168,6 +171,9 @@ const props = withDefaults(
 const QUICK_ACTION_COUNT = 7;
 
 const { t } = useI18n();
+const menuTitle = computed(() =>
+  props.name.trim() ? `${t("shell.appmenu")}: ${props.name}` : t("shell.appmenu")
+);
 const { width } = useViewport();
 const root = ref<HTMLElement | null>(null);
 const revealed = useRowReveal(root);
@@ -175,17 +181,22 @@ const revealed = useRowReveal(root);
 const closeSpotlight = inject<() => void>("close-spotlight", () => {});
 
 const is_favorite = computed(() => Favorites.isFavorite(props.id_music));
-const compact = computed(() => width.value <= 550);
+const compact = computed(() => width.value <= props.compactBreakpoint);
 const showQuickActions = computed(() => !props.deferQuickActions || revealed.value);
 
 /**
- * A cor vem do consumidor (a tabela de álbuns pinta a linha de branco sobre a
- * capa). Em vez de forçar `color`, o valor entra pelos tokens que o botão
- * fantasma já lê — assim o estado de hover continua coerente.
+ * Consumidores que usam superfícies próprias podem ajustar a cor do botão.
+ * O valor entra pelos tokens que o botão fantasma já lê para preservar o hover.
  */
 const colorStyle = computed(() =>
   props.color ? { "--lj-text-muted": props.color, "--lj-text": props.color } : undefined
 );
+
+function openLyric(): void {
+  Media.openLyric(
+    props.albumId != null ? { id_music: props.id_music, id_album: props.albumId } : props.id_music
+  );
+}
 
 const buttons = computed<ButtonItem[]>(() => [
   {
@@ -232,7 +243,7 @@ const buttons = computed<ButtonItem[]>(() => [
     disabled: false,
     title: t("ribbon.btn.lyric"),
     icon: ICONS.MUSIC.LYRIC,
-    click: () => Media.openLyric(props.id_music),
+    click: openLyric,
   },
   {
     testid: "audio-only",
@@ -331,7 +342,7 @@ const menu = computed<MenuItem[]>(() => [
       {
         title: t("ribbon.btn.lyric"),
         icon: ICONS.MUSIC.LYRIC,
-        click: () => Media.openLyric(props.id_music),
+        click: openLyric,
       },
       { title: "-" },
       {

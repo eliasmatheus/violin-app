@@ -3,9 +3,20 @@
   "description": "Álbuns de doxologia para adoração.",
   "albums": "Álbuns",
   "musics": "Músicas",
-  "search": "Pesquisar…",
+  "music_name": "Música",
+  "track": "Faixa",
+  "duration": "Duração",
+  "actions": "Ações",
+  "search_albums": "Buscar álbuns",
+  "search_musics": "Buscar músicas",
+  "back_to_albums": "Voltar aos álbuns",
   "empty_albums": "Nenhum álbum disponível.",
   "empty_musics": "Nenhuma música neste álbum.",
-  "load_error": "Erro ao carregar a doxologia.",
-  "play": "Reproduzir"
+  "no_album_matches": "Nenhum álbum corresponde à busca.",
+  "no_music_matches": "Nenhuma música corresponde à busca.",
+  "loading_albums": "Carregando álbuns…",
+  "loading_musics": "Carregando músicas…",
+  "load_error": "Não foi possível carregar os álbuns de doxologia.",
+  "load_musics_error": "Não foi possível carregar as músicas deste álbum.",
+  "retry": "Tentar novamente"
 }

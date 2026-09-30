@@ -25,6 +25,11 @@
   "align_y": "Alineación vertical",
   "align_top": "Arriba",
   "align_bottom": "Abajo",
+  "media_fit": "Ajuste de la imagen/vídeo",
+  "fit_cover": "Cover (llenar)",
+  "fit_contain": "Contain (encuadrar)",
+  "fit_fill": "Fill (estirar)",
+  "fit_none": "None (original)",
   "save": "Guardar",
   "cancel": "Cancelar",
   "delete": "Eliminar",
@@ -35,5 +40,9 @@
   "project": "Proyectar",
   "stop": "Detener",
   "next": "Siguiente",
-  "prev": "Anterior"
+  "prev": "Anterior",
+  "ribbon": {
+    "title_ctx": "Transiciones",
+    "transitions_group": "Transición entre diapositivas"
+  }
 }

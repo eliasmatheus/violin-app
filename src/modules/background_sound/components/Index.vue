@@ -2,7 +2,7 @@
   <ModuleContainer
     ref="moduleContainer"
     :manifest="manifest"
-    :style="{ minWidth: '500px' }"
+    :style="{ minWidth: isMobileWeb ? '0' : '500px' }"
     @close="stop"
   >
     <!-- Header -->
@@ -222,6 +222,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { useViewport } from "@/composables/useViewport";
 import { module as manifest } from "../manifest";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import { useBackgroundSound } from "@/composables/useBackgroundSound";
@@ -240,6 +241,9 @@ import { DB_TABLE } from "@/constants/DbTables";
 import { getSetting, saveSetting } from "@/helpers/SettingsStorage";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { MediaFile } from "@/types/Media";
+
+const { width: viewportWidth } = useViewport();
+const isMobileWeb = computed(() => viewportWidth.value > 0 && viewportWidth.value <= 700);
 
 /* ------------------------------------------------------------------ */
 /*  IDB Helpers                                                        */
@@ -1308,5 +1312,29 @@ onBeforeUnmount(() => {
 }
 .bgs-change-file {
   margin-top: var(--lj-space-5);
+}
+
+@media (max-width: 700px) {
+  .bgs-header-actions :deep(.lj-btn),
+  .bgs-chip {
+    min-height: 44px;
+  }
+
+  .bgs-chips {
+    max-height: 35%;
+    overflow-y: auto;
+    padding-inline: var(--lj-space-3);
+  }
+
+  .bgs-audio-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+    padding-inline: var(--lj-space-3);
+  }
+
+  .bgs-audio-card-actions :deep(.lj-btn) {
+    min-width: 40px;
+    min-height: 40px;
+    opacity: 1;
+  }
 }
 </style>

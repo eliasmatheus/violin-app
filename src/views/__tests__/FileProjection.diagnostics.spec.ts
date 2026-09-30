@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   send: vi.fn(),
   idb: vi.fn(),
   api: vi.fn(),
+  heicToJpeg: vi.fn(),
 }));
 vi.mock("@/composables/useBroadcastListener", () => ({
   useBroadcastListener: (type: string, callback: (_payload: unknown) => unknown) => {
@@ -34,6 +35,11 @@ vi.mock("@/helpers/Telemetry", () => ({
 }));
 vi.mock("@/helpers/Broadcast", () => ({ default: { send: h.send } }));
 vi.mock("@/composables/useYouTubeApi", () => ({ loadYtApi: h.api }));
+vi.mock("@/helpers/ImageConvert", () => ({
+  heicToJpeg: h.heicToJpeg,
+  isHeic: (name?: string, mime?: string) =>
+    /\.(heic|heif)$/i.test(name || "") || /^image\/hei[cf]$/i.test(mime || ""),
+}));
 
 const i18n = createI18n({ legacy: false, locale: "pt", messages: { pt: {} } });
 const ID = "T8YHfGrk3ok";
@@ -61,6 +67,7 @@ describe.each([
     h.exception.mockReset();
     h.idb.mockReset();
     h.api.mockReset();
+    h.heicToJpeg.mockReset();
     h.send.mockReset().mockReturnValue({ crossWindow: true });
     vi.stubGlobal("localStorage", { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() });
     vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
@@ -118,6 +125,26 @@ describe.each([
       })
     );
     expect(JSON.stringify(h.log.mock.calls)).not.toMatch(/blob:foreign|blob:private|not a video/);
+  });
+
+  it("converts HEIC from the library inside the projection window", async () => {
+    const jpeg = new Blob(["jpeg bytes"], { type: "image/jpeg" });
+    h.heicToJpeg.mockResolvedValue(jpeg);
+    h.idb.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]).buffer,
+      mime: "image/heic",
+      name: "foto.heic",
+    });
+    emit(BROADCAST_TYPE.FILE_PROJECTION, projection("photo", 1, {
+      type: "image",
+      url: "blob:created-in-main-window",
+      libRef: { id: "heic-photo", table: "media_library" },
+      heic: true,
+    }));
+    await flushPromises();
+    expect(h.heicToJpeg).toHaveBeenCalledWith(expect.objectContaining({ type: "image/heic" }));
+    expect(URL.createObjectURL).toHaveBeenCalledWith(jpeg);
+    expect(wrapper.find("img").attributes("src")).toBe("blob:local-object");
   });
 
   it("attributes an old play rejection to its original identity after the same video node changes source", async () => {
