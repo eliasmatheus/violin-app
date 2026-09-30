@@ -93,6 +93,14 @@ export const KEYS = {
       EXPANDED: `${MODULES_PRESENTATION_MODE}.expanded`,
       /** UserData: saída travada. Mora aqui porque o stateBinding do ribbon lê o UserData; o módulo zera ao abrir. */
       OUTPUT_LOCKED: `${MODULES_PRESENTATION_MODE}.output_locked`,
+      /** UserData: pastas do navegador de arquivos — `{ path, label }[]`. */
+      LIBRARY_FOLDERS: `${MODULES_PRESENTATION_MODE}.library_folders`,
+      /** UserData: arquivos marcados com estrela no navegador de arquivos. */
+      LIBRARY_FAVORITES: `${MODULES_PRESENTATION_MODE}.library_favorites`,
+      /** UserData: biblioteca ocupando as duas colunas da esquerda. */
+      LIBRARY_FULL_WIDTH: `${MODULES_PRESENTATION_MODE}.library_full_width`,
+      /** UserData: biblioteca mais alta. */
+      LIBRARY_TALL: `${MODULES_PRESENTATION_MODE}.library_tall`,
     },
     MUSICS: {
       SELECTED_PLAYLIST: `${MODULES}.${ModuleEnum.MUSICS}.selected_playlist`,

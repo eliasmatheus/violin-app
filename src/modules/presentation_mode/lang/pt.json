@@ -39,7 +39,6 @@
   "empty": {
     "program": "Nenhum item no programa deste dia.",
     "stage": "Nada no ar.",
-    "library": "Arquivos, músicas, Bíblia e vídeos para enviar à tela.",
     "outputs": "Tela principal e retorno de palco."
   },
   "actions": {
@@ -158,5 +157,36 @@
     "play": "Tocar",
     "pause": "Pausar",
     "go_to_slide_title": "Ir para o slide nº"
+  },
+  "library": {
+    "files": "Arquivos",
+    "folders": "Pastas",
+    "all": "Todos",
+    "favorites": "Favoritos",
+    "add_folder": "Adicionar pasta",
+    "remove_folder": "Remover pasta",
+    "remove_folder_text": "Tirar esta pasta da lista? Os arquivos não são apagados.",
+    "full_width": "Biblioteca em largura total",
+    "normal_width": "Biblioteca ao lado do programa",
+    "taller": "Biblioteca mais alta",
+    "shorter": "Biblioteca mais baixa",
+    "desktop_only": "O navegador de arquivos está disponível no aplicativo de computador.",
+    "no_folders": "Adicione uma pasta para ver os arquivos aqui.",
+    "no_favorites": "Marque arquivos com a estrela para vê-los aqui.",
+    "empty": "Nenhum arquivo que possa ser projetado nesta pasta.",
+    "missing": "Esta pasta não foi encontrada. Ela pode ter sido movida ou estar num disco desconectado.",
+    "loading": "Carregando…",
+    "up": "Voltar à pasta anterior",
+    "items_count": "{n} arquivo | {n} arquivos",
+    "hint": "duplo clique envia para a tela principal",
+    "extension": "Extensão",
+    "size": "Tamanho",
+    "resolution": "Resolução",
+    "duration": "Duração",
+    "modified": "Modificado",
+    "favorite": "Marcar como favorito",
+    "unfavorite": "Tirar dos favoritos",
+    "send": "Enviar para tela principal",
+    "add_to_program": "Adicionar ao programa"
   }
 }

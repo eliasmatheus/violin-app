@@ -369,6 +369,8 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     enforceQuota: (maxBytes) => ipcRenderer.invoke("storage:enforceQuota", maxBytes),
     /** Lista arquivos de um diretório local (para auto-populate). */
     readDir: (dirPath) => ipcRenderer.invoke("storage:readDir", dirPath),
+    /** Um nível de uma pasta, com tamanho e data (navegador de arquivos). */
+    listDir: (dirPath) => ipcRenderer.invoke("files:listDir", dirPath),
     /** Verifica quais arquivos remotos já estão no disco. */
     checkLocal: (remotePaths) => ipcRenderer.invoke("storage:checkLocal", remotePaths),
     /** Remove arquivos de mídia do cache local (paths remotos relativos). */

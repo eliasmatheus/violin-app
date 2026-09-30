@@ -39,7 +39,6 @@
   "empty": {
     "program": "No hay ítems en el programa de este día.",
     "stage": "Nada al aire.",
-    "library": "Archivos, músicas, Biblia y videos para enviar a la pantalla.",
     "outputs": "Pantalla principal y retorno de escenario."
   },
   "actions": {
@@ -158,5 +157,36 @@
     "play": "Reproducir",
     "pause": "Pausar",
     "go_to_slide_title": "Ir a la diapositiva nº"
+  },
+  "library": {
+    "files": "Archivos",
+    "folders": "Carpetas",
+    "all": "Todos",
+    "favorites": "Favoritos",
+    "add_folder": "Agregar carpeta",
+    "remove_folder": "Quitar carpeta",
+    "remove_folder_text": "¿Quitar esta carpeta de la lista? Los archivos no se eliminan.",
+    "full_width": "Biblioteca a todo el ancho",
+    "normal_width": "Biblioteca al lado del programa",
+    "taller": "Biblioteca más alta",
+    "shorter": "Biblioteca más baja",
+    "desktop_only": "El navegador de archivos está disponible en la aplicación de escritorio.",
+    "no_folders": "Agregue una carpeta para ver los archivos aquí.",
+    "no_favorites": "Marque archivos con la estrella para verlos aquí.",
+    "empty": "No hay archivos que se puedan proyectar en esta carpeta.",
+    "missing": "No se encontró esta carpeta. Puede haber sido movida o estar en un disco desconectado.",
+    "loading": "Cargando…",
+    "up": "Volver a la carpeta anterior",
+    "items_count": "{n} archivo | {n} archivos",
+    "hint": "doble clic envía a la pantalla principal",
+    "extension": "Extensión",
+    "size": "Tamaño",
+    "resolution": "Resolución",
+    "duration": "Duración",
+    "modified": "Modificado",
+    "favorite": "Marcar como favorito",
+    "unfavorite": "Quitar de favoritos",
+    "send": "Enviar a la pantalla principal",
+    "add_to_program": "Agregar al programa"
   }
 }

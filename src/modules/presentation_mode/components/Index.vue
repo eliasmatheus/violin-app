@@ -1,6 +1,9 @@
 <template>
   <ModuleContainer :manifest="manifest">
-    <div class="pm-area" :class="{ 'pm-area--library-wide': libraryFullWidth }">
+    <div
+      class="pm-area"
+      :class="{ 'pm-area--library-wide': libraryFullWidth, 'pm-area--library-tall': libraryTall }"
+    >
       <ProgramPanel
         @activate="activate"
         @edit-item="openEditItem"
@@ -32,20 +35,23 @@
           :subtitle="liveProgramItem?.kind === 'music' ? liveProgramItem.subtitle : undefined"
           :locked="outputLocked"
         />
+        <!-- Até a F4 trazer os controles de vídeo, o palco mostra o que está na tela. -->
+        <div v-else-if="liveKind" class="pm-stage__preview" data-testid="pm-stage-preview">
+          <div class="pm-stage__frame"><LiveMirror :cleared="false" /></div>
+        </div>
         <div v-else class="pm-stage__body">
           <p class="pm-stage__empty">{{ tm("empty.stage") }}</p>
         </div>
       </section>
 
-      <section class="pm-library" data-testid="pm-library">
-        <header class="pm-bar">
-          <LjIcon :icon="ICONS.UI.FOLDER_OPEN" :size="14" />
-          <span class="pm-bar__title">{{ tm("panels.library") }}</span>
-        </header>
-        <div class="pm-panel-body">
-          <LjEmpty :icon="ICONS.UI.FOLDER_OPEN" :title="tm('empty.library')" />
-        </div>
-      </section>
+      <LibraryPanel
+        :full-width="libraryFullWidth"
+        :tall="libraryTall"
+        @toggle-width="toggleLibraryWidth"
+        @toggle-height="toggleLibraryHeight"
+        @project="projectFile"
+        @add-to-program="addFileToProgram"
+      />
 
       <OutputsPanel
         :up-next="upNextItem"
@@ -87,7 +93,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { LjButton, LjEmpty, LjIcon } from "@/components/ui";
+import { LjButton, LjIcon } from "@/components/ui";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
@@ -108,6 +114,13 @@ import ProgramSessionDialog from "./ProgramSessionDialog.vue";
 import ProgramSettingsDialog from "./ProgramSettingsDialog.vue";
 import OutputsPanel from "./OutputsPanel.vue";
 import StageSlides from "./StageSlides.vue";
+import LibraryPanel from "./LibraryPanel.vue";
+import LiveMirror from "./LiveMirror.vue";
+import $userdata from "@/helpers/UserData";
+import { KEYS } from "@/constants/UserDataKeys";
+import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
+import type { LibraryEntry } from "../composables/useFileLibrary";
+import type { MediaMeta } from "../composables/useMediaMeta";
 import { KIND_ICONS } from "../program/kinds";
 import Media from "@/composables/useMedia";
 import { useSlides } from "@/composables/useSlides";
@@ -116,7 +129,7 @@ import { cleared, setCleared, startOutputs, stopOutputs } from "../composables/u
 import { formatHHMM, plannedStarts } from "../program/time";
 import { newId, useProgram } from "../composables/useProgram";
 import { useProgramExecution } from "../composables/useProgramExecution";
-import { importLiturgy, programToLiturgy } from "../program/liturgy";
+import { importLiturgy, kindFromPath, liturgyItem, programToLiturgy } from "../program/liturgy";
 import { module as manifest } from "../manifest";
 
 const moduleId = ModuleEnum.PRESENTATION_MODE;
@@ -148,7 +161,7 @@ const {
   setOutputLocked,
   prepare,
 } = useProgram();
-const { execute } = useProgramExecution();
+const { execute, projectPath } = useProgramExecution();
 
 onMounted(() => {
   void ensureLoaded();
@@ -157,8 +170,50 @@ onMounted(() => {
 });
 
 const expanded = computed(() => isModuleExpanded(moduleId));
-// A biblioteca em largura total ganha botão próprio na F5; o grid já prevê o arranjo.
-const libraryFullWidth = ref(false);
+/* ─── Biblioteca ─── */
+
+const libraryFullWidth = computed(
+  () => $userdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_FULL_WIDTH, false) === true
+);
+const libraryTall = computed(
+  () => $userdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_TALL, false) === true
+);
+
+function toggleLibraryWidth(): void {
+  $userdata.set(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_FULL_WIDTH, !libraryFullWidth.value);
+}
+
+function toggleLibraryHeight(): void {
+  $userdata.set(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_TALL, !libraryTall.value);
+}
+
+function fileTitle(entry: LibraryEntry): string {
+  return entry.name.replace(/\.[^.]+$/, "");
+}
+
+/** Duplo clique ou "Enviar": vai para a tela principal pelo mesmo caminho da liturgia. */
+function projectFile(entry: LibraryEntry): void {
+  if (outputLocked.value) return;
+  projectPath(entry.path, entry.name);
+  Telemetry.track("presentation_library_projected", { ext: entry.ext });
+}
+
+function addFileToProgram(entry: LibraryEntry, meta: MediaMeta | null): void {
+  const kind = kindFromPath(entry.path);
+  const seconds = meta?.duration ?? 0;
+  addItem(
+    {
+      id: newId(),
+      kind,
+      title: fileTitle(entry),
+      subtitle: entry.name,
+      // Imagem não tem duração própria: um minuto é o ponto de partida mais comum.
+      plannedMinutes: seconds > 0 ? Math.ceil(seconds / 60) : 1,
+      source: liturgyItem({ id: newId(), tipo: LiturgyItemTypeEnum.ARQUIVO, dir: entry.path, item: fileTitle(entry) }),
+    },
+    ensureSession()
+  );
+}
 
 function toggleExpand(): void {
   toggleModuleExpanded(moduleId);
@@ -207,9 +262,23 @@ const stageIcon = computed(() => {
   return liveProgramItem.value ? KIND_ICONS[liveProgramItem.value.kind] : null;
 });
 
+/** O item do programa no ar; sem ele (biblioteca, outro módulo), o nome do que está na tela. */
 const stageTitle = computed(() => {
-  if (liveKind.value === "music" && !liveProgramItem.value) return slides.title.value;
-  return liveProgramItem.value?.title || tm("panels.stage");
+  if (liveProgramItem.value) return liveProgramItem.value.title;
+  switch (liveKind.value) {
+    case "music":
+      return slides.title.value;
+    case "bible":
+      return live.bible.value?.reference ?? "";
+    case "file":
+      return live.file.value?.title ?? "";
+    case "online_video":
+      return live.onlineTitle.value;
+    case "announcements":
+      return live.announcement.value?.nome ?? "";
+    default:
+      return tm("panels.stage");
+  }
 });
 
 const stageMeta = computed(() => (liveKind.value ? (liveProgramItem.value?.subtitle ?? "") : ""));
@@ -225,7 +294,8 @@ function goToSlidePrompt(): void {
 /* ─── Saídas ─── */
 
 const slides = useSlides();
-const { current: liveKind } = useLiveContent();
+const live = useLiveContent();
+const liveKind = live.current;
 
 /** Há partes para percorrer: os slides da música que está no ar. */
 const canNavigate = computed(
@@ -491,7 +561,10 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
   grid-column: 2;
   grid-row: 2;
   height: min(244px, 30vh);
-  border-top: 1px solid var(--lj-surface-border);
+}
+
+.pm-area--library-tall .pm-library {
+  height: min(340px, 30vh);
 }
 
 .pm-outputs {
@@ -603,6 +676,21 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
 }
 
 /* O palco é escuro em qualquer tema; o texto não pode seguir o tema. */
+.pm-stage__preview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  container-type: size;
+}
+
+/* O maior 16:9 que cabe no palco, sem sobrepor a biblioteca. */
+.pm-stage__frame {
+  width: min(100cqw, calc(100cqh * 16 / 9));
+}
+
 .pm-stage__empty {
   margin: 0;
   color: var(--lj-white-alpha-50);

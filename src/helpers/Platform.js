@@ -329,6 +329,11 @@ export default {
     return api?.storage?.readDir?.(dirPath) ?? Promise.resolve([]);
   },
 
+  /** Um nível de uma pasta, com tamanho e data. No navegador: `{ ok: false }`. */
+  listDir(dirPath) {
+    return api?.storage?.listDir?.(dirPath) ?? Promise.resolve({ ok: false, error: "unsupported" });
+  },
+
   /**
    * Detecção da versão clássica Delphi (Windows).
    * { detect() } — retorna { detected, installDir, configDir, lang, folders }.

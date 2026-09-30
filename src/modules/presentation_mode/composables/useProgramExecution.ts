@@ -10,6 +10,7 @@ import Media from "@/composables/useMedia";
 import type { LiturgyItem } from "@/types/Liturgy";
 import { useLiturgyExecution } from "@/modules/liturgy/composables/useLiturgyExecution";
 import type { ProgramBibleRef, ProgramItem } from "@/types/Presentation";
+import { liturgyItem } from "../program/liturgy";
 
 /** Versões da música que têm letra para a grade (as de "só áudio" não têm). */
 const SLIDE_MODES: Record<string, MusicActionEnum> = {
@@ -77,5 +78,10 @@ export function useProgramExecution() {
     return false;
   }
 
-  return { execute };
+  /** Um arquivo solto (biblioteca) vai para a tela principal como um item de arquivo da liturgia. */
+  function projectPath(path: string, name: string): void {
+    executeItem(liturgyItem({ id: crypto.randomUUID(), tipo: LiturgyItemTypeEnum.ARQUIVO, dir: path, item: name }));
+  }
+
+  return { execute, projectPath };
 }

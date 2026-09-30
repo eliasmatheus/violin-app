@@ -120,6 +120,20 @@ declare global {
       chooseFile: () => Promise<string | null>;
       chooseImage: () => Promise<string | null>;
       chooseDir: () => Promise<string | null>;
+      listDir: (dirPath: string) => Promise<
+        | {
+            ok: true;
+            entries: {
+              name: string;
+              path: string;
+              isDir: boolean;
+              ext: string;
+              size: number;
+              mtimeMs: number;
+            }[];
+          }
+        | { ok: false; error: string }
+      >;
       setDataDir: (dir: string, opts?: { moveExisting?: boolean }) => Promise<void>;
       enforceQuota: (maxBytes: number) => Promise<void>;
       checkLocal: (paths: string[]) => Promise<Record<string, "own" | "classic" | false>>;
