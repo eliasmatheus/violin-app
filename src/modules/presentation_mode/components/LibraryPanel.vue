@@ -51,8 +51,8 @@
     <LibraryMusic
       v-if="tab === 'musics'"
       @preview-song="(s: LibrarySong) => emit('preview-song', s)"
-      @play-song="(s: LibrarySong) => emit('play-song', s)"
-      @add-song="(s: LibrarySong) => emit('add-song', s)"
+      @play-song="(s: LibrarySong, m: MusicMode) => emit('play-song', s, m)"
+      @add-song="(s: LibrarySong, m: MusicMode) => emit('add-song', s, m)"
     />
 
     <div v-else-if="!lib.supported" class="pm-library__unsupported">
@@ -260,6 +260,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import draggable from "vuedraggable";
 import LibraryMusic from "./LibraryMusic.vue";
 import type { LibrarySong } from "./LibrarySongRow.vue";
+import type { MusicMode } from "../program/musicModes";
 import { LjButton, LjContextMenu, LjEmpty, LjIcon, LjTooltip, type LjMenuItem } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
@@ -291,8 +292,8 @@ const emit = defineEmits<{
   /** Imagem ou vídeo só no retorno de palco; `null` tira. */
   "show-on-return": [entry: LibraryEntry | null];
   "preview-song": [song: LibrarySong];
-  "play-song": [song: LibrarySong];
-  "add-song": [song: LibrarySong];
+  "play-song": [song: LibrarySong, mode: MusicMode];
+  "add-song": [song: LibrarySong, mode: MusicMode];
   "add-to-program": [entry: LibraryEntry, meta: MediaMeta | null];
 }>();
 

@@ -8,6 +8,13 @@
         <LjButton variant="primary" :icon="ICONS.PLAYER.PLAY" data-testid="pm-preview-play" @click="emit('play')">
           {{ tm("preview.play") }}
         </LjButton>
+        <LjMenu v-if="view.chooseMode" :items="modeItems" side="top">
+          <template #trigger>
+            <LjButton :icon-end="ICONS.UI.CHEVRON_UP" data-testid="pm-preview-play-as">
+              {{ tm("music_modes.play_as") }}
+            </LjButton>
+          </template>
+        </LjMenu>
         <span class="pm-preview__hint">{{ tm("preview.song_hint") }}</span>
       </footer>
     </template>
@@ -62,8 +69,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import { LjButton, LjIcon, LjTooltip } from "@/components/ui";
+import { computed, ref, watch } from "vue";
+import { LjButton, LjIcon, LjMenu, LjTooltip, type LjMenuItem } from "@/components/ui";
+import { modesFor, type MusicMode } from "../program/musicModes";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import $database from "@/helpers/Database";
@@ -85,6 +93,8 @@ export interface PreviewView {
   icon: string;
   playable: boolean;
   songId?: number;
+  /** Música da biblioteca: oferece "Reproduzir como…" (no programa, o formato é do item). */
+  chooseMode?: boolean;
   url?: string;
   text?: string;
   reference?: string;
@@ -92,11 +102,23 @@ export interface PreviewView {
 }
 
 const props = defineProps<{ view: PreviewView }>();
-const emit = defineEmits<{ play: [slideIndex?: number]; "play-return": [] }>();
+const emit = defineEmits<{
+  play: [slideIndex?: number, mode?: MusicMode];
+  "play-return": [];
+}>();
 
 const { tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 
 const songSlides = ref<Record<string, unknown>[]>([]);
+const songHasInstrumental = ref(false);
+
+const modeItems = computed<LjMenuItem[]>(() =>
+  modesFor(songHasInstrumental.value).map((m) => ({
+    label: tm(m.label),
+    icon: m.icon,
+    action: () => emit("play", 0, m.value),
+  }))
+);
 const songState = ref<"idle" | "loading" | "ready" | "error">("idle");
 let songSeq = 0;
 
@@ -105,6 +127,7 @@ watch(
   async (id) => {
     const seq = ++songSeq;
     songSlides.value = [];
+    songHasInstrumental.value = false;
     if (!id) {
       songState.value = "idle";
       return;
@@ -115,6 +138,7 @@ watch(
       if (seq !== songSeq) return;
       if (!data) throw new Error("music_not_found");
       songSlides.value = buildSlidesFrom(data) as Record<string, unknown>[];
+      songHasInstrumental.value = !!data.url_instrumental_music;
       songState.value = "ready";
     } catch (e) {
       if (seq !== songSeq) return;

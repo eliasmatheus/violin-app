@@ -1,52 +1,70 @@
 <template>
-  <li
-    class="pm-song"
-    role="button"
-    tabindex="0"
-    :data-testid="`pm-song-${song.id_music}`"
-    @click="emit('preview')"
-    @dblclick="emit('play')"
-    @keydown.enter="emit('play')"
-  >
-    <span class="pm-song__track">{{ song.track ?? "" }}</span>
-    <LjIcon :icon="ICONS.MUSIC.MUSIC" :size="14" class="pm-song__icon" />
-    <span class="pm-song__text">
-      <span class="pm-song__name">{{ song.name }}</span>
-      <span v-if="song.album" class="pm-song__album">{{ song.album }}</span>
-    </span>
-    <span class="pm-song__duration">{{ shortDuration }}</span>
-    <span class="pm-song__actions">
-      <LjTooltip :text="tm('library.play')">
-        <button
-          type="button"
-          class="pm-song__btn"
-          :aria-label="tm('library.play')"
-          :data-testid="`pm-song-play-${song.id_music}`"
-          @click.stop="emit('play')"
-          @dblclick.stop
-        >
-          <LjIcon :icon="ICONS.PLAYER.PLAY" :size="13" />
-        </button>
-      </LjTooltip>
-      <LjTooltip :text="tm('library.add_to_program')">
-        <button
-          type="button"
-          class="pm-song__btn"
-          :aria-label="tm('library.add_to_program')"
-          :data-testid="`pm-song-add-${song.id_music}`"
-          @click.stop="emit('add')"
-          @dblclick.stop
-        >
-          <LjIcon :icon="ICONS.ACTIONS.ADD" :size="13" />
-        </button>
-      </LjTooltip>
-    </span>
-  </li>
+  <LjContextMenu :items="menu">
+    <li
+      class="pm-song"
+      role="button"
+      tabindex="0"
+      :data-testid="`pm-song-${song.id_music}`"
+      @click="emit('preview')"
+      @dblclick="emit('play', 'sung')"
+      @keydown.enter="emit('play', 'sung')"
+    >
+      <span class="pm-song__track">{{ song.track ?? "" }}</span>
+      <LjIcon :icon="ICONS.MUSIC.MUSIC" :size="14" class="pm-song__icon" />
+      <span class="pm-song__text">
+        <span class="pm-song__name">{{ song.name }}</span>
+        <span v-if="song.album" class="pm-song__album">{{ song.album }}</span>
+      </span>
+      <span class="pm-song__duration">{{ shortDuration }}</span>
+      <span class="pm-song__actions">
+        <LjTooltip :text="tm('library.play')">
+          <button
+            type="button"
+            class="pm-song__btn"
+            :aria-label="tm('library.play')"
+            :data-testid="`pm-song-play-${song.id_music}`"
+            @click.stop="emit('play', 'sung')"
+            @dblclick.stop
+          >
+            <LjIcon :icon="ICONS.PLAYER.PLAY" :size="13" />
+          </button>
+        </LjTooltip>
+        <LjTooltip :text="tm('library.add_to_program')">
+          <button
+            type="button"
+            class="pm-song__btn"
+            :aria-label="tm('library.add_to_program')"
+            :data-testid="`pm-song-add-${song.id_music}`"
+            @click.stop="emit('add', 'sung')"
+            @dblclick.stop
+          >
+            <LjIcon :icon="ICONS.ACTIONS.ADD" :size="13" />
+          </button>
+        </LjTooltip>
+        <LjMenu :items="menu" align="end">
+          <template #trigger>
+            <button
+              type="button"
+              class="pm-song__btn"
+              :aria-label="tm('music_modes.more')"
+              :title="tm('music_modes.more')"
+              :data-testid="`pm-song-more-${song.id_music}`"
+              @click.stop
+              @dblclick.stop
+            >
+              <LjIcon :icon="ICONS.UI.DOTS_VERTICAL" :size="13" />
+            </button>
+          </template>
+        </LjMenu>
+      </span>
+    </li>
+  </LjContextMenu>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { LjIcon, LjTooltip } from "@/components/ui";
+import { LjContextMenu, LjIcon, LjMenu, LjTooltip, type LjMenuItem } from "@/components/ui";
+import { modesFor, type MusicMode } from "../program/musicModes";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useModuleI18n } from "@/composables/useModuleI18n";
@@ -62,9 +80,24 @@ export interface LibrarySong {
 }
 
 const props = defineProps<{ song: LibrarySong }>();
-const emit = defineEmits<{ preview: []; play: []; add: [] }>();
+const emit = defineEmits<{ preview: []; play: [mode: MusicMode]; add: [mode: MusicMode] }>();
 
 const { tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
+
+/**
+ * Tocar e adicionar em qualquer formato: com banda, "Só letra"; sem banda,
+ * "Cantado" ou "Playback". O ▶ e o + da linha usam "Cantado".
+ */
+const menu = computed<LjMenuItem[]>(() => {
+  const modes = modesFor(props.song.has_instrumental_music);
+  return [
+    { label: tm("music_modes.play_as") },
+    ...modes.map((m) => ({ label: tm(m.label), icon: m.icon, action: () => emit("play", m.value) })),
+    { separator: true },
+    { label: tm("music_modes.add_as") },
+    ...modes.map((m) => ({ label: tm(m.label), icon: m.icon, action: () => emit("add", m.value) })),
+  ];
+});
 
 /** "00:03:39" → "3:39". */
 const shortDuration = computed(() => {

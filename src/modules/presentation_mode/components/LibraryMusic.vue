@@ -49,8 +49,8 @@
           :key="song.id_music"
           :song="song"
           @preview="emit('preview-song', song)"
-          @play="emit('play-song', song)"
-          @add="emit('add-song', song)"
+          @play="(mode: MusicMode) => emit('play-song', song, mode)"
+          @add="(mode: MusicMode) => emit('add-song', song, mode)"
         />
       </ol>
 
@@ -60,8 +60,8 @@
           :key="song.id_music"
           :song="song"
           @preview="emit('preview-song', song)"
-          @play="emit('play-song', song)"
-          @add="emit('add-song', song)"
+          @play="(mode: MusicMode) => emit('play-song', song, mode)"
+          @add="(mode: MusicMode) => emit('add-song', song, mode)"
         />
       </ol>
 
@@ -100,6 +100,7 @@ import { useModuleI18n } from "@/composables/useModuleI18n";
 import { useDisabledAlbums } from "@/composables/useMusicCatalog";
 import { isAlbumEnabled } from "@root/config/musicCatalog.mjs";
 import SongRow, { type LibrarySong } from "./LibrarySongRow.vue";
+import type { MusicMode } from "../program/musicModes";
 
 /**
  * Aba Músicas da biblioteca: as coletâneas do LouvorJA por capa, e a busca
@@ -133,8 +134,8 @@ interface Category {
 
 const emit = defineEmits<{
   "preview-song": [song: LibrarySong];
-  "play-song": [song: LibrarySong];
-  "add-song": [song: LibrarySong];
+  "play-song": [song: LibrarySong, mode: MusicMode];
+  "add-song": [song: LibrarySong, mode: MusicMode];
 }>();
 
 const { tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);

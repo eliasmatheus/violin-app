@@ -11,8 +11,9 @@ import type { LiturgyItem } from "@/types/Liturgy";
 import { useLiturgyExecution } from "@/modules/liturgy/composables/useLiturgyExecution";
 import type { ProgramBibleRef, ProgramItem } from "@/types/Presentation";
 import { liturgyItem } from "../program/liturgy";
+import type { MusicMode } from "../program/musicModes";
 
-/** Versões da música que têm letra para a grade (as de "só áudio" não têm). */
+/** Versões da música que têm letra para a grade. */
 const SLIDE_MODES: Record<string, MusicActionEnum> = {
   sung: MusicActionEnum.AUDIO,
   pb: MusicActionEnum.INSTRUMENTAL,
@@ -21,14 +22,27 @@ const SLIDE_MODES: Record<string, MusicActionEnum> = {
 };
 
 /**
- * Música com letra toca minimizada: os slides vão para a grade do palco do
- * módulo, e não para a janela do player por cima dele. O resto — música a
- * escolher na hora, personalizada, só áudio — segue o caminho da liturgia.
+ * Toca uma música no formato pedido. Com letra, ela vai minimizada — os
+ * slides aparecem na grade do palco do módulo, não na janela do player por
+ * cima dele. "Só áudio" toca sem mandar nada às telas e aparece no palco
+ * com o player.
  */
+export function playMusicInMode(idMusic: number, mode: MusicMode | string = "sung"): void {
+  if (mode === "audio" || mode === "audio_pb") {
+    Media.stop();
+    void Media.openAudio({
+      id_music: idMusic,
+      mode: mode === "audio_pb" ? MusicActionEnum.INSTRUMENTAL : MusicActionEnum.AUDIO,
+    });
+    return;
+  }
+  void Media.open({ id_music: idMusic, mode: SLIDE_MODES[mode] ?? MusicActionEnum.AUDIO, minimized: true });
+}
+
+/** Música a escolher na hora e música personalizada seguem o caminho da liturgia. */
 function playMusicOnStage(source: LiturgyItem): boolean {
-  const mode = SLIDE_MODES[source.subtipo || "sung"];
-  if (!mode || source.escolha || !source.id_music || source.id_music < 0) return false;
-  void Media.open({ id_music: source.id_music, mode, minimized: true });
+  if (source.escolha || !source.id_music || source.id_music < 0) return false;
+  playMusicInMode(source.id_music, source.subtipo || "sung");
   return true;
 }
 

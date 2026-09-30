@@ -25,6 +25,16 @@
         </div>
       </LjField>
 
+      <LjField v-if="kind === 'music'" :label="tm('item_dialog.version')">
+        <LjSelect
+          v-model="musicMode"
+          :items="modeOptions"
+          item-value="value"
+          item-label="label"
+          data-testid="pm-item-version"
+        />
+      </LjField>
+
       <LjField v-else-if="kind === 'bible'" :label="tm('item_dialog.verse')">
         <div class="pm-item-form__pick">
           <span class="pm-item-form__picked">{{ bible?.reference || tm("item_dialog.none") }}</span>
@@ -127,6 +137,7 @@ import type {
 } from "@/types/Presentation";
 import { CREATABLE_KINDS, KIND_ICONS } from "../program/kinds";
 import { kindFromPath, liturgyItem } from "../program/liturgy";
+import { isMusicMode, modesFor, type MusicMode } from "../program/musicModes";
 import { newId } from "../composables/useProgram";
 
 const MusicSpotlight = defineAsyncComponent(() => import("@/components/MusicSpotlight.vue"));
@@ -163,6 +174,16 @@ const subtitle = ref("");
 const minutes = ref<string | number>(0);
 const targetSessionId = ref<string | null>(null);
 const music = ref<MusicPick | null>(null);
+const musicMode = ref<MusicMode>("sung");
+
+const modeOptions = computed(() =>
+  modesFor(!!music.value?.has_instrumental_music).map((m) => ({ value: m.value, label: tm(m.label) }))
+);
+
+// Trocar para uma música sem instrumental não pode deixar "Playback" escolhido.
+watch(modeOptions, (options) => {
+  if (!options.some((o) => o.value === musicMode.value)) musicMode.value = "sung";
+});
 const bible = ref<ProgramBibleRef | null>(null);
 const filePath = ref("");
 const url = ref("");
@@ -197,6 +218,7 @@ function reset(): void {
     source?.tipo === LiturgyItemTypeEnum.MUSICA && source.id_music
       ? { id_music: source.id_music, name: source.item, has_instrumental_music: source.has_instrumental_music }
       : null;
+  musicMode.value = isMusicMode(source?.subtipo) ? source.subtipo : "sung";
   bible.value = item?.bible ?? null;
   filePath.value = source?.tipo === LiturgyItemTypeEnum.ARQUIVO ? source.dir : "";
   url.value = source?.url ?? "";
@@ -275,7 +297,7 @@ function build(): ProgramItem | string {
           ...(base?.source ?? {}),
           id: sourceId,
           tipo: LiturgyItemTypeEnum.MUSICA,
-          subtipo: base?.source?.subtipo || "sung",
+          subtipo: musicMode.value,
           id_music: music.value.id_music,
           musica: music.value.id_music,
           item: music.value.name,

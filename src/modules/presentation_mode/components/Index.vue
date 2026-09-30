@@ -77,7 +77,7 @@
         @preview="(entry: LibraryEntry) => preview.show({ type: 'file', entry })"
         @stop="stopMedia"
         @preview-song="(s: LibrarySong) => preview.show({ type: 'song', id_music: s.id_music, title: s.name, subtitle: s.album })"
-        @play-song="(s: LibrarySong) => playSong(s.id_music, s.name, s.album)"
+        @play-song="(s: LibrarySong, m: MusicMode) => playSong(s.id_music, s.name, s.album, 0, m)"
         @add-song="addSongToProgram"
         @toggle-width="toggleLibraryWidth"
         @toggle-height="toggleLibraryHeight"
@@ -155,7 +155,6 @@ import DateTime from "@/helpers/DateTime";
 import StagePreview, { type PreviewView } from "./StagePreview.vue";
 import { usePreview } from "../composables/usePreview";
 import $path from "@/helpers/Path";
-import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import LibraryPanel from "./LibraryPanel.vue";
 import LiveMirror from "./LiveMirror.vue";
 import $userdata from "@/helpers/UserData";
@@ -178,7 +177,8 @@ import {
 } from "../composables/useOutputs";
 import { formatHHMM, plannedStarts } from "../program/time";
 import { newId, useProgram } from "../composables/useProgram";
-import { useProgramExecution } from "../composables/useProgramExecution";
+import { playMusicInMode, useProgramExecution } from "../composables/useProgramExecution";
+import { MUSIC_MODES, type MusicMode } from "../program/musicModes";
 import { importLiturgy, kindFromPath, liturgyItem, programToLiturgy } from "../program/liturgy";
 import { module as manifest } from "../manifest";
 
@@ -262,19 +262,21 @@ function projectFile(entry: LibraryEntry): void {
   Telemetry.track("presentation_library_projected", { ext: entry.ext });
 }
 
-function addSongToProgram(song: LibrarySong): void {
+function addSongToProgram(song: LibrarySong, mode: MusicMode = "sung"): void {
   const seconds = DateTime.toNumber(song.duration);
+  // O formato aparece no subtítulo quando não é o de sempre ("Cantado").
+  const modeLabel = mode === "sung" ? "" : tm(MUSIC_MODES.find((m) => m.value === mode)?.label ?? "");
   addItem(
     {
       id: newId(),
       kind: "music",
       title: song.name,
-      subtitle: song.album || undefined,
+      subtitle: [song.album, modeLabel].filter(Boolean).join(" · ") || undefined,
       plannedMinutes: seconds > 0 ? Math.ceil(seconds / 60) : 3,
       source: liturgyItem({
         id: newId(),
         tipo: LiturgyItemTypeEnum.MUSICA,
-        subtipo: "sung",
+        subtipo: mode,
         id_music: song.id_music,
         musica: song.id_music,
         item: song.name,
@@ -366,7 +368,11 @@ const previewIsLive = computed(() => {
       (audioLive.value && audioTitle.value === t.entry.name)
     );
   }
-  return liveKind.value === "music" && Number(slides.slides.value[0]?.id_music) === t.id_music;
+  return (
+    (liveKind.value === "music" && Number(slides.slides.value[0]?.id_music) === t.id_music) ||
+    // "Só áudio" não tem slides: o player marca o título da música.
+    (audioLive.value && audioTitle.value === t.title)
+  );
 });
 
 const stagePreview = computed(() => !!preview.target.value && !previewIsLive.value);
@@ -405,7 +411,7 @@ const previewView = computed<PreviewView | null>(() => {
     return item ? programView(item) : null;
   }
   if (t.type === "file") return fileView(t.entry.path, t.entry.name);
-  return { kind: "song", title: t.title, icon: KIND_ICONS.music, playable: true, songId: t.id_music };
+  return { kind: "song", title: t.title, icon: KIND_ICONS.music, playable: true, songId: t.id_music, chooseMode: true };
 });
 
 /**
@@ -430,14 +436,14 @@ function goToSlideWhenLoaded(idMusic: number, index: number): void {
   }, 15000);
 }
 
-function playSong(idMusic: number, title: string, subtitle?: string, slideIndex = 0): void {
+function playSong(idMusic: number, title: string, subtitle?: string, slideIndex = 0, mode: MusicMode = "sung"): void {
   if (outputLocked.value) return;
   preview.show({ type: "song", id_music: idMusic, title, subtitle });
-  void Media.open({ id_music: idMusic, mode: MusicActionEnum.AUDIO, minimized: true });
+  playMusicInMode(idMusic, mode);
   goToSlideWhenLoaded(idMusic, slideIndex);
 }
 
-function playPreview(slideIndex = 0): void {
+function playPreview(slideIndex = 0, mode: MusicMode = "sung"): void {
   const t = preview.target.value;
   if (!t) return;
   if (t.type === "program") {
@@ -447,7 +453,7 @@ function playPreview(slideIndex = 0): void {
   } else if (t.type === "file") {
     projectFile(t.entry);
   } else {
-    playSong(t.id_music, t.title, t.subtitle, slideIndex);
+    playSong(t.id_music, t.title, t.subtitle, slideIndex, mode);
   }
 }
 

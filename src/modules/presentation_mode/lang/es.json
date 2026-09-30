@@ -107,7 +107,8 @@
     "missing_verse": "Elija el versículo.",
     "missing_file": "Elija el archivo.",
     "missing_url": "Informe una dirección que empiece con http:// o https://.",
-    "missing_title": "Informe el título."
+    "missing_title": "Informe el título.",
+    "version": "Versión"
   },
   "session_dialog": {
     "new_title": "Nueva sesión",
@@ -224,5 +225,15 @@
     "play": "Reproducir",
     "song_failed": "No fue posible cargar la letra de esta música.",
     "song_hint": "Haga clic en una diapositiva para empezar la música desde ella."
+  },
+  "music_modes": {
+    "sung": "Cantado",
+    "pb": "Playback",
+    "lyric": "Solo letra (sin audio)",
+    "audio": "Solo audio",
+    "audio_pb": "Solo audio (playback)",
+    "play_as": "Reproducir como…",
+    "add_as": "Agregar al programa como…",
+    "more": "Más opciones"
   }
 }

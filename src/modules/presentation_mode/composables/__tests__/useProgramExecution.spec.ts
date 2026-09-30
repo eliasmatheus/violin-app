@@ -5,9 +5,11 @@ import type { ProgramItem } from "@/types/Presentation";
 import { liturgyItem } from "../../program/liturgy";
 
 const open = vi.fn(async () => {});
+const openAudio = vi.fn(async () => {});
+const stop = vi.fn();
 const executeItem = vi.fn();
 
-vi.mock("@/composables/useMedia", () => ({ default: { open } }));
+vi.mock("@/composables/useMedia", () => ({ default: { open, openAudio, stop } }));
 vi.mock("@/modules/liturgy/composables/useLiturgyExecution", () => ({
   useLiturgyExecution: () => ({ executeItem }),
 }));
@@ -31,6 +33,7 @@ function music(fields: Partial<Parameters<typeof liturgyItem>[0]> = {}): Program
 describe("useProgramExecution", () => {
   beforeEach(() => {
     open.mockClear();
+    openAudio.mockClear();
     executeItem.mockClear();
   });
 
@@ -49,12 +52,22 @@ describe("useProgramExecution", () => {
     ]);
   });
 
-  it("só áudio, música a escolher e personalizada seguem pela liturgia", () => {
+  it("só áudio toca sem ir às telas, cantado ou playback", () => {
     useProgramExecution().execute(music({ subtipo: "audio" }));
+    useProgramExecution().execute(music({ subtipo: "audio_pb" }));
+    expect(openAudio.mock.calls.map((c) => (c as unknown[])[0])).toEqual([
+      { id_music: 70, mode: MusicActionEnum.AUDIO },
+      { id_music: 70, mode: MusicActionEnum.INSTRUMENTAL },
+    ]);
+    expect(open).not.toHaveBeenCalled();
+    expect(executeItem).not.toHaveBeenCalled();
+  });
+
+  it("música a escolher e personalizada seguem pela liturgia", () => {
     useProgramExecution().execute(music({ escolha: true }));
     useProgramExecution().execute(music({ id_music: -3, ref_id: "custom" }));
     expect(open).not.toHaveBeenCalled();
-    expect(executeItem).toHaveBeenCalledTimes(3);
+    expect(executeItem).toHaveBeenCalledTimes(2);
   });
 
   it("item com sub-itens não executa", () => {
