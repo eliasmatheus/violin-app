@@ -1022,6 +1022,14 @@ function _lyricEntries(data: Music): Lyric[] {
   return [];
 }
 
+/**
+ * Slides de uma música como a projeção os mostra (capa + letra), sem tocá-la.
+ * Exportado para prévias — o Modo apresentação mostra a grade antes de ir ao ar.
+ */
+export function buildSlidesFrom(data: Music): Slide[] {
+  return _buildSlidesFrom(data);
+}
+
 function _buildSlidesFrom(data: Music): Slide[] {
   let prev_image: string | undefined = data?.url_image as string | undefined;
   let prev_image_position: string | number | undefined = data?.image_position;

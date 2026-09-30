@@ -1,29 +1,12 @@
 <template>
   <div class="pm-slides" data-testid="pm-stage-slides">
-    <div class="pm-slides__grid" :class="{ 'pm-slides__grid--locked': locked }">
-      <button
-        v-for="(slide, i) in slides.slides.value"
-        :key="i"
-        type="button"
-        class="pm-slide-card"
-        :class="{
-          'pm-slide-card--live': i === index,
-          'pm-slide-card--next': i === index + 1,
-        }"
-        :disabled="locked"
-        :aria-current="i === index ? 'true' : undefined"
-        :data-testid="`pm-slide-${i}`"
-        @click="goTo(i)"
-      >
-        <span class="pm-slide-card__frame">
-          <Slide :slide="slide" :title="slides.title.value" />
-        </span>
-        <span class="pm-slide-card__foot">
-          <span class="pm-slide-card__n">{{ i + 1 }}</span>
-          <span v-if="i === 0" class="pm-slide-card__part">{{ tm("stage.cover") }}</span>
-        </span>
-      </button>
-    </div>
+    <SlideGrid
+      :slides="slides.slides.value"
+      :title="slides.title.value"
+      :live-index="index"
+      :disabled="locked"
+      @pick="goTo"
+    />
 
     <footer class="pm-slides__bar">
       <LjButton
@@ -72,7 +55,6 @@
 
 <script setup lang="ts">
 import { computed, nextTick, watch } from "vue";
-import Slide from "@/components/Slide.vue";
 import { LjButton } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
@@ -82,6 +64,7 @@ import Media from "@/composables/useMedia";
 import { useSlides } from "@/composables/useSlides";
 import { useAudioPlayback } from "@/composables/useAudioPlayback";
 import { useModuleI18n } from "@/composables/useModuleI18n";
+import SlideGrid from "./SlideGrid.vue";
 
 /**
  * Grade de slides da música no ar. Cada miniatura é o `Slide.vue` real, com a
@@ -134,82 +117,6 @@ watch(index, async (i) => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.pm-slides__grid {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 12px;
-  display: grid;
-  /* A letra tem piso de 18px no Slide.vue: abaixo de 168px a miniatura estoura. */
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-  gap: 12px;
-  align-content: start;
-}
-
-.pm-slide-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--lj-white-alpha-50);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.pm-slide-card:disabled {
-  cursor: not-allowed;
-}
-
-.pm-slide-card__frame {
-  display: block;
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  border-radius: 3px;
-  outline: 1px solid var(--lj-surface-border);
-  transition: outline-color 120ms var(--lj-ease);
-}
-
-.pm-slide-card:hover:not(:disabled) .pm-slide-card__frame {
-  outline-color: var(--lj-navy-active);
-}
-
-.pm-slide-card--next .pm-slide-card__frame {
-  outline: 2px solid var(--lj-navy-active);
-}
-
-.pm-slide-card--live .pm-slide-card__frame {
-  outline: 2px solid var(--lj-orange);
-}
-
-.pm-slide-card:focus-visible {
-  outline: none;
-}
-
-.pm-slide-card:focus-visible .pm-slide-card__frame {
-  box-shadow: var(--lj-ui-focus);
-}
-
-.pm-slide-card__foot {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.pm-slide-card__n {
-  font-family: var(--lj-font-mono);
-  font-size: 10.5px;
-}
-
-.pm-slide-card__part {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .pm-slides__bar {

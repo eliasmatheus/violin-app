@@ -123,7 +123,7 @@
               :prepared="element.id === preparedItemId"
               :selected="element.id === selectedItemId"
               :open="!!openItems[element.id]"
-              @select="select(element.id)"
+              @select="onSelect(element.id)"
               @activate="emit('activate', element.id)"
               @toggle="toggleOpen(element.id)"
               @edit="emit('edit-item', element.id)"
@@ -163,6 +163,8 @@ import {
 
 const emit = defineEmits<{
   activate: [itemId: string];
+  /** Um clique: o item vai para a prévia do palco. */
+  preview: [itemId: string];
   "edit-item": [itemId: string];
   "edit-session": [sessionId: string];
   "new-item": [];
@@ -260,6 +262,11 @@ const countsLabel = computed(() => {
     items.value.length
   )}`;
 });
+
+function onSelect(itemId: string): void {
+  select(itemId);
+  emit("preview", itemId);
+}
 
 function onSessionItems(sessionId: string, list: ProgramItem[]): void {
   setSessions(program.value.sessions.map((s) => (s.id === sessionId ? { ...s, items: list } : s)));

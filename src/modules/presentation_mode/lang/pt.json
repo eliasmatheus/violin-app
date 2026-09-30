@@ -156,7 +156,9 @@
     "cover": "Capa",
     "play": "Tocar",
     "pause": "Pausar",
-    "go_to_slide_title": "Ir para o slide nº"
+    "go_to_slide_title": "Ir para o slide nº",
+    "preview": "PRÉVIA",
+    "show_live": "Ver o que está no ar"
   },
   "library": {
     "files": "Arquivos",
@@ -178,7 +180,7 @@
     "loading": "Carregando…",
     "up": "Voltar à pasta anterior",
     "items_count": "{n} arquivo | {n} arquivos",
-    "hint": "duplo clique envia para a tela principal",
+    "hint": "clique mostra no palco · duplo clique reproduz",
     "extension": "Extensão",
     "size": "Tamanho",
     "resolution": "Resolução",
@@ -189,7 +191,12 @@
     "send": "Enviar para tela principal",
     "add_to_program": "Adicionar ao programa",
     "resize": "Arraste para mudar a altura (duplo clique alterna)",
-    "select_hint": "Clique num arquivo para ver os detalhes."
+    "musics": "Músicas",
+    "play": "Reproduzir",
+    "stop": "Parar de reproduzir",
+    "details": "Detalhes",
+    "preview": "Pré-visualizar",
+    "open_folder": "Abrir pasta"
   },
   "video": {
     "back_10": "Voltar 10 segundos",
@@ -199,5 +206,17 @@
     "mute": "Cortar o áudio",
     "unmute": "Devolver o áudio",
     "stop": "Parar o vídeo"
+  },
+  "music": {
+    "categories": "Categorias",
+    "back": "Voltar às coletâneas",
+    "search": "Buscar música, coletânea ou nº do hino",
+    "no_results": "Nenhuma música encontrada.",
+    "hymnals": "Hinários"
+  },
+  "preview": {
+    "play": "Reproduzir",
+    "song_failed": "Não foi possível carregar a letra desta música.",
+    "song_hint": "Clique num slide para começar a música a partir dele."
   }
 }

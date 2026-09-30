@@ -156,7 +156,9 @@
     "cover": "Portada",
     "play": "Reproducir",
     "pause": "Pausar",
-    "go_to_slide_title": "Ir a la diapositiva nº"
+    "go_to_slide_title": "Ir a la diapositiva nº",
+    "preview": "VISTA PREVIA",
+    "show_live": "Ver lo que está al aire"
   },
   "library": {
     "files": "Archivos",
@@ -178,7 +180,7 @@
     "loading": "Cargando…",
     "up": "Volver a la carpeta anterior",
     "items_count": "{n} archivo | {n} archivos",
-    "hint": "doble clic envía a la pantalla principal",
+    "hint": "clic muestra en el escenario · doble clic reproduce",
     "extension": "Extensión",
     "size": "Tamaño",
     "resolution": "Resolución",
@@ -189,7 +191,12 @@
     "send": "Enviar a la pantalla principal",
     "add_to_program": "Agregar al programa",
     "resize": "Arrastre para cambiar la altura (doble clic alterna)",
-    "select_hint": "Haga clic en un archivo para ver los detalles."
+    "musics": "Músicas",
+    "play": "Reproducir",
+    "stop": "Dejar de reproducir",
+    "details": "Detalles",
+    "preview": "Previsualizar",
+    "open_folder": "Abrir carpeta"
   },
   "video": {
     "back_10": "Retroceder 10 segundos",
@@ -199,5 +206,17 @@
     "mute": "Cortar el audio",
     "unmute": "Devolver el audio",
     "stop": "Detener el video"
+  },
+  "music": {
+    "categories": "Categorías",
+    "back": "Volver a las colecciones",
+    "search": "Buscar música, colección o nº del himno",
+    "no_results": "No se encontró ninguna música.",
+    "hymnals": "Himnarios"
+  },
+  "preview": {
+    "play": "Reproducir",
+    "song_failed": "No fue posible cargar la letra de esta música.",
+    "song_hint": "Haga clic en una diapositiva para empezar la música desde ella."
   }
 }

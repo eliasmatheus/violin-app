@@ -12,8 +12,18 @@
     />
     <header class="pm-library__tabs">
       <div class="pm-library__tablist" role="tablist">
-        <button type="button" role="tab" aria-selected="true" class="pm-library__tab pm-library__tab--active">
-          <LjIcon :icon="ICONS.UI.FOLDER_OPEN" :size="15" />{{ tm("library.files") }}
+        <button
+          v-for="libTab in TABS"
+          :key="libTab.id"
+          type="button"
+          role="tab"
+          :aria-selected="tab === libTab.id"
+          class="pm-library__tab"
+          :class="{ 'pm-library__tab--active': tab === libTab.id }"
+          :data-testid="`pm-library-tab-${libTab.id}`"
+          @click="tab = libTab.id"
+        >
+          <LjIcon :icon="libTab.icon" :size="15" />{{ tm(libTab.label) }}
         </button>
       </div>
       <div class="pm-library__tools">
@@ -38,11 +48,18 @@
       </div>
     </header>
 
-    <div v-if="!lib.supported" class="pm-library__unsupported">
+    <LibraryMusic
+      v-if="tab === 'musics'"
+      @preview-song="(s: LibrarySong) => emit('preview-song', s)"
+      @play-song="(s: LibrarySong) => emit('play-song', s)"
+      @add-song="(s: LibrarySong) => emit('add-song', s)"
+    />
+
+    <div v-else-if="!lib.supported" class="pm-library__unsupported">
       <LjEmpty :icon="ICONS.UI.FOLDER_OPEN" :title="tm('library.desktop_only')" />
     </div>
 
-    <div v-else class="pm-library__body">
+    <div v-else class="pm-library__body" :class="{ 'pm-library__body--details': !!details }">
       <nav class="pm-folders" :aria-label="tm('library.folders')">
         <button
           type="button"
@@ -113,25 +130,56 @@
           </LjButton>
         </div>
         <div v-else class="pm-files__grid" data-testid="pm-library-grid">
-          <button
-            v-for="entry in lib.entries.value"
-            :key="entry.path"
-            type="button"
-            class="pm-file"
-            :class="{ 'pm-file--selected': entry.path === selected?.path }"
-            :title="entry.name"
-            :data-testid="`pm-file-${entry.name}`"
-            @click="lib.select(entry)"
-            @dblclick="onOpen(entry)"
-            @keydown.enter="onOpen(entry)"
-          >
-            <span class="pm-file__thumb">
-              <img v-if="thumbOf(entry)" :src="thumbOf(entry)" alt="" loading="lazy" />
-              <LjIcon v-else :icon="iconOf(entry)" :size="22" class="pm-file__icon" />
-              <span v-if="durationOf(entry)" class="pm-file__badge">{{ durationOf(entry) }}</span>
-            </span>
-            <span class="pm-file__name">{{ entry.name }}</span>
-          </button>
+          <LjContextMenu v-for="entry in lib.entries.value" :key="entry.path" :items="menuFor(entry)">
+            <div
+              class="pm-file"
+              :class="{
+                'pm-file--selected': entry.path === selected?.path,
+                'pm-file--live': entry.path === livePath,
+              }"
+              role="button"
+              tabindex="0"
+              :title="entry.name"
+              :aria-current="entry.path === livePath ? 'true' : undefined"
+              :data-testid="`pm-file-${entry.name}`"
+              @click="onClick(entry)"
+              @dblclick="onOpen(entry)"
+              @keydown.enter="onOpen(entry)"
+            >
+              <span class="pm-file__thumb">
+                <img v-if="thumbOf(entry)" :src="thumbOf(entry)" alt="" loading="lazy" />
+                <LjIcon v-else :icon="iconOf(entry)" :size="22" class="pm-file__icon" />
+                <span v-if="durationOf(entry)" class="pm-file__badge">{{ durationOf(entry) }}</span>
+                <template v-if="!entry.isDir">
+                  <LjTooltip :text="entry.path === livePath ? tm('library.stop') : tm('library.play')">
+                    <button
+                      type="button"
+                      class="pm-file__action"
+                      :aria-label="entry.path === livePath ? tm('library.stop') : tm('library.play')"
+                      :data-testid="`pm-file-action-${entry.name}`"
+                      @click.stop="entry.path === livePath ? emit('stop') : emit('project', entry)"
+                      @dblclick.stop
+                    >
+                      <LjIcon :icon="entry.path === livePath ? ICONS.ACTIONS.CLOSE : ICONS.PLAYER.PLAY" :size="26" />
+                    </button>
+                  </LjTooltip>
+                  <LjTooltip :text="tm('library.details')">
+                    <button
+                      type="button"
+                      class="pm-file__info"
+                      :aria-label="tm('library.details')"
+                      :data-testid="`pm-file-info-${entry.name}`"
+                      @click.stop="openDetails(entry)"
+                      @dblclick.stop
+                    >
+                      <LjIcon :icon="ICONS.UI.INFORMATION_OUTLINE" :size="14" />
+                    </button>
+                  </LjTooltip>
+                </template>
+              </span>
+              <span class="pm-file__name">{{ entry.name }}</span>
+            </div>
+          </LjContextMenu>
         </div>
         <footer class="pm-files__foot">
           <LjButton
@@ -151,46 +199,52 @@
         </footer>
       </div>
 
-      <!-- A coluna fica sempre: abri-la no primeiro clique deslocava a grade
-           e o segundo clique do duplo clique caía em outro arquivo. -->
-      <aside v-if="!selected" class="pm-details pm-details--empty">
-        <LjIcon :icon="ICONS.UI.INFORMATION_OUTLINE" :size="18" />
-        <p>{{ tm("library.select_hint") }}</p>
-      </aside>
-      <aside v-else class="pm-details" data-testid="pm-library-details">
+      <!-- Detalhes só a pedido — (i) ou menu de contexto. Abrir no clique
+           deslocava a grade no meio do duplo clique. -->
+      <aside v-if="details" class="pm-details" data-testid="pm-library-details">
         <div class="pm-details__head">
-          <span class="pm-details__title">{{ selected.name }}</span>
+          <span class="pm-details__title">{{ details.name }}</span>
           <button
             type="button"
             class="pm-details__star"
-            :aria-pressed="lib.isFavorite(selected)"
-            :title="lib.isFavorite(selected) ? tm('library.unfavorite') : tm('library.favorite')"
-            @click="lib.toggleFavorite(selected)"
+            :aria-pressed="lib.isFavorite(details)"
+            :title="lib.isFavorite(details) ? tm('library.unfavorite') : tm('library.favorite')"
+            @click="lib.toggleFavorite(details)"
           >
-            <LjIcon :icon="lib.isFavorite(selected) ? ICONS.UI.STAR : ICONS.UI.STAR_OUTLINE" :size="15" />
+            <LjIcon :icon="lib.isFavorite(details) ? ICONS.UI.STAR : ICONS.UI.STAR_OUTLINE" :size="15" />
+          </button>
+          <button
+            type="button"
+            class="pm-details__star pm-details__close"
+            :title="t('actions.close')"
+            :aria-label="t('actions.close')"
+            data-testid="pm-library-details-close"
+            @click="detailsPath = null"
+          >
+            <LjIcon :icon="ICONS.ACTIONS.CLOSE" :size="15" />
           </button>
         </div>
         <dl class="pm-details__table">
           <dt>{{ tm("library.extension") }}</dt>
-          <dd>{{ selected.ext.toUpperCase() }}</dd>
+          <dd>{{ details.ext.toUpperCase() }}</dd>
           <dt>{{ tm("library.size") }}</dt>
-          <dd>{{ formatSize(selected.size) }}</dd>
-          <template v-if="selectedMeta?.width">
+          <dd>{{ formatSize(details.size) }}</dd>
+          <template v-if="detailsMeta?.width">
             <dt>{{ tm("library.resolution") }}</dt>
-            <dd>{{ selectedMeta.width }}×{{ selectedMeta.height }}</dd>
+            <dd>{{ detailsMeta.width }}×{{ detailsMeta.height }}</dd>
           </template>
-          <template v-if="selectedMeta?.duration">
+          <template v-if="detailsMeta?.duration">
             <dt>{{ tm("library.duration") }}</dt>
-            <dd>{{ clock(selectedMeta.duration) }}</dd>
+            <dd>{{ clock(detailsMeta.duration) }}</dd>
           </template>
           <dt>{{ tm("library.modified") }}</dt>
-          <dd>{{ formatDate(selected.mtimeMs) }}</dd>
+          <dd>{{ formatDate(details.mtimeMs) }}</dd>
         </dl>
         <div class="pm-details__actions">
-          <LjButton variant="primary" block :icon="ICONS.PROJECTION.START" data-testid="pm-library-send" @click="emit('project', selected)">
+          <LjButton variant="primary" block :icon="ICONS.PROJECTION.START" data-testid="pm-library-send" @click="emit('project', details)">
             {{ tm("library.send") }}
           </LjButton>
-          <LjButton block :icon="ICONS.ACTIONS.ADD" data-testid="pm-library-add" @click="emit('add-to-program', selected, selectedMeta)">
+          <LjButton block :icon="ICONS.ACTIONS.ADD" data-testid="pm-library-add" @click="emit('add-to-program', details, detailsMeta)">
             {{ tm("library.add_to_program") }}
           </LjButton>
         </div>
@@ -202,7 +256,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import draggable from "vuedraggable";
-import { LjButton, LjEmpty, LjIcon } from "@/components/ui";
+import LibraryMusic from "./LibraryMusic.vue";
+import type { LibrarySong } from "./LibrarySongRow.vue";
+import { LjButton, LjContextMenu, LjEmpty, LjIcon, LjTooltip, type LjMenuItem } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import $alert from "@/helpers/Alert";
@@ -210,7 +266,13 @@ import { useModuleI18n } from "@/composables/useModuleI18n";
 import { ALL, FAVORITES, fileKind, useFileLibrary, type LibraryEntry } from "../composables/useFileLibrary";
 import { useMediaMeta, type MediaMeta } from "../composables/useMediaMeta";
 
-const props = defineProps<{ fullWidth: boolean; tall: boolean; height: number }>();
+const props = defineProps<{
+  fullWidth: boolean;
+  tall: boolean;
+  height: number;
+  /** Caminho do arquivo que está no ar, para a borda de destaque e o ✕. */
+  livePath: string | null;
+}>();
 
 const emit = defineEmits<{
   "toggle-width": [];
@@ -218,10 +280,23 @@ const emit = defineEmits<{
   resize: [height: number];
   "resize-end": [height: number];
   project: [entry: LibraryEntry];
+  /** Um clique: o arquivo vai para a prévia do palco. */
+  preview: [entry: LibraryEntry];
+  /** ✕ no arquivo que está no ar. */
+  stop: [];
+  "preview-song": [song: LibrarySong];
+  "play-song": [song: LibrarySong];
+  "add-song": [song: LibrarySong];
   "add-to-program": [entry: LibraryEntry, meta: MediaMeta | null];
 }>();
 
 const { t, tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
+
+const TABS = [
+  { id: "files", label: "library.files", icon: ICONS.UI.FOLDER_OPEN },
+  { id: "musics", label: "library.musics", icon: ICONS.MUSIC.MUSIC },
+] as const;
+const tab = ref<(typeof TABS)[number]["id"]>("files");
 
 /* ─── Altura por arraste da borda de cima ─── */
 
@@ -258,7 +333,46 @@ const lib = useFileLibrary();
 const { meta, request } = useMediaMeta();
 
 const selected = computed(() => lib.selected.value);
-const selectedMeta = computed(() => (selected.value ? (meta.get(selected.value.path) ?? null) : null));
+
+/** Detalhes abertos pelo (i) ou pelo menu de contexto. */
+const detailsPath = ref<string | null>(null);
+const details = computed(
+  () => lib.entries.value.find((e) => e.path === detailsPath.value) ?? null
+);
+const detailsMeta = computed(() => (details.value ? (meta.get(details.value.path) ?? null) : null));
+
+function openDetails(entry: LibraryEntry): void {
+  detailsPath.value = entry.path;
+  request(entry, { priority: true });
+}
+
+function onClick(entry: LibraryEntry): void {
+  lib.select(entry);
+  if (!entry.isDir) emit("preview", entry);
+}
+
+function menuFor(entry: LibraryEntry): LjMenuItem[] {
+  if (entry.isDir) return [{ label: tm("library.open_folder"), icon: ICONS.UI.FOLDER_OPEN, action: () => void lib.enter(entry) }];
+  const live = entry.path === props.livePath;
+  return [
+    live
+      ? { label: tm("library.stop"), icon: ICONS.ACTIONS.CLOSE, action: () => emit("stop") }
+      : { label: tm("library.play"), icon: ICONS.PLAYER.PLAY, action: () => emit("project", entry) },
+    { label: tm("library.preview"), icon: ICONS.UI.EYE, action: () => onClick(entry) },
+    {
+      label: tm("library.add_to_program"),
+      icon: ICONS.ACTIONS.ADD,
+      action: () => emit("add-to-program", entry, meta.get(entry.path) ?? null),
+    },
+    { separator: true },
+    {
+      label: lib.isFavorite(entry) ? tm("library.unfavorite") : tm("library.favorite"),
+      icon: lib.isFavorite(entry) ? ICONS.UI.STAR : ICONS.UI.STAR_OUTLINE,
+      action: () => lib.toggleFavorite(entry),
+    },
+    { label: tm("library.details"), icon: ICONS.UI.INFORMATION_OUTLINE, action: () => openDetails(entry) },
+  ];
+}
 
 onMounted(() => {
   if (lib.supported) void lib.load();
@@ -270,7 +384,7 @@ watch(
   (entries) => entries.forEach((e) => request(e)),
   { immediate: true }
 );
-watch(selected, (entry) => {
+watch(details, (entry) => {
   if (entry) request(entry, { priority: true });
 });
 
@@ -439,6 +553,10 @@ const emptyMessage = computed(() => {
   flex: 1;
   min-height: 0;
   display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+}
+
+.pm-library__body--details {
   grid-template-columns: 168px minmax(0, 1fr) 222px;
 }
 
@@ -614,9 +732,69 @@ const emptyMessage = computed(() => {
   border-color: var(--lj-navy-active);
 }
 
-.pm-file--selected .pm-file__thumb {
-  box-shadow: inset 0 0 0 2px var(--lj-orange);
+.pm-file__action,
+.pm-file__info {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  color: var(--lj-white);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 120ms var(--lj-ease),
+    background 120ms var(--lj-ease);
+}
+
+/* ▶ (ou ✕ no que está no ar) no centro; (i) no canto — só no hover ou no foco. */
+.pm-file__action {
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--lj-black-alpha-40);
+  transform: translate(-50%, -50%);
+}
+
+.pm-file__info {
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--lj-black-alpha-40);
+}
+
+.pm-file:hover .pm-file__action,
+.pm-file:hover .pm-file__info,
+.pm-file:focus-within .pm-file__action,
+.pm-file:focus-within .pm-file__info {
+  opacity: 1;
+}
+
+.pm-file__action:hover,
+.pm-file__info:hover {
+  background: var(--lj-black-alpha-75);
+}
+
+.pm-file__action:focus-visible,
+.pm-file__info:focus-visible {
+  outline: none;
+  box-shadow: var(--lj-ui-focus);
+}
+
+.pm-file--live .pm-file__thumb {
   border-color: var(--lj-orange);
+  box-shadow: 0 0 0 2px var(--lj-orange);
+}
+
+/* Em prévia: azul, como o "próximo" do programa. No ar é laranja (acima). */
+.pm-file--selected:not(.pm-file--live) .pm-file__thumb {
+  box-shadow: inset 0 0 0 2px var(--lj-navy-active);
+  border-color: var(--lj-navy-active);
 }
 
 .pm-file:focus-visible {

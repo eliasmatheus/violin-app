@@ -7,6 +7,7 @@
     >
       <ProgramPanel
         @activate="activate"
+        @preview="(id: string) => preview.show({ type: 'program', itemId: id })"
         @edit-item="openEditItem"
         @edit-session="openEditSession"
         @new-item="openNewItem"
@@ -16,11 +17,21 @@
 
       <section class="pm-stage" data-testid="pm-stage">
         <header class="pm-bar">
-          <span v-if="liveKind" class="pm-on-air"><span class="pm-on-air__dot" />{{ tm("stage.on_air") }}</span>
+          <span v-if="stagePreview" class="pm-preview-badge" data-testid="pm-stage-badge">{{ tm("stage.preview") }}</span>
+          <span v-else-if="liveKind" class="pm-on-air" data-testid="pm-stage-badge"><span class="pm-on-air__dot" />{{ tm("stage.on_air") }}</span>
           <LjIcon v-if="stageIcon" :icon="stageIcon" :size="14" />
           <span class="pm-bar__title" data-testid="pm-stage-title">{{ stageTitle }}</span>
           <span v-if="stageMeta" class="pm-bar__meta">{{ stageMeta }}</span>
           <div class="pm-bar__tools">
+            <LjButton
+              v-if="stagePreview && liveKind"
+              size="sm"
+              :icon="ICONS.PROJECTION.START"
+              data-testid="pm-stage-show-live"
+              @click="focusLive"
+            >
+              {{ tm("stage.show_live") }}
+            </LjButton>
             <LjButton
               size="sm"
               icon-only
@@ -31,8 +42,9 @@
             />
           </div>
         </header>
+        <StagePreview v-if="stagePreview && previewView" :view="previewView" @play="playPreview" />
         <StageSlides
-          v-if="showSlideGrid"
+          v-else-if="showSlideGrid"
           :subtitle="liveProgramItem?.kind === 'music' ? liveProgramItem.subtitle : undefined"
           :locked="outputLocked"
         />
@@ -50,6 +62,12 @@
         :full-width="libraryFullWidth"
         :tall="libraryHeight > LIBRARY_DEFAULT_HEIGHT"
         :height="libraryHeight"
+        :live-path="libraryLivePath"
+        @preview="(entry: LibraryEntry) => preview.show({ type: 'file', entry })"
+        @stop="stopMedia"
+        @preview-song="(s: LibrarySong) => preview.show({ type: 'song', id_music: s.id_music, title: s.name, subtitle: s.album })"
+        @play-song="(s: LibrarySong) => playSong(s.id_music, s.name, s.album)"
+        @add-song="addSongToProgram"
         @toggle-width="toggleLibraryWidth"
         @toggle-height="toggleLibraryHeight"
         @resize="(h: number) => (draggingHeight = h)"
@@ -98,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { LjButton, LjIcon } from "@/components/ui";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import { ICONS } from "@/config/Icons";
@@ -121,6 +139,12 @@ import ProgramSettingsDialog from "./ProgramSettingsDialog.vue";
 import OutputsPanel from "./OutputsPanel.vue";
 import StageSlides from "./StageSlides.vue";
 import StageVideo from "./StageVideo.vue";
+import type { LibrarySong } from "./LibrarySongRow.vue";
+import DateTime from "@/helpers/DateTime";
+import StagePreview, { type PreviewView } from "./StagePreview.vue";
+import { usePreview } from "../composables/usePreview";
+import $path from "@/helpers/Path";
+import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import LibraryPanel from "./LibraryPanel.vue";
 import LiveMirror from "./LiveMirror.vue";
 import $userdata from "@/helpers/UserData";
@@ -219,6 +243,29 @@ function projectFile(entry: LibraryEntry): void {
   Telemetry.track("presentation_library_projected", { ext: entry.ext });
 }
 
+function addSongToProgram(song: LibrarySong): void {
+  const seconds = DateTime.toNumber(song.duration);
+  addItem(
+    {
+      id: newId(),
+      kind: "music",
+      title: song.name,
+      subtitle: song.album || undefined,
+      plannedMinutes: seconds > 0 ? Math.ceil(seconds / 60) : 3,
+      source: liturgyItem({
+        id: newId(),
+        tipo: LiturgyItemTypeEnum.MUSICA,
+        subtipo: "sung",
+        id_music: song.id_music,
+        musica: song.id_music,
+        item: song.name,
+        has_instrumental_music: song.has_instrumental_music,
+      }),
+    },
+    ensureSession()
+  );
+}
+
 function addFileToProgram(entry: LibraryEntry, meta: MediaMeta | null): void {
   const kind = kindFromPath(entry.path);
   const seconds = meta?.duration ?? 0;
@@ -266,9 +313,119 @@ function activate(itemId: string, { force = false } = {}): void {
     prepare(item.id);
     return;
   }
+  preview.show({ type: "program", itemId: item.id });
   goLive(item.id);
   execute(item);
   Telemetry.track("presentation_item_live", { kind: item.kind });
+}
+
+/* ─── Palco: prévia × ao vivo ─── */
+
+const preview = usePreview();
+
+/** O item em prévia é o que está no ar? Então o palco é o controle dele. */
+const previewIsLive = computed(() => {
+  const t = preview.target.value;
+  if (!t) return true;
+  if (t.type === "program") return t.itemId === liveItemId.value && !!liveKind.value;
+  if (t.type === "file") return liveKind.value === "file" && live.file.value?.title === t.entry.name;
+  return liveKind.value === "music" && Number(slides.slides.value[0]?.id_music) === t.id_music;
+});
+
+const stagePreview = computed(() => !!preview.target.value && !previewIsLive.value);
+
+function fileView(path: string, title: string): PreviewView {
+  const kind = kindFromPath(path);
+  const url = $path.local(path);
+  if (kind === "image") return { kind: "image", title, icon: KIND_ICONS.image, playable: true, url };
+  if (kind === "video") return { kind: "video", title, icon: KIND_ICONS.video, playable: true, url };
+  return { kind: "other", title, icon: KIND_ICONS[kind], playable: true };
+}
+
+function programView(item: ProgramItem): PreviewView {
+  const src = item.source;
+  if (src?.tipo === LiturgyItemTypeEnum.MUSICA && src.id_music && src.id_music > 0 && !src.escolha) {
+    return { kind: "song", title: item.title, icon: KIND_ICONS.music, playable: true, songId: src.id_music };
+  }
+  if (item.children?.length) {
+    return { kind: "list", title: item.title, icon: KIND_ICONS[item.kind], playable: false, items: item.children.map((c) => c.title) };
+  }
+  if (item.bible) {
+    return { kind: "text", title: item.title, icon: KIND_ICONS.bible, playable: true, text: item.bible.text, reference: item.bible.reference };
+  }
+  if (item.kind === "note") {
+    return { kind: "text", title: item.title, icon: KIND_ICONS.note, playable: true, text: item.notes ?? src?.subitem ?? item.title };
+  }
+  if (src?.tipo === LiturgyItemTypeEnum.ARQUIVO && src.dir) return fileView(src.dir, item.title);
+  return { kind: "other", title: item.title, icon: KIND_ICONS[item.kind], playable: true };
+}
+
+const previewView = computed<PreviewView | null>(() => {
+  const t = preview.target.value;
+  if (!t) return null;
+  if (t.type === "program") {
+    const item = findItem(t.itemId);
+    return item ? programView(item) : null;
+  }
+  if (t.type === "file") return fileView(t.entry.path, t.entry.name);
+  return { kind: "song", title: t.title, icon: KIND_ICONS.music, playable: true, songId: t.id_music };
+});
+
+/**
+ * Clique num slide da prévia: a música vai ao ar e, quando os slides dela
+ * chegarem, salta para o slide escolhido.
+ */
+function goToSlideWhenLoaded(idMusic: number, index: number): void {
+  if (index <= 0) return;
+  let done = false;
+  const stop = watch(
+    () => [slides.totalSlides.value, slides.slides.value[0]?.id_music] as const,
+    ([total, id]) => {
+      if (done || total <= index || Number(id) !== idMusic) return;
+      done = true;
+      Media.goToSlide(index);
+    },
+    { immediate: true }
+  );
+  setTimeout(() => {
+    done = true;
+    stop();
+  }, 15000);
+}
+
+function playSong(idMusic: number, title: string, subtitle?: string, slideIndex = 0): void {
+  if (outputLocked.value) return;
+  preview.show({ type: "song", id_music: idMusic, title, subtitle });
+  void Media.open({ id_music: idMusic, mode: MusicActionEnum.AUDIO, minimized: true });
+  goToSlideWhenLoaded(idMusic, slideIndex);
+}
+
+function playPreview(slideIndex = 0): void {
+  const t = preview.target.value;
+  if (!t) return;
+  if (t.type === "program") {
+    activate(t.itemId);
+    const src = findItem(t.itemId)?.source;
+    if (src?.id_music) goToSlideWhenLoaded(src.id_music, slideIndex);
+  } else if (t.type === "file") {
+    projectFile(t.entry);
+  } else {
+    playSong(t.id_music, t.title, t.subtitle, slideIndex);
+  }
+}
+
+/** Traz para o palco o que está no ar, com os controles dele. */
+function focusLive(): void {
+  if (liveItemId.value && liveProgramItem.value) {
+    preview.show({ type: "program", itemId: liveItemId.value });
+  } else if (libraryQueueLive.value && library.queue.value) {
+    const q = library.queue.value;
+    preview.show({ type: "file", entry: q.entries[q.index] });
+  } else if (liveKind.value === "music") {
+    preview.show({ type: "song", id_music: Number(slides.slides.value[0]?.id_music), title: slides.title.value });
+  } else {
+    preview.show(null);
+  }
 }
 
 /* ─── Palco ─── */
@@ -286,12 +443,14 @@ const showVideoStage = computed(
 const liveProgramItem = computed(() => (liveItemId.value ? findItem(liveItemId.value) : null));
 
 const stageIcon = computed(() => {
+  if (stagePreview.value) return previewView.value?.icon ?? null;
   if (!liveKind.value) return null;
   return liveProgramItem.value ? KIND_ICONS[liveProgramItem.value.kind] : null;
 });
 
 /** O item do programa no ar; sem ele (biblioteca, outro módulo), o nome do que está na tela. */
 const stageTitle = computed(() => {
+  if (stagePreview.value) return previewView.value?.title ?? "";
   if (liveProgramItem.value) return liveProgramItem.value.title;
   switch (liveKind.value) {
     case "music":
@@ -309,7 +468,15 @@ const stageTitle = computed(() => {
   }
 });
 
-const stageMeta = computed(() => (liveKind.value ? (liveProgramItem.value?.subtitle ?? "") : ""));
+const stageMeta = computed(() => {
+  const t = preview.target.value;
+  if (stagePreview.value && t) {
+    if (t.type === "program") return findItem(t.itemId)?.subtitle ?? "";
+    if (t.type === "song") return t.subtitle ?? "";
+    return "";
+  }
+  return liveKind.value ? (liveProgramItem.value?.subtitle ?? "") : "";
+});
 
 function goToSlidePrompt(): void {
   if (!showSlideGrid.value || outputLocked.value) return;
@@ -336,6 +503,17 @@ const libraryQueueLive = computed(() => {
   const q = library.queue.value;
   return liveKind.value === "file" && !!q && live.file.value?.title === q.entries[q.index]?.name;
 });
+
+/** Arquivo da biblioteca que está no ar — borda de destaque e ✕ na grade. */
+const libraryLivePath = computed(() => {
+  const q = library.queue.value;
+  return libraryQueueLive.value && q ? q.entries[q.index].path : null;
+});
+
+/** Tira a mídia do ar mantendo as janelas de projeção abertas. */
+function stopMedia(): void {
+  Media.close(true, false, true);
+}
 
 /** Há partes para percorrer: os slides da música no ar, ou a pasta do arquivo no ar. */
 const canNavigate = computed(
@@ -647,6 +825,17 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
 
 .pm-bar__accent {
   color: var(--lj-orange);
+}
+
+.pm-preview-badge {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border: 1px solid var(--lj-navy-active);
+  border-radius: 3px;
+  color: var(--lj-text);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .pm-on-air {
