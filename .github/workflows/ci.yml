@@ -44,3 +44,6 @@ jobs:
 
       - name: Conferir estilos do build contra o desenvolvimento
         run: npm run test:e2e:build
+
+      - name: Conferir web Android no build PWA
+        run: npm run test:e2e:mobile:build
