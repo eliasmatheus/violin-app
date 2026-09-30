@@ -20,6 +20,8 @@ files:
   - config/**/*
   - package.json
   - public/ico/**/*
+  # O splash usa os mesmos tokens de cor do renderer antes do app montar.
+  - src/assets/styles/tokens.css
 
 # Arquivos compartilhados entre o main process e o renderer process (copiados para o asar e para o build final)
 extraResources: [

@@ -2,24 +2,25 @@
 
 /**
  * Splash window — janela frameless 508×117 que cobre a inicialização inteira.
- * Usa a identidade clara do LouvorJA, fade-in e a mensagem
- * "Inicializando programa...".
+ * Usa o tema salvo do app, fade-in e a mensagem "Inicializando programa...".
  *
  * Abre no primeiro instante do `whenReady` e sai quando a janela principal
- * aparece pintada — quem fecha é `revealMainWindow()`, no main.cjs. O que ela
- * mostra é fixo, e por isso a janela não tem preload: não há nada a dizer ao
- * documento durante a espera.
+ * aparece pintada — quem fecha é `revealMainWindow()`, no main.cjs. A janela
+ * não tem preload: o tema resolvido é passado no URL do arquivo local.
  */
 
-const { BrowserWindow, screen } = require("electron");
+const { BrowserWindow, nativeTheme, screen } = require("electron");
 const path = require("path");
 const { backgroundWindows } = require("./e2eWindowMode.js");
+const { resolveSplashTheme } = require("./splashTheme.js");
 
 let splashWindow = null;
 
-function show() {
+function show(userData) {
   if (backgroundWindows) return null;
   if (splashWindow && !splashWindow.isDestroyed()) return splashWindow;
+
+  const theme = resolveSplashTheme(userData, nativeTheme.shouldUseDarkColors);
 
   // Centralizar na tela primária
   const primary = screen.getPrimaryDisplay();
@@ -47,7 +48,8 @@ function show() {
     skipTaskbar: true,
     alwaysOnTop: true,
     show: false,
-    backgroundColor: "#F7FAFD",
+    // Cor do primeiro frame, antes de o CSS do documento pintar.
+    backgroundColor: theme === "dark" ? "#1f2937" : "#f7fafd",
     webPreferences: {
       contextIsolation: true,
       sandbox: true,
@@ -55,7 +57,9 @@ function show() {
     },
   });
 
-  splashWindow.loadFile(path.join(__dirname, "..", "splash.html"));
+  splashWindow.loadFile(path.join(__dirname, "..", "splash.html"), {
+    query: { theme },
+  });
 
   splashWindow.once("ready-to-show", () => {
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.show();

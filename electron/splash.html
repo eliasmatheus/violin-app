@@ -1,21 +1,50 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-br" data-theme="darkblue">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LouvorJA Violin</title>
+  <script>
+    // O main process já validou o ID. Aplicar antes da folha evita um frame
+    // claro ao abrir o splash com o tema escuro.
+    const theme = new URLSearchParams(location.search).get("theme");
+    if (theme) document.documentElement.dataset.theme = theme;
+  </script>
+  <link rel="stylesheet" href="../src/assets/styles/tokens.css" />
   <style>
-    /* Splash claro alinhado ao novo logo, em uma janela de 508×117. */
     :root {
       color-scheme: light;
+      --splash-bg: var(--lj-color-splash-bg, #f7fafd);
+      --splash-title: var(--lj-navy-dark, #143a66);
+      --splash-muted: var(--lj-text-muted, #505e6e);
+      --splash-accent: #a56300;
+      --splash-icon-start: color-mix(in srgb, var(--lj-navy, #1b4f8a) 8%, #fff);
+      --splash-icon-end: color-mix(in srgb, var(--lj-navy, #1b4f8a) 15%, #fff);
+      --splash-icon-border: color-mix(in srgb, var(--lj-navy, #1b4f8a) 25%, #fff);
+      --splash-spinner-track: color-mix(in srgb, var(--lj-navy, #1b4f8a) 20%, transparent);
+      --splash-spinner-active: var(--lj-navy-dark, #143a66);
+      --splash-logo-shadow: rgba(15, 64, 104, 0.16);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --splash-bg: var(--lj-surface-bg, #1f2937);
+      --splash-title: var(--lj-text, #e5e7eb);
+      --splash-muted: var(--lj-text-muted, #9aa3ad);
+      --splash-accent: var(--lj-orange, #f39c12);
+      --splash-icon-start: var(--lj-surface-bg-hover, #243248);
+      --splash-icon-end: var(--lj-surface-bg-soft, #161e2c);
+      --splash-icon-border: var(--lj-surface-border, #2a3441);
+      --splash-spinner-track: rgba(229, 231, 235, 0.2);
+      --splash-spinner-active: var(--lj-orange, #f39c12);
+      --splash-logo-shadow: rgba(0, 0, 0, 0.38);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #F7FAFD;
-      color: #173D68;
+      background: var(--splash-bg);
+      color: var(--splash-title);
       font-family: "Tahoma", "Segoe UI", "Helvetica Neue", sans-serif;
       user-select: none;
       -webkit-user-select: none;
@@ -49,14 +78,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(145deg, #EFF8FF 0%, #DCEFFE 100%);
-      border-right: 1px solid #D3E7F5;
+      background: linear-gradient(145deg, var(--splash-icon-start), var(--splash-icon-end));
+      border-right: 1px solid var(--splash-icon-border);
     }
 
     .splash-logo {
       height: 69%;
       width: auto;
-      filter: drop-shadow(0 3px 5px rgba(15, 64, 104, 0.16));
+      filter: drop-shadow(0 3px 5px var(--splash-logo-shadow));
     }
 
     .splash-content {
@@ -72,16 +101,16 @@
       font-size: 30px;
       font-weight: 700;
       letter-spacing: 0.02em;
-      color: #173D68;
+      color: var(--splash-title);
       line-height: 1;
     }
 
-    .splash-title b { color: #A56300; }
+    .splash-title b { color: var(--splash-accent); }
 
     .splash-subtitle {
       font-size: 13px;
       font-weight: 400;
-      color: #586B80;
+      color: var(--splash-muted);
       line-height: 1;
       letter-spacing: 0.02em;
     }
@@ -89,7 +118,7 @@
     .splash-info {
       margin-top: 8px;
       font-size: 11px;
-      color: #586B80;
+      color: var(--splash-muted);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -98,8 +127,8 @@
     .splash-spinner {
       width: 12px;
       height: 12px;
-      border: 2px solid rgba(27, 79, 138, 0.18);
-      border-top-color: #1B4F8A;
+      border: 2px solid var(--splash-spinner-track);
+      border-top-color: var(--splash-spinner-active);
       border-radius: 50%;
       animation: splash-spin 0.7s linear infinite;
     }

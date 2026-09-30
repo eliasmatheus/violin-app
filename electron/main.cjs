@@ -887,7 +887,7 @@ app.whenReady().then(async () => {
   // Antes de qualquer trabalho: entre o clique no ícone e a janela existir há
   // bootstrap de monitores, limpeza de cache e a subida do servidor HTTP, e
   // nada disso dá sinal de vida ao operador.
-  splash.show();
+  splash.show(_userDataMain);
   await legacyDataMigration;
 
   // A identificação de monitores e a limpeza dos caches de desenvolvimento
