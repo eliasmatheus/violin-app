@@ -3,6 +3,13 @@ import { devices, expect, test } from "@playwright/test";
 import ptMusics from "./fixtures/pt_musics.json";
 import music1 from "./fixtures/music_1.json";
 
+test.use({
+  ...devices["Pixel 7"],
+  serviceWorkers: "block",
+  reducedMotion: "reduce",
+  colorScheme: "light",
+});
+
 async function boot(page) {
   await page.route("http://e2e.mock/**", (route) => route.fulfill({ json: [] }));
   await page.route("**/json_db/**", (route) => route.fulfill({ json: [] }));

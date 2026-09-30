@@ -241,6 +241,8 @@ test("cartões e tabela respeitam os temas e a largura de 390 px", async ({ page
   expect(dark.text).not.toBe(light.text);
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator(".liturgy-panel")).toHaveClass(/liturgy-panel--compact-web/);
+  await expect(page.locator(".liturgy-panel")).toHaveClass(/liturgy-panel--collapsed/);
   await assertNoHorizontalOverflow(page);
   const longAlbum = page.getByRole("button", { name: albums[1].name, exact: true });
   await expect(longAlbum).toBeVisible();

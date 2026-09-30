@@ -256,12 +256,19 @@ test("álbuns e ações cabem em desktop e celular", async ({ page }) => {
   await assertNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const mobileFirst = await page.locator(".dx-album").first().boundingBox();
-  const mobileSecond = await page.locator(".dx-album").nth(1).boundingBox();
-  expect(
-    mobileSecond.x >= mobileFirst.x + mobileFirst.width ||
-      mobileSecond.y >= mobileFirst.y + mobileFirst.height
-  ).toBe(true);
+  await expect(page.locator(".liturgy-panel")).toHaveClass(/liturgy-panel--compact-web/);
+  await expect(page.locator(".liturgy-panel")).toHaveClass(/liturgy-panel--collapsed/);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const [first, second] = document.querySelectorAll(".dx-album");
+        if (!first || !second) return false;
+        const a = first.getBoundingClientRect();
+        const b = second.getBoundingClientRect();
+        return b.left >= a.right || b.top >= a.bottom;
+      })
+    )
+    .toBe(true);
   await assertNoHorizontalOverflow(page);
 
   await page.locator(".dx-album").first().click();

@@ -56,9 +56,9 @@ test("announcement deck recovers its current index and rejects an older session"
 
     const stage = await context.newPage();
     await stage.goto("/projection/announcements");
-    await expect(stage.locator(".ann-text")).toHaveText("Current first");
+    await expect(stage.locator(".ann-text")).toHaveText(["Current first"]);
     await stage.keyboard.press("ArrowRight");
-    await expect(stage.locator(".ann-text")).toHaveText("Current second");
+    await expect(stage.locator(".ann-text")).toHaveText(["Current second"]);
     const position = await producer.evaluate(() => window.__annPositions.at(-1));
     expect(position).toMatchObject({
       announcement_session: "current",
@@ -70,14 +70,14 @@ test("announcement deck recovers its current index and rejects an older session"
       window.__annControl("prev", "old");
       window.__annRaw(window.__annPackets[0]);
     });
-    await expect(stage.locator(".ann-text")).toHaveText("Current second");
+    await expect(stage.locator(".ann-text")).toHaveText(["Current second"]);
 
     await stage.close();
     const reopened = await context.newPage();
     await reopened.goto("/projection/announcements");
-    await expect(reopened.locator(".ann-text")).toHaveText("Current second");
+    await expect(reopened.locator(".ann-text")).toHaveText(["Current second"]);
     await producer.evaluate((packet) => window.__annRaw(packet), old);
-    await expect(reopened.locator(".ann-text")).toHaveText("Current second");
+    await expect(reopened.locator(".ann-text")).toHaveText(["Current second"]);
 
     await producer.evaluate(() => window.__annMediaClose());
     await expect(reopened.locator(".ann-text")).toHaveCount(0);
