@@ -36,7 +36,8 @@
           :subtitle="liveProgramItem?.kind === 'music' ? liveProgramItem.subtitle : undefined"
           :locked="outputLocked"
         />
-        <!-- Até a F4 trazer os controles de vídeo, o palco mostra o que está na tela. -->
+        <StageVideo v-else-if="showVideoStage" :locked="outputLocked" />
+        <!-- Imagem, versículo, anúncio: o palco mostra o que está na tela. -->
         <div v-else-if="liveKind" class="pm-stage__preview" data-testid="pm-stage-preview">
           <div class="pm-stage__frame"><LiveMirror :cleared="false" /></div>
         </div>
@@ -119,6 +120,7 @@ import ProgramSessionDialog from "./ProgramSessionDialog.vue";
 import ProgramSettingsDialog from "./ProgramSettingsDialog.vue";
 import OutputsPanel from "./OutputsPanel.vue";
 import StageSlides from "./StageSlides.vue";
+import StageVideo from "./StageVideo.vue";
 import LibraryPanel from "./LibraryPanel.vue";
 import LiveMirror from "./LiveMirror.vue";
 import $userdata from "@/helpers/UserData";
@@ -273,6 +275,13 @@ function activate(itemId: string, { force = false } = {}): void {
 
 /** A grade aparece para qualquer música no ar — do programa ou tocada de outro módulo. */
 const showSlideGrid = computed(() => liveKind.value === "music" && slides.totalSlides.value > 0);
+
+/** Vídeo no ar — arquivo local ou on-line — ganha o palco com controles. */
+const showVideoStage = computed(
+  () =>
+    liveKind.value === "online_video" ||
+    (liveKind.value === "file" && live.file.value?.type === "video")
+);
 
 const liveProgramItem = computed(() => (liveItemId.value ? findItem(liveItemId.value) : null));
 

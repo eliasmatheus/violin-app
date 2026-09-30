@@ -42,7 +42,7 @@
       <LjEmpty :icon="ICONS.UI.FOLDER_OPEN" :title="tm('library.desktop_only')" />
     </div>
 
-    <div v-else class="pm-library__body" :class="{ 'pm-library__body--details': !!selected }">
+    <div v-else class="pm-library__body">
       <nav class="pm-folders" :aria-label="tm('library.folders')">
         <button
           type="button"
@@ -151,7 +151,13 @@
         </footer>
       </div>
 
-      <aside v-if="selected" class="pm-details" data-testid="pm-library-details">
+      <!-- A coluna fica sempre: abri-la no primeiro clique deslocava a grade
+           e o segundo clique do duplo clique caía em outro arquivo. -->
+      <aside v-if="!selected" class="pm-details pm-details--empty">
+        <LjIcon :icon="ICONS.UI.INFORMATION_OUTLINE" :size="18" />
+        <p>{{ tm("library.select_hint") }}</p>
+      </aside>
+      <aside v-else class="pm-details" data-testid="pm-library-details">
         <div class="pm-details__head">
           <span class="pm-details__title">{{ selected.name }}</span>
           <button
@@ -433,10 +439,6 @@ const emptyMessage = computed(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
-}
-
-.pm-library__body--details {
   grid-template-columns: 168px minmax(0, 1fr) 222px;
 }
 
@@ -684,6 +686,19 @@ const emptyMessage = computed(() => {
   overflow-y: auto;
   padding: 8px;
   border-left: 1px solid var(--lj-surface-border);
+}
+
+.pm-details--empty {
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--lj-text-subtle);
+  text-align: center;
+  font-size: 11px;
+}
+
+.pm-details--empty p {
+  margin: 0;
 }
 
 .pm-details__head {

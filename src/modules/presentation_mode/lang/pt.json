@@ -188,6 +188,16 @@
     "unfavorite": "Tirar dos favoritos",
     "send": "Enviar para tela principal",
     "add_to_program": "Adicionar ao programa",
-    "resize": "Arraste para mudar a altura (duplo clique alterna)"
+    "resize": "Arraste para mudar a altura (duplo clique alterna)",
+    "select_hint": "Clique num arquivo para ver os detalhes."
+  },
+  "video": {
+    "back_10": "Voltar 10 segundos",
+    "forward_10": "Avançar 10 segundos",
+    "timeline": "Posição do vídeo",
+    "volume": "Volume",
+    "mute": "Cortar o áudio",
+    "unmute": "Devolver o áudio",
+    "stop": "Parar o vídeo"
   }
 }
