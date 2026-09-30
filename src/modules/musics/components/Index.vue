@@ -9,57 +9,97 @@
     @scroll="onScroll"
     @has-scroll="hasScroll"
   >
-    <template v-if="!compact" #left>
+    <template v-if="!compact && !mobileLayout" #left>
       <PlaylistPanel />
     </template>
 
     <template v-if="userdata" #header>
-      <div class="musics-searchbar">
-        <LjInput
-          v-if="!disabled"
-          v-model="search"
-          :placeholder="tm('inputs.search')"
-          :aria-label="tm('inputs.search')"
-          :icon="ICONS.ACTIONS.SEARCH"
-          :invalid="data.filter_count <= 0"
-          :disabled="disabled"
-          clearable
-        />
+      <div class="musics-header-content" :class="{ 'musics-header-content--mobile': mobileLayout }">
+        <nav v-if="mobileLayout" class="musics-mobile-nav" :aria-label="tm('title')">
+          <button
+            type="button"
+            class="musics-mobile-nav__button"
+            :class="{ 'is-active': mobileView === 'music' }"
+            :aria-current="mobileView === 'music' ? 'page' : undefined"
+            @click="mobileView = 'music'"
+          >
+            {{ tm("title") }}
+          </button>
+          <button
+            type="button"
+            class="musics-mobile-nav__button"
+            :class="{ 'is-active': mobileView !== 'music' }"
+            :aria-current="mobileView !== 'music' ? 'page' : undefined"
+            @click="mobileView = 'playlists'"
+          >
+            {{ tm("playlists.title") }}
+          </button>
+        </nav>
 
-        <p v-if="disabled" class="musics-searchbar__warning">
-          <LjIcon :icon="ICONS.UI.ALERT" :size="14" />
-          {{ tm("inputs.search_disabled") }}
-        </p>
+        <div v-if="!mobileLayout || mobileView === 'music'" class="musics-searchbar">
+          <LjInput
+            v-if="!disabled"
+            v-model="search"
+            :placeholder="tm('inputs.search')"
+            :aria-label="tm('inputs.search')"
+            :icon="ICONS.ACTIONS.SEARCH"
+            :invalid="data.filter_count <= 0"
+            :disabled="disabled"
+            clearable
+          />
 
-        <div class="musics-searchbar__scope" role="group" :aria-labelledby="scopeLabelId">
-          <span :id="scopeLabelId" class="musics-searchbar__label">
-            {{ tm("inputs.search_in") }}
-          </span>
-          <LjCheckbox v-model="userdata.search.name" :label="tm('inputs.filter_name')" />
-          <LjCheckbox v-model="userdata.search.lyric" :label="tm('inputs.filter_lyric')" />
-          <LjCheckbox v-model="userdata.search.album" :label="tm('inputs.filter_album')" />
-          <LjCheckbox v-model="userdata.search.track" :label="tm('inputs.filter_track')" />
+          <p v-if="disabled" class="musics-searchbar__warning">
+            <LjIcon :icon="ICONS.UI.ALERT" :size="14" />
+            {{ tm("inputs.search_disabled") }}
+          </p>
+
+          <div class="musics-searchbar__scope" role="group" :aria-labelledby="scopeLabelId">
+            <span :id="scopeLabelId" class="musics-searchbar__label">
+              {{ tm("inputs.search_in") }}
+            </span>
+            <LjCheckbox v-model="userdata.search.name" :label="tm('inputs.filter_name')" />
+            <LjCheckbox v-model="userdata.search.lyric" :label="tm('inputs.filter_lyric')" />
+            <LjCheckbox v-model="userdata.search.album" :label="tm('inputs.filter_album')" />
+            <LjCheckbox v-model="userdata.search.track" :label="tm('inputs.filter_track')" />
+          </div>
+
+          <LjSwitch
+            v-model="userdata.filter.instrumental_music"
+            :label="tm('inputs.filter_instrumental')"
+          />
         </div>
-
-        <LjSwitch
-          v-model="userdata.filter.instrumental_music"
-          :label="tm('inputs.filter_instrumental')"
-        />
       </div>
     </template>
 
-    <template v-if="selectedPlaylist" #right>
+    <template v-if="selectedPlaylist && !mobileLayout" #right>
       <PlaylistSongs :playlist="selectedPlaylist" />
     </template>
 
+    <div v-if="mobileLayout && mobileView === 'playlists'" class="musics-mobile-pane">
+      <PlaylistPanel mobile @select="mobileView = 'songs'" />
+    </div>
+
+    <div
+      v-if="mobileLayout && mobileView === 'songs' && selectedPlaylist"
+      class="musics-mobile-pane"
+    >
+      <button type="button" class="musics-mobile-back" @click="mobileView = 'playlists'">
+        <LjIcon :icon="ICONS.UI.BACK" :size="16" />
+        {{ tm("playlists.title") }}
+      </button>
+      <PlaylistSongs mobile :playlist="selectedPlaylist" />
+    </div>
+
     <LjAlert
       v-if="data.is_fuzzy"
+      v-show="!mobileLayout || mobileView === 'music'"
       variant="info"
       :text="tm('data.approximate')"
       class="musics-alert"
     />
 
     <Table
+      v-show="!mobileLayout || mobileView === 'music'"
       v-model="data"
       :search="search"
       :letter="letter"
@@ -159,12 +199,13 @@
 
     <LjAlert
       v-if="search && data.filter_count <= 0"
+      v-show="!mobileLayout || mobileView === 'music'"
       variant="danger"
       :text="tm('data.not_found')"
       class="musics-alert"
     />
 
-    <template #footer>
+    <template v-if="!mobileLayout || mobileView === 'music'" #footer>
       <div class="w-100">
         <LetterPaginate v-model="letter" />
         <div class="lj-u-text-end">
@@ -185,6 +226,7 @@ import { LjAlert, LjButton, LjCheckbox, LjChip, LjIcon, LjInput, LjSwitch } from
 /* ########################################################### */
 import { computed, nextTick, onMounted, ref, useId, watch } from "vue";
 import { useViewport } from "@/composables/useViewport";
+import Platform from "@/helpers/Platform";
 import Media from "@/composables/useMedia";
 import AppData from "@/helpers/AppData";
 import DateTime from "@/helpers/DateTime";
@@ -312,6 +354,8 @@ function removeSongFromPlaylist(id_music) {
 /* STATE                                              */
 /* -------------------------------------------------- */
 const { width: displayWidth } = useViewport();
+const mobileLayout = computed(() => !Platform.isDesktop && displayWidth.value <= 1000);
+const mobileView = ref("music");
 
 const scopeLabelId = useId();
 const search = ref("");
@@ -355,6 +399,9 @@ const disabled = computed(() => {
 });
 
 const compact = computed(() => displayWidth.value <= 800);
+watch(selectedPlaylist, (playlist) => {
+  if (!playlist && mobileView.value === "songs") mobileView.value = "playlists";
+});
 const chipVariant = computed(() => (AppData.get(KEYS.SHELL.IS_DARK) ? "neutral" : "primary"));
 const shortTime = (t) => DateTime.shortTime(t);
 
@@ -394,6 +441,13 @@ function close() {
 </script>
 
 <style scoped>
+.musics-header-content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
 .musics-searchbar {
   display: flex;
   flex: 1;
@@ -445,5 +499,85 @@ function close() {
 .musics-alert {
   margin: var(--lj-space-4);
   max-height: 70px;
+}
+
+@media (max-width: 1000px) {
+  .musics-mobile-nav {
+    display: flex;
+    width: 100%;
+    gap: var(--lj-space-2);
+    border-bottom: 1px solid var(--lj-surface-border);
+  }
+
+  .musics-mobile-nav__button {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 var(--lj-space-4);
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--lj-text-muted);
+    font: inherit;
+    font-weight: var(--lj-weight-medium);
+  }
+
+  .musics-mobile-nav__button.is-active {
+    border-bottom-color: var(--lj-ui-accent);
+    color: var(--lj-ui-accent-text);
+  }
+
+  .musics-mobile-nav__button:focus-visible,
+  .musics-mobile-back:focus-visible {
+    outline: none;
+    box-shadow: var(--lj-ui-focus);
+  }
+
+  .musics-mobile-pane {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .musics-mobile-pane :deep(.playlist-panel),
+  .musics-mobile-pane :deep(.playlist-songs) {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+
+  .musics-mobile-back {
+    display: flex;
+    align-items: center;
+    gap: var(--lj-space-3);
+    width: 100%;
+    min-height: 44px;
+    padding: 0 var(--lj-space-5);
+    border: none;
+    border-bottom: 1px solid var(--lj-surface-border);
+    background: var(--lj-surface-bg);
+    color: var(--lj-ui-accent-text);
+    font: inherit;
+    font-weight: var(--lj-weight-medium);
+    text-align: left;
+  }
+}
+
+@media (max-width: 600px) {
+  .musics-header-content--mobile .musics-searchbar :deep(.lj-input) {
+    flex: 1 1 100%;
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .musics-header-content--mobile .musics-searchbar__scope {
+    gap: var(--lj-space-3);
+  }
 }
 </style>

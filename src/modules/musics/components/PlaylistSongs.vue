@@ -1,11 +1,12 @@
 <template>
-  <div class="playlist-songs">
+  <div class="playlist-songs" :class="{ 'playlist-songs--mobile': mobile }">
     <div class="playlist-songs-header">
       <span class="playlist-songs-title">{{ playlist.name }}</span>
       <button
         type="button"
         class="playlist-songs-close"
         :title="tm('playlists.close')"
+        :aria-label="tm('playlists.close')"
         @click="selectPlaylist(null)"
       >
         <LjIcon :icon="ICONS.ACTIONS.CLOSE" size="16" />
@@ -40,6 +41,7 @@
             type="button"
             class="playlist-songs-btn"
             :title="tm('playlists.play_song')"
+            :aria-label="tm('playlists.play_song')"
             @click="playSong(song)"
           >
             <LjIcon
@@ -51,6 +53,7 @@
             type="button"
             class="playlist-songs-btn playlist-songs-btn--danger"
             :title="tm('playlists.remove_song')"
+            :aria-label="tm('playlists.remove_song')"
             @click="
               removeSong(
                 playlist.id,
@@ -84,6 +87,7 @@
             type="button"
             class="playlist-songs-option-btn"
             :class="{ 'playlist-songs-option-btn--active': shuffleEnabled }"
+            :aria-label="tm('playlists.shuffle')"
             @click="toggleShuffle"
           >
             <LjIcon :icon="ICONS.PLAYER.SHUFFLE" size="18" />
@@ -94,6 +98,7 @@
             type="button"
             class="playlist-songs-option-btn"
             :class="{ 'playlist-songs-option-btn--active': repeatEnabled }"
+            :aria-label="tm('playlists.repeat')"
             @click="toggleRepeat"
           >
             <LjIcon :icon="ICONS.PLAYER.REPEAT" size="18" />
@@ -127,6 +132,7 @@ import { musicTitle } from "@root/config/musicCatalog.mjs";
 
 const props = defineProps<{
   playlist: Playlist;
+  mobile?: boolean;
 }>();
 
 const { t: i18nT } = useI18n();
@@ -428,5 +434,24 @@ function playAll(): void {
 
 .playlist-songs-btn--danger:hover {
   color: var(--lj-danger);
+}
+
+.playlist-songs--mobile .playlist-songs-item {
+  min-height: 56px;
+}
+
+.playlist-songs--mobile .playlist-songs-item-actions {
+  opacity: 1;
+}
+
+.playlist-songs--mobile .playlist-songs-close,
+.playlist-songs--mobile .playlist-songs-btn,
+.playlist-songs--mobile .playlist-songs-option-btn {
+  width: 40px;
+  height: 40px;
+}
+
+.playlist-songs--mobile .playlist-songs-play-btn {
+  min-height: 44px;
 }
 </style>

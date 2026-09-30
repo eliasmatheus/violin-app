@@ -1,19 +1,17 @@
 <template>
-  <ModuleContainer
-    ref="moduleContainer"
-    :manifest="manifest"
-    :style="{ minWidth: '700px', minHeight: '400px' }"
-  >
+  <ModuleContainer ref="moduleContainer" class="overlay-module-container" :manifest="manifest">
     <template #header>
-      <LjSwitch
-        :model-value="enabled"
-        :label="tm('global_enabled')"
-        @update:model-value="setEnabled"
-      />
-      <span class="lj-u-spacer" />
-      <LjButton variant="primary" size="sm" :icon="ICONS.ACTIONS.ADD" @click="addSlot">
-        {{ tm("add_slot") }}
-      </LjButton>
+      <div class="overlay-header-controls">
+        <LjSwitch
+          :model-value="enabled"
+          :label="tm('global_enabled')"
+          @update:model-value="setEnabled"
+        />
+        <span class="lj-u-spacer" />
+        <LjButton variant="primary" size="sm" :icon="ICONS.ACTIONS.ADD" @click="addSlot">
+          {{ tm("add_slot") }}
+        </LjButton>
+      </div>
     </template>
 
     <div class="overlay-root">
@@ -85,34 +83,36 @@
                 <LjChip size="sm" class="overlay-slot-type">
                   {{ tm("slot.type_" + slot.type) }}
                 </LjChip>
-                <LjButton
-                  variant="ghost"
-                  size="sm"
-                  icon-only
-                  :icon="ICONS.ACTIONS.EDIT_OUTLINE"
-                  :title="tm('slot.edit')"
-                  :aria-label="tm('slot.edit')"
-                  :aria-expanded="editingSlot?.id === slot.id"
-                  @click="toggleEditing(slot)"
-                />
-                <LjButton
-                  variant="ghost"
-                  size="sm"
-                  icon-only
-                  :icon="ICONS.ACTIONS.DUPLICATE"
-                  :title="tm('slot.duplicate')"
-                  :aria-label="tm('slot.duplicate')"
-                  @click="duplicateSlot(slot)"
-                />
-                <LjButton
-                  variant="danger"
-                  size="sm"
-                  icon-only
-                  :icon="ICONS.ACTIONS.DELETE"
-                  :title="tm('slot.delete')"
-                  :aria-label="tm('slot.delete')"
-                  @click="confirmRemove(slot)"
-                />
+                <div class="overlay-slot-actions">
+                  <LjButton
+                    variant="ghost"
+                    size="sm"
+                    icon-only
+                    :icon="ICONS.ACTIONS.EDIT_OUTLINE"
+                    :title="tm('slot.edit')"
+                    :aria-label="tm('slot.edit')"
+                    :aria-expanded="editingSlot?.id === slot.id"
+                    @click="toggleEditing(slot)"
+                  />
+                  <LjButton
+                    variant="ghost"
+                    size="sm"
+                    icon-only
+                    :icon="ICONS.ACTIONS.DUPLICATE"
+                    :title="tm('slot.duplicate')"
+                    :aria-label="tm('slot.duplicate')"
+                    @click="duplicateSlot(slot)"
+                  />
+                  <LjButton
+                    variant="danger"
+                    size="sm"
+                    icon-only
+                    :icon="ICONS.ACTIONS.DELETE"
+                    :title="tm('slot.delete')"
+                    :aria-label="tm('slot.delete')"
+                    @click="confirmRemove(slot)"
+                  />
+                </div>
               </div>
 
               <div v-if="editingSlot?.id === slot.id" class="overlay-slot-editor">
@@ -377,6 +377,19 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.overlay-module-container {
+  min-width: 700px;
+  min-height: 400px;
+}
+
+.overlay-header-controls {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--lj-space-3);
+  min-width: 0;
+}
+
 .overlay-root {
   display: flex;
   flex-direction: column;
@@ -532,6 +545,10 @@ onBeforeUnmount(() => {
   font-size: var(--lj-text-base);
 }
 
+.overlay-slot-actions {
+  display: contents;
+}
+
 .overlay-slot-name {
   flex: 1;
   min-width: 0;
@@ -578,6 +595,66 @@ onBeforeUnmount(() => {
     overflow: visible;
     border-top: 1px solid var(--lj-surface-divider);
     border-left: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .overlay-module-container {
+    min-width: 0;
+    min-height: 0;
+    max-width: 100%;
+  }
+
+  .overlay-header-controls {
+    flex-wrap: wrap;
+  }
+
+  .overlay-header-controls :deep(.lj-switch) {
+    min-height: 44px;
+  }
+
+  .overlay-header-controls :deep(.lj-btn) {
+    min-height: 44px;
+  }
+
+  .overlay-preview-panel,
+  .overlay-list-panel {
+    min-width: 0;
+    padding-inline: var(--lj-space-4);
+  }
+
+  .overlay-stage-wrap {
+    max-width: 100%;
+  }
+
+  .overlay-slot-card-header {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .overlay-slot-actions {
+    display: flex;
+    width: 100%;
+    justify-content: flex-end;
+    gap: var(--lj-space-2);
+  }
+
+  .overlay-slot-actions :deep(.lj-btn) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .overlay-slot-editor {
+    min-width: 0;
+  }
+
+  .overlay-slot-editor :deep(.editor-tabs .lj-tabs__list) {
+    overflow-x: auto;
+  }
+
+  .overlay-slot-editor :deep(.editor-tabs .lj-tabs__trigger) {
+    flex: 0 0 auto;
+    min-height: 44px;
   }
 }
 </style>

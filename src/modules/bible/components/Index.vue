@@ -3,6 +3,7 @@
     <template #header>
       <div class="bible-header">
         <LjSelect
+          :size="compact ? 'touch' : 'md'"
           :model-value="bible.id_bible_version"
           :items="versions_list ?? []"
           item-value="value"
@@ -24,6 +25,7 @@
       <!-- Os campos abaixo serão exibidos apenas no mobile / reolução pequena -->
       <div v-if="compact" class="bible-compact-fields">
         <LjSelect
+          size="touch"
           :model-value="bible.id_bible_book"
           :items="books ?? []"
           item-value="id_bible_book"
@@ -34,6 +36,7 @@
           @update:model-value="selBook(Number($event))"
         />
         <LjSelect
+          size="touch"
           :model-value="bible.chapter"
           :items="chaptersList"
           item-value="id"
@@ -1319,6 +1322,12 @@ useBroadcastListener(BROADCAST_TYPE.BIBLE_VERSE, async (payload: any) => {
   flex: 1;
   min-width: 0;
   text-align: left;
+}
+
+@media (max-width: 750px) {
+  .bible-verses-trigger {
+    height: var(--lj-ui-h-touch);
+  }
 }
 
 .bible-verses-options {

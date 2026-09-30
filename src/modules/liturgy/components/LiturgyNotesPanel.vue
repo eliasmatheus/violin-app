@@ -47,6 +47,7 @@
       <button
         class="lit-tb-btn lit-tb-btn--bold"
         :title="t('notes.bold')"
+        :aria-label="t('notes.bold')"
         @mousedown.prevent
         @click="exec('bold')"
       >
@@ -55,6 +56,7 @@
       <button
         class="lit-tb-btn lit-tb-btn--italic"
         :title="t('notes.italic')"
+        :aria-label="t('notes.italic')"
         @mousedown.prevent
         @click="exec('italic')"
       >
@@ -63,6 +65,7 @@
       <button
         class="lit-tb-btn lit-tb-btn--strike"
         :title="t('notes.strike')"
+        :aria-label="t('notes.strike')"
         @mousedown.prevent
         @click="exec('strikeThrough')"
       >
@@ -71,6 +74,7 @@
       <button
         class="lit-tb-btn lit-tb-btn--under"
         :title="t('notes.under')"
+        :aria-label="t('notes.under')"
         @mousedown.prevent
         @click="exec('underline')"
       >
@@ -83,6 +87,7 @@
         <span class="lit-tb-color-icon">A</span>
         <input
           type="color"
+          :aria-label="t('notes.text_color')"
           :value="textColor"
           @input="
             (e) => {
@@ -97,6 +102,7 @@
         <span class="lit-tb-color-icon" :style="{ background: bgColor }">A</span>
         <input
           type="color"
+          :aria-label="t('notes.bg_color')"
           :value="bgColor"
           @input="
             (e) => {
@@ -113,6 +119,7 @@
       <button
         class="lit-tb-btn"
         :title="t('notes.align_left')"
+        :aria-label="t('notes.align_left')"
         @mousedown.prevent
         @click="exec('justifyLeft')"
       >
@@ -121,6 +128,7 @@
       <button
         class="lit-tb-btn"
         :title="t('notes.align_center')"
+        :aria-label="t('notes.align_center')"
         @mousedown.prevent
         @click="exec('justifyCenter')"
       >
@@ -129,6 +137,7 @@
       <button
         class="lit-tb-btn"
         :title="t('notes.align_right')"
+        :aria-label="t('notes.align_right')"
         @mousedown.prevent
         @click="exec('justifyRight')"
       >
@@ -140,6 +149,7 @@
       <button
         class="lit-tb-btn"
         :title="t('notes.list_ul')"
+        :aria-label="t('notes.list_ul')"
         @mousedown.prevent
         @click="exec('insertUnorderedList')"
       >
@@ -148,6 +158,7 @@
       <button
         class="lit-tb-btn"
         :title="t('notes.list_ol')"
+        :aria-label="t('notes.list_ol')"
         @mousedown.prevent
         @click="exec('insertOrderedList')"
       >
@@ -171,12 +182,13 @@ import { ref, watch, onMounted, onActivated, nextTick } from "vue";
 
 const props = withDefaults(
   defineProps<{
+    active?: boolean;
     dayLabel?: string;
     noteHtml?: string;
     totalDuration?: number;
     onInput: (event: Event) => void;
   }>(),
-  { dayLabel: "", noteHtml: "", totalDuration: 0 }
+  { active: true, dayLabel: "", noteHtml: "", totalDuration: 0 }
 );
 
 const { t } = useLiturgyI18n();
@@ -293,6 +305,12 @@ onMounted(() => {
 onActivated(restoreScroll);
 
 watch(() => props.noteHtml, syncFromProp);
+watch(
+  () => props.active,
+  (active) => {
+    if (active) restoreScroll();
+  }
+);
 </script>
 
 <style scoped>
@@ -443,5 +461,47 @@ watch(() => props.noteHtml, syncFromProp);
   border-top: 1px solid var(--lj-surface-divider);
   background: rgba(var(--lj-on-surface-ch), 0.03);
   flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .lit-notes-panel {
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 auto;
+    border-left: 0;
+  }
+
+  .lit-notes-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    touch-action: pan-x;
+  }
+
+  .lit-notes-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .lit-tb-font,
+  .lit-tb-size,
+  .lit-tb-btn,
+  .lit-tb-color,
+  .lit-tb-sep {
+    flex: 0 0 auto;
+  }
+
+  .lit-tb-btn,
+  .lit-tb-color {
+    width: 44px;
+    height: 44px;
+  }
+
+  .lit-tb-font :deep(.lj-select),
+  .lit-tb-size :deep(.lj-select) {
+    min-height: 44px;
+  }
 }
 </style>

@@ -2,9 +2,21 @@
   <ModuleContainer
     ref="moduleContainer"
     :manifest="manifest"
-    :style="{ minWidth: '360px' }"
+    :style="{ minWidth: isMobileWeb ? '0' : '360px' }"
     @close="close()"
   >
+    <template v-if="isMobileWeb" #header>
+      <LjButton
+        size="touch"
+        variant="default"
+        :icon="ICONS.FORMAT.LIST_BULLETED"
+        :aria-expanded="showList"
+        @click="showList = !showList"
+      >
+        {{ tm("data.list") }}
+      </LjButton>
+    </template>
+
     <div class="mb-body">
       <ModuleFormatDrawer v-model="show_format" :module-id="'message_board'" :manifest="manifest" />
 
@@ -13,6 +25,15 @@
         <aside v-if="showList" class="mb-list-drawer">
           <div class="mb-list-drawer__header">
             <span class="mb-list-drawer__title">{{ tm("data.list") }}</span>
+            <LjButton
+              v-if="isMobileWeb"
+              size="touch"
+              variant="ghost"
+              icon-only
+              :icon="ICONS.ACTIONS.CLOSE"
+              :aria-label="$t('alert.close')"
+              @click="showList = false"
+            />
           </div>
 
           <div class="mb-list-drawer__body">
@@ -144,6 +165,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted } from "vue";
+import { useViewport } from "@/composables/useViewport";
 import { module as manifest } from "../manifest";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import ModuleFormatDrawer from "@/components/ModuleFormatDrawer.vue";
@@ -157,6 +179,8 @@ import { useModuleBodyStyle } from "@/composables/useModuleBodyStyle";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 
 const { show_format } = useModuleFormat("message_board", manifest);
+const { width: viewportWidth } = useViewport();
+const isMobileWeb = computed(() => viewportWidth.value > 0 && viewportWidth.value <= 700);
 const { rootStyle, textStyle, bgImage, imageStyle, container } =
   useModuleBodyStyle("message_board");
 
@@ -459,5 +483,20 @@ function close() {
 }
 .fade-slide-leave-to {
   opacity: 0;
+}
+
+@media (max-width: 700px) {
+  .mb-list-drawer {
+    width: min(300px, 100%);
+  }
+
+  .mb-list-drawer__header {
+    justify-content: space-between;
+  }
+
+  .mb-fs-root {
+    height: 100dvh;
+    padding: var(--lj-space-4);
+  }
 }
 </style>

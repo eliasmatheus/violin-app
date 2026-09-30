@@ -32,8 +32,34 @@
       :set-active-day="setActiveDay"
     />
 
-    <div class="liturgy-body">
+    <nav class="liturgy-mobile-views" :aria-label="t('title')">
+      <button
+        type="button"
+        class="liturgy-mobile-views__button"
+        :aria-pressed="activeMobilePane === 'timeline'"
+        aria-controls="liturgy-mobile-timeline"
+        @click="selectMobilePane('timeline')"
+      >
+        {{ t("title") }}
+      </button>
+      <button
+        type="button"
+        class="liturgy-mobile-views__button"
+        :aria-pressed="activeMobilePane === 'notes'"
+        aria-controls="liturgy-mobile-notes"
+        @click="selectMobilePane('notes')"
+      >
+        {{ t("notes.title") }}
+      </button>
+    </nav>
+
+    <div
+      class="liturgy-body"
+      :class="{ 'liturgy-body--mobile-notes': activeMobilePane === 'notes' }"
+    >
       <LiturgyTimeline
+        id="liturgy-mobile-timeline"
+        class="liturgy-body__timeline"
         :items="safeItems"
         :locked="locked ?? false"
         :default-color="defaultColor"
@@ -55,6 +81,9 @@
 
       <LiturgyNotesPanel
         v-if="showNotes"
+        id="liturgy-mobile-notes"
+        class="liturgy-body__notes"
+        :active="activeMobilePane === 'notes'"
         :day-label="dayLabels[activeDay]"
         :note-html="currentNote"
         :total-duration="totalDuration"
@@ -173,6 +202,7 @@ const litItems = useLiturgyItems(persist.activeDay, persist.scheduledCategories)
 const chooseMusicSearchOpen = ref(false);
 const chooseLaterItem = ref<LiturgyItem | null>(null);
 const chooseLaterMode = ref("sung");
+const mobilePane = ref<"timeline" | "notes">("timeline");
 
 const {
   activeDay,
@@ -200,6 +230,15 @@ const {
   updateScheduled,
   removeScheduled,
 } = persist;
+
+const activeMobilePane = computed(() =>
+  showNotes.value && mobilePane.value === "notes" ? "notes" : "timeline"
+);
+
+function selectMobilePane(pane: "timeline" | "notes") {
+  if (pane === "notes" && !showNotes.value) toggleNotes();
+  mobilePane.value = pane;
+}
 
 const {
   dialog,
@@ -608,6 +647,61 @@ function onDragLeaveCustom(e: DragEvent) {
   display: flex;
   overflow: hidden;
   min-height: 0;
+}
+
+.liturgy-mobile-views {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .liturgy-mobile-views {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--lj-space-2);
+    flex-shrink: 0;
+    padding: var(--lj-space-2) var(--lj-space-3);
+    border-bottom: 1px solid var(--lj-surface-border);
+    background: var(--lj-surface-bg);
+  }
+
+  .liturgy-mobile-views__button {
+    min-width: 0;
+    min-height: 44px;
+    padding: var(--lj-space-2) var(--lj-space-3);
+    border: var(--lj-ui-border);
+    border-radius: var(--lj-ui-radius);
+    background: var(--lj-surface-bg);
+    color: var(--lj-text);
+    font: inherit;
+    font-weight: var(--lj-weight-medium);
+    cursor: pointer;
+  }
+
+  .liturgy-mobile-views__button[aria-pressed="true"] {
+    border-color: var(--lj-ui-accent);
+    background: var(--lj-ui-accent-soft);
+    color: var(--lj-ui-accent-text);
+  }
+
+  .liturgy-mobile-views__button:focus-visible {
+    outline: none;
+    box-shadow: var(--lj-ui-focus);
+  }
+
+  .liturgy-body__timeline,
+  .liturgy-body__notes {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .liturgy-body--mobile-notes .liturgy-body__timeline,
+  .liturgy-body:not(.liturgy-body--mobile-notes) .liturgy-body__notes {
+    display: none;
+  }
+
+  .liturgy-body__timeline :deep(.liturgy-tl-empty .lj-btn) {
+    min-height: 44px;
+  }
 }
 
 /* O corpo do diálogo já tem folga própria; ao parágrafo cabe só a distância

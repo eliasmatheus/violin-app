@@ -1,8 +1,26 @@
 <template>
   <ModuleContainer ref="moduleContainer" :manifest="manifest" min-width="700px">
-    <div class="si-root">
+    <nav v-if="mobileLayout" class="si-mobile-nav" :aria-label="tm('title')">
+      <button
+        type="button"
+        :class="{ 'is-active': mobileView === 'categories' }"
+        :aria-current="mobileView === 'categories' ? 'page' : undefined"
+        @click="mobileView = 'categories'"
+      >
+        {{ tm("categories") }}
+      </button>
+      <button
+        type="button"
+        :class="{ 'is-active': mobileView === 'calendar' }"
+        :aria-current="mobileView === 'calendar' ? 'page' : undefined"
+        @click="mobileView = 'calendar'"
+      >
+        {{ tm("calendar") }}
+      </button>
+    </nav>
+    <div class="si-root" :class="{ 'si-root--mobile': mobileLayout }">
       <!-- Categorias -->
-      <aside class="si-cats">
+      <aside v-show="!mobileLayout || mobileView === 'categories'" class="si-cats">
         <div class="si-cats-head">
           <span>{{ tm("categories") }}</span>
           <LjButton
@@ -20,7 +38,7 @@
           class="si-cat"
           :class="{ 'si-cat--active': String(selectedCategoryId) === String(cat.id) }"
           :style="{ '--cat-color': (cat.color as string) || '#1976d2' }"
-          @click="selectedCategoryId = cat.id"
+          @click="selectCategory(cat.id)"
         >
           <LjIcon :icon="ICONS.MODULES.SCHEDULED_ITEMS" :size="16" />
           <span class="si-cat-name">{{ cat.nome }}</span>
@@ -52,7 +70,7 @@
       </aside>
 
       <!-- Calendário -->
-      <div class="si-cal">
+      <div v-show="!mobileLayout || mobileView === 'calendar'" class="si-cal">
         <div class="si-cal-toolbar">
           <LjButton
             size="md"
@@ -106,7 +124,7 @@
           :events="calendarEvents"
           event-start="start"
           event-end="end"
-          :max-events="5"
+          :max-events="mobileLayout ? 1 : 5"
           :event-height="calendarType === 'week' ? 20 : 18"
           :event-more-text="moreEventsText"
           :locale="calLocale"
@@ -331,11 +349,21 @@ import { ICONS } from "@/config/Icons";
 import { isHeic, heicToJpeg } from "@/helpers/ImageConvert";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
+import { useViewport } from "@/composables/useViewport";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import type { ScheduledCategory, ScheduledItem } from "@/types/Liturgy";
 import { AUDIO_EXT, IMAGE_EXT, VIDEO_EXT } from "@/constants/FileTypes";
 
 const { t, locale } = useI18n();
+const { width: viewportWidth } = useViewport();
+const mobileLayout = computed(() => !Platform.isDesktop && viewportWidth.value <= 1000);
+const mobileView = ref<"categories" | "calendar">("categories");
+
+function selectCategory(id: string | number): void {
+  selectedCategoryId.value = id;
+  if (mobileLayout.value) mobileView.value = "calendar";
+}
+
 function tm(key: string): string {
   return t(`modules.scheduled_items.${key}`);
 }
@@ -1069,6 +1097,95 @@ async function removeEntry(): Promise<void> {
 }
 .si-cal-toolbar .si-cal-title {
   font-weight: var(--lj-weight-semibold);
+}
+
+@media (max-width: 1000px) {
+  .si-mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--lj-space-2);
+    flex-shrink: 0;
+    padding: var(--lj-space-2) var(--lj-space-3);
+    border-bottom: 1px solid var(--lj-surface-border);
+  }
+
+  .si-mobile-nav button {
+    min-width: 0;
+    min-height: 44px;
+    border: 1px solid var(--lj-surface-border);
+    border-radius: var(--lj-radius-sm);
+    background: var(--lj-surface-bg-soft);
+    color: var(--lj-text);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .si-mobile-nav button.is-active {
+    border-color: var(--lj-ui-accent);
+    background: var(--lj-ui-accent-soft);
+    color: var(--lj-ui-accent-text);
+    font-weight: var(--lj-weight-semibold);
+  }
+
+  .si-root--mobile {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    padding: var(--lj-space-3);
+  }
+
+  .si-root--mobile .si-cats,
+  .si-root--mobile .si-cal {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    border-right: 0;
+    padding-right: 0;
+  }
+
+  .si-root--mobile .si-cats-head :deep(.lj-btn),
+  .si-root--mobile .si-cat-actions :deep(.lj-btn) {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .si-root--mobile .si-cat {
+    min-height: 56px;
+    padding-inline: var(--lj-space-2);
+  }
+
+  .si-root--mobile .si-cat-actions,
+  .si-root--mobile .si-cat:hover .si-cat-actions {
+    display: inline-flex;
+  }
+
+  .si-root--mobile .si-cal-toolbar {
+    display: grid;
+    grid-template-columns: 44px 44px minmax(0, 1fr);
+    align-items: center;
+    gap: var(--lj-space-2);
+    padding: 0 0 var(--lj-space-3);
+  }
+
+  .si-root--mobile .si-cal-toolbar :deep(.lj-btn) {
+    min-height: 44px;
+  }
+
+  .si-root--mobile .si-cal-type,
+  .si-root--mobile .si-cal-title {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .si-root--mobile .si-cal-type :deep(.lj-btn) {
+    flex: 1;
+  }
+
+  .si-root--mobile .si-cal-toolbar .si-cal-title {
+    justify-content: center;
+    width: 100%;
+  }
 }
 
 /* ── Controles nativos ainda sem primitivo ─────────────────────────────

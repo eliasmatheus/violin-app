@@ -1,5 +1,5 @@
 <template>
-  <nav class="lit-daytabs">
+  <nav ref="tabs" class="lit-daytabs">
     <button
       v-for="(label, i) in dayLabels"
       :key="i"
@@ -23,6 +23,7 @@
 <script setup lang="ts">
 import { LjIcon } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
+import { nextTick, ref, watch } from "vue";
 const props = withDefaults(
   defineProps<{
     activeDay?: number;
@@ -37,7 +38,22 @@ const props = withDefaults(
   }
 );
 
-void props;
+const tabs = ref<HTMLElement | null>(null);
+
+watch(
+  () => props.activeDay,
+  async () => {
+    await nextTick();
+    const nav = tabs.value;
+    if (!nav || !window.matchMedia("(max-width: 600px)").matches) return;
+    const active = nav.querySelector<HTMLElement>(".lit-daytab.is-active");
+    if (!active) return;
+    const navRect = nav.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    nav.scrollLeft += activeRect.left - navRect.left - (navRect.width - activeRect.width) / 2;
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>
@@ -86,5 +102,31 @@ void props;
 }
 .lit-daytab.is-today .lit-daytab__icon {
   color: var(--lj-orange);
+}
+
+@media (max-width: 600px) {
+  .lit-daytabs {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    touch-action: pan-x;
+  }
+
+  .lit-daytabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .lit-daytab {
+    flex: 0 0 auto;
+    min-width: 76px;
+    min-height: 44px;
+    padding-inline: var(--lj-space-3);
+    scroll-snap-align: center;
+  }
 }
 </style>
