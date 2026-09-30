@@ -457,7 +457,6 @@ function playPreview(slideIndex = 0, mode: MusicMode = "sung"): void {
   }
 }
 
-/** Imagem ou vídeo só no retorno de palco; `null` tira de lá. */
 function onShowOnReturn(entry: LibraryEntry | null): void {
   if (!entry) {
     void showOnReturn(null);
@@ -477,7 +476,6 @@ function playPreviewOnReturn(): void {
   }
 }
 
-/** Traz para o palco o que está no ar, com os controles dele. */
 function focusLive(): void {
   if (liveItemId.value && liveProgramItem.value) {
     preview.show({ type: "program", itemId: liveItemId.value });

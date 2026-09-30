@@ -75,7 +75,6 @@ import SlideGrid from "./SlideGrid.vue";
 const props = defineProps<{
   /** Subtítulo do item do programa (coletânea, versão). */
   subtitle?: string;
-  /** Saída travada: a tela principal não muda. */
   locked: boolean;
 }>();
 

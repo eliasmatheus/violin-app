@@ -275,7 +275,6 @@ const props = defineProps<{
   height: number;
   /** Caminho do arquivo que está no ar, para a borda de destaque e o ✕. */
   livePath: string | null;
-  /** Caminho do arquivo que está só no retorno de palco. */
   returnPath: string | null;
 }>();
 

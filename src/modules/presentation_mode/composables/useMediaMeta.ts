@@ -119,7 +119,6 @@ function _pump(): void {
 export function useMediaMeta() {
   return {
     meta: _meta,
-    /** Pede os metadados de um arquivo; ignora os já lidos ou na fila. */
     request(entry: LibraryEntry, { priority = false } = {}): void {
       if (entry.isDir || _meta.has(entry.path) || _queued.has(entry.path)) return;
       if (!fileKind(entry.ext) || fileKind(entry.ext) === "pdf" || fileKind(entry.ext) === "slja") return;

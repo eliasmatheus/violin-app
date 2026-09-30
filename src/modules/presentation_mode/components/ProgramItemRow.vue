@@ -90,7 +90,6 @@ const props = defineProps<{
   prepared: boolean;
   selected: boolean;
   open: boolean;
-  /** Itens do botão direito sobre a linha. */
   menu: LjMenuItem[];
 }>();
 

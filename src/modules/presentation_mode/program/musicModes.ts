@@ -14,7 +14,6 @@ export interface MusicModeOption {
   /** Chave em `modules.presentation_mode.music_modes.*`. */
   label: string;
   icon: string;
-  /** Só existe para músicas com versão instrumental. */
   needsInstrumental: boolean;
 }
 

@@ -137,7 +137,6 @@ export function useFileLibrary() {
   /** Caminho mostrado no rodapé: a pasta aberta, ou o nome da fonte especial. */
   const location = computed(() => (_source.value === ALL || _source.value === FAVORITES ? null : (_dir.value ?? _source.value)));
 
-  /** Dentro de uma subpasta dá para voltar até a pasta da lista. */
   const canGoUp = computed(
     () => !!_dir.value && _source.value !== ALL && _source.value !== FAVORITES && _dir.value !== _source.value
   );

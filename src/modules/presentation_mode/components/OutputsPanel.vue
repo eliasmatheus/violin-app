@@ -144,11 +144,9 @@ defineProps<{
   /** O item de "A seguir" é o que foi enfileirado com a saída travada. */
   prepared: boolean;
   locked: boolean;
-  /** O conteúdo no ar tem partes (slides) para navegar. */
   canNavigate: boolean;
   /** Pisca "A seguir" quando o Próximo não tem mais parte para avançar. */
   flash: boolean;
-  /** Posição do arquivo no ar na pasta da biblioteca. */
   fileCounter?: string;
 }>();
 
