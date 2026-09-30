@@ -1,15 +1,15 @@
 {
-  "source": "8a4cd20ce89f93db46aabbb88f3f3954bd06ebb853e2876c54f210d956457da9",
+  "source": "0bc321ab52bb616652c990e90c8e99b74f31a200a5c42ebbf8e641cc7349500e",
   "desktop": {
-    "build/icon-512.png": "aaa30bdfd584bd8b2c62db290cb2b6823b8be54a93027c8938ec8af29da1122e",
-    "build/icon.ico": "7a7bb2d0390a158babf35da407504f6d0e74e23afc0aca1d0b56adbbd6717867"
+    "build/icon-512.png": "45dcc8334e8f6e98f5c08a21dd92b6eb4ddccba9998de14dfaeb2c22cf22f2b8",
+    "build/icon.ico": "ea7586c4f2d875a3fae707d086df933c66d8060aacdc58cf5e470dda05d047f9"
   },
   "mac": {
-    "source": "8a4cd20ce89f93db46aabbb88f3f3954bd06ebb853e2876c54f210d956457da9",
+    "source": "0bc321ab52bb616652c990e90c8e99b74f31a200a5c42ebbf8e641cc7349500e",
     "files": {
-      "build/icon-mac.svg": "96f2945335b2b10400406ac464c4dc7e918ee24d7303d50d847318626245fe05",
-      "build/icon-mac.png": "dc397b56b98a516fb709919453c98851560aa9124a9539dde38c7430c7de7210",
-      "build/icon-mac.icns": "f97c521f2c118cf1e6ff39b5d53e9cf2dffe9e452af997ee6f0c04f9a591992b"
+      "build/icon-mac.svg": "61124847d91132bb6775db127b9b383d8447c8677788ce9b982b71ab605878bf",
+      "build/icon-mac.png": "3c75a99932df5f1a4b21b24d96afe499fbf6e15d355bfdcbdb3293a670d33455",
+      "build/icon-mac.icns": "db696cf776a6664643fdeaade2136058e72a89b4db4b1eee97e893650840ce01"
     }
   }
 }

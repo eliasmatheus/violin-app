@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { LAYERED_ICON, LOGO_WITH_DEPTH, logoWithDepth, macIconLayers } from "./brand-layers.mjs";
 
 /** @typedef {{ source: string, desktop: Record<string, string>, mac: { source: string, files: Record<string, string> } | null }} BrandAssetsManifest */
 
@@ -61,4 +62,27 @@ if (checksum(Buffer.from(macSvg)) !== manifest.mac.files?.["build/icon-mac.svg"]
   throw new Error("A composição macOS difere do ícone gerado.");
 }
 
-console.log("SVG, ícones públicos e ícones desktop estão sincronizados.");
+if (readFileSync(LOGO_WITH_DEPTH, "utf8") !== logoWithDepth(source.toString("utf8"))) {
+  throw new Error(`${LOGO_WITH_DEPTH} difere do logo com sombras. Rode npm run assets:brand.`);
+}
+
+const layers = macIconLayers(source.toString("utf8"), hash);
+const layeredAssets = `${LAYERED_ICON}/Assets`;
+const onDisk = existsSync(layeredAssets)
+  ? readdirSync(layeredAssets).map((name) => `${layeredAssets}/${name}`)
+  : [];
+for (const path of new Set([...layers.keys(), ...onDisk])) {
+  if (!existsSync(path) || readFileSync(path, "utf8") !== layers.get(path)) {
+    throw new Error(`${path} não acompanha as camadas do logo. Rode npm run assets:brand.`);
+  }
+}
+const icon = JSON.parse(readFileSync(`${LAYERED_ICON}/icon.json`, "utf8"));
+const imageNames = (icon.groups || []).flatMap((group) =>
+  (group.layers || []).map((layer) => layer["image-name"])
+);
+const missing = imageNames.filter((name) => !layers.has(`${layeredAssets}/${name}`));
+if (imageNames.length === 0 || missing.length > 0) {
+  throw new Error(`O icon.json referencia camadas que o logo não tem: ${missing.join(", ")}`);
+}
+
+console.log("SVG, ícones públicos, desktop e camadas macOS estão sincronizados.");

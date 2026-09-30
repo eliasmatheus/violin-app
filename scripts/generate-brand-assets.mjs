@@ -7,9 +7,18 @@ import { chromium } from "playwright";
 import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { LAYERED_ICON, LOGO_WITH_DEPTH, logoWithDepth, macIconLayers } from "./brand-layers.mjs";
 
 const source = readFileSync("src/assets/img/logo.svg", "utf8");
 const desktopOnly = process.argv.includes("--desktop-only");
@@ -73,6 +82,15 @@ const macSvg = `<!-- brand-source-sha256: ${sourceHash} -->
 </svg>`;
 writeFileSync("build/icon-mac.svg", macSvg);
 
+// Icon Composer package: layers come from the logo; icon.json (glass, shadows,
+// order) is edited by hand or in Icon Composer and stays as is.
+const layers = macIconLayers(source, sourceHash);
+mkdirSync(`${LAYERED_ICON}/Assets`, { recursive: true });
+for (const name of readdirSync(`${LAYERED_ICON}/Assets`)) {
+  if (!layers.has(`${LAYERED_ICON}/Assets/${name}`)) rmSync(`${LAYERED_ICON}/Assets/${name}`);
+}
+for (const [path, svg] of layers) writeFileSync(path, svg);
+
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({
   viewport: { width: 1024, height: 1024 },
@@ -86,9 +104,13 @@ async function render(svg, size) {
   return page.screenshot({ omitBackground: true, animations: "disabled" });
 }
 
+// Up to 48px the layer shadows would only blur the drawing, so those stay flat.
+const depth = logoWithDepth(source);
+writeFileSync(LOGO_WITH_DEPTH, depth);
+
 const pngs = new Map();
 for (const size of [16, 32, 48, 144, 152, 180, 192, 256, 512, 1200]) {
-  pngs.set(size, await render(source, size));
+  pngs.set(size, await render(size <= 48 ? source : depth, size));
 }
 if (!desktopOnly) {
   for (const size of [16, 32, 144, 152, 180, 192, 512]) {
@@ -127,10 +149,45 @@ if (process.platform === "darwin") {
   const { renameSync } = await import("node:fs");
   const tmp = iconset.slice(0, -8);
   renameSync(tmp, iconset);
+  // With Icon Composer installed, the static icons (Dock in dev, DMG, older
+  // macOS) come from the real Liquid Glass render of the layered icon, placed
+  // on Apple's 824/1024 grid. Without it, they fall back to the flat plate.
+  const ictool = "/Applications/Icon Composer.app/Contents/Executables/ictool";
+  const glassDir = mkdtempSync(join(tmpdir(), "louvorja-glass-"));
   try {
+    let glass = null;
+    if (existsSync(ictool)) {
+      const out = join(glassDir, "glass.png");
+      execFileSync(ictool, [
+        LAYERED_ICON,
+        "--export-image",
+        "--output-file",
+        out,
+        "--platform",
+        "macOS",
+        "--rendition",
+        "Default",
+        "--width",
+        "1648",
+        "--height",
+        "1648",
+        "--scale",
+        "1",
+      ]);
+      glass = readFileSync(out).toString("base64");
+    }
+    const renderMac = (size) => {
+      if (!glass) return render(macSvg, size);
+      const inset = (size * 100) / 1024;
+      const side = (size * 824) / 1024;
+      return render(
+        `<img src="data:image/png;base64,${glass}" style="position:absolute;left:${inset}px;top:${inset}px;width:${side}px;height:${side}px">`,
+        size
+      );
+    };
     const sizes = [16, 32, 64, 128, 256, 512, 1024];
     const rendered = new Map();
-    for (const size of sizes) rendered.set(size, await render(macSvg, size));
+    for (const size of sizes) rendered.set(size, await renderMac(size));
     writeFileSync("build/icon-mac.png", rendered.get(1024));
     for (const size of [16, 32, 128, 256, 512]) {
       writeFileSync(join(iconset, `icon_${size}x${size}.png`), rendered.get(size));
@@ -140,6 +197,7 @@ if (process.platform === "darwin") {
     execFileSync("iconutil", ["-c", "icns", iconset, "-o", "build/icon-mac.icns"]);
   } finally {
     rmSync(iconset, { recursive: true, force: true });
+    rmSync(glassDir, { recursive: true, force: true });
   }
 }
 await browser.close();

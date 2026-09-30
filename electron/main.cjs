@@ -905,11 +905,12 @@ app.whenReady().then(async () => {
   await Promise.all([monitorBootstrap, devCacheCleanup]);
 
   // Dock icon no macOS — SÓ em dev, onde não há bundle e o Dock mostraria o
-  // ícone genérico do Electron. Em produção o .icns do .app já está correto e
-  // sobrescrevê-lo aqui trocava o ícone assim que o app abria.
+  // ícone genérico do Electron. Em produção o bundle já inclui o catálogo
+  // do Icon Composer e o .icns de compatibilidade; sobrescrevê-lo aqui
+  // trocaria o ícone assim que o app abrisse.
   // `dock.setIcon` desenha o bitmap cru, sem o recorte que o macOS aplica ao
-  // .icns do bundle — e é por isso que serve o mesmo arquivo: o icon-mac.png
-  // já traz a placa desenhada, então o Dock em dev fica igual ao do build.
+  // ícone do bundle. O icon-mac.png traz a placa desenhada para o Dock em dev;
+  // os efeitos dinâmicos das camadas só existem no bundle de produção.
   if (isDev && process.platform === "darwin" && app.dock) {
     try {
       const iconPath = path.join(__dirname, "..", "build", "icon-mac.png");

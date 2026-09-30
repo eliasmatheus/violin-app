@@ -175,13 +175,9 @@ mac:
   # assets da release adivinha que ele não é pra baixar: existe só porque o
   # Squirrel.Mac exige um .zip (não o .dmg) para o auto-update.
   artifactName: "LouvorJA.Violin-${version}-mac.${ext}"
-  # Composição macOS com profundidade e reflexos, gerada pelo
-  # `npm run assets:brand` a partir do mesmo SVG das outras plataformas.
-  # A placa é opaca por dentro e tem margem transparente para o Dock antigo.
-  # O script usa iconutil para incluir tamanhos normais e Retina no .icns;
-  # o Electron ainda usa esse formato estático, sem os efeitos dinâmicos do
-  # Icon Composer em aplicativos Xcode.
-  icon: build/icon-mac.icns
+  # O Icon Composer mantém fundo e símbolo em camadas; o electron-builder
+  # compila o .icon em Assets.car e gera um .icns de compatibilidade.
+  icon: build/icon-mac.icon
   category: public.app-category.music
   # Assinatura + notarização (certificado Developer ID + credenciais Apple
   # fornecidas via env no CI: CSC_LINK/CSC_KEY_PASSWORD + APPLE_ID/
@@ -193,6 +189,8 @@ mac:
 
 dmg:
   artifactName: "LouvorJA.Violin-${version}.${ext}"
+  # O ícone do volume DMG ainda precisa do formato estático .icns.
+  icon: build/icon-mac.icns
 
 # ---------------------------------------------------------------------------
 # Linux — AppImage
