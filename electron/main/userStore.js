@@ -174,7 +174,10 @@ function keys() {
     for (const key of fs
       .readdirSync(storageDir())
       .filter((f) => f.endsWith(".json") && !f.endsWith(".tmp.json"))
-      .map((f) => f.slice(0, -5))) {
+      .map((f) => f.slice(0, -5))
+      // iCloud/OneDrive deixam cópias de conflito ("user_data 2.json") que nunca
+      // serão uma chave válida: anunciá-las só faz o renderer falhar ao ler.
+      .filter((k) => KEY_RE.test(k))) {
       found.add(key);
     }
   } catch (e) {

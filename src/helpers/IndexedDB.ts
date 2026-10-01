@@ -36,7 +36,28 @@ function getDb(): Promise<IDBPDatabase> {
           }
         }
       },
+      // O iOS encerra a conexão quando a aba vai para segundo plano. Sem soltar
+      // a promessa guardada, toda leitura seguinte falhava com "The database
+      // connection is closing" até o operador recarregar a página.
+      terminated() {
+        dbPromise = null;
+      },
     });
+    const opening = dbPromise;
+    void opening
+      .then((db) => {
+        const drop = () => {
+          if (dbPromise === opening) dbPromise = null;
+        };
+        db.addEventListener("close", drop);
+        db.addEventListener("versionchange", () => {
+          db.close();
+          drop();
+        });
+      })
+      .catch(() => {
+        if (dbPromise === opening) dbPromise = null;
+      });
   }
   return dbPromise;
 }
