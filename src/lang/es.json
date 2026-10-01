@@ -1002,6 +1002,7 @@
     }
   },
   "shell": {
+    "stale_version": "Hay una versión nueva de la aplicación. Haz clic aquí para recargar.",
     "home_title": "Listo para el próximo culto",
     "home_description": "Abre una música, la Biblia o la liturgia para empezar.",
     "home_music": "Músicas",
