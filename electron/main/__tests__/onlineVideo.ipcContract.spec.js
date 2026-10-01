@@ -120,7 +120,10 @@ describe("vídeo online: o que fica de fora do carregamento do preload", () => {
       expect(await lookup).toBe(true);
       expect(onlineVideo.getManager()).not.toBe(previous);
       expect(onlineVideo.getManager().store.dir).toBe(path.join(path.resolve(chosen), "Videos"));
-      expect(onlineVideo.getManager().tools.paths().ytdlp).toBe(path.join(path.resolve(chosen), "bin", "yt-dlp"));
+      // No macOS o yt-dlp fica desempacotado numa pasta própria (ver tools.js).
+      expect(onlineVideo.getManager().tools.paths().ytdlp).toBe(
+        path.join(path.resolve(chosen), "bin", "yt-dlp-dist", "yt-dlp_macos")
+      );
     });
   });
 

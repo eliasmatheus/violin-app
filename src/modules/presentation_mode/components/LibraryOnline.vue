@@ -240,7 +240,7 @@ import { ModuleEnum } from "@/enums/ModuleEnum";
 import $alert from "@/helpers/Alert";
 import DateTime from "@/helpers/DateTime";
 import $snackbar from "@/helpers/Snackbar";
-import { youtubeThumb } from "@/helpers/OnlineVideo";
+import { prepare as prepareOnlineVideo, youtubeThumb } from "@/helpers/OnlineVideo";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import {
   useOnlineLibrary,
@@ -350,7 +350,11 @@ function onScroll(): void {
     void online.loadMore(locale.value);
 }
 
-onMounted(() => void online.ensureLoaded());
+onMounted(() => {
+  void online.ensureLoaded();
+  // Instala o yt-dlp de antemão: o primeiro vídeo não paga a instalação.
+  prepareOnlineVideo();
+});
 </script>
 
 <style scoped>

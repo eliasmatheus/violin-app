@@ -64,6 +64,10 @@ function getManager() {
     const manager = _manager;
     _ready = migrateDownloads(path.join(paths.bootstrapDir(), "online_videos"), manager.store.dir)
       .then(() => manager.init());
+    // Troca o yt-dlp antigo pela versão desempacotada em segundo plano (ver tools.js).
+    if (tools.needsUpgrade()) {
+      void tools.ensure().catch((error) => console.warn("[onlineVideo] atualização do yt-dlp falhou:", error?.message || error));
+    }
     // O boot e os pedidos IPC observam a mesma promessa, inclusive se falhar.
     void _ready.catch((error) => console.warn("[onlineVideo] inicialização falhou:", error?.message || error));
   }
