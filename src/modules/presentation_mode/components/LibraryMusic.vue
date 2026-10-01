@@ -54,6 +54,7 @@
         :search_min_length="3"
         :searchable_fields="{
           name: scope.name,
+          custom_collections: scope.name,
           lyric: scope.lyric,
           albums_names: scope.album,
           track: scope.track,
@@ -65,6 +66,7 @@
         :has_scroll="hasScroll"
         sort_by="name"
         :file="`${locale}_musics`"
+        :extra_rows="customMusics"
       >
         <thead>
           <tr>
@@ -92,6 +94,15 @@
             <td class="pm-music__name">{{ item.name }}</td>
             <td class="pm-music__albums">
               <LjChip
+                v-for="name in item.custom_collection_names || []"
+                :key="name"
+                size="sm"
+                :variant="chipVariant"
+                class="pm-music__chip pm-music__chip--static"
+              >
+                {{ name }}
+              </LjChip>
+              <LjChip
                 v-for="a in item.albums"
                 :key="a.id_album"
                 size="sm"
@@ -105,7 +116,7 @@
               </LjChip>
             </td>
             <td class="lj-u-text-end pm-music__duration">
-              {{ DateTime.shortTime(item.duration ?? 0) }}
+              {{ item.custom_song_id ? "" : DateTime.shortTime(item.duration ?? 0) }}
             </td>
             <td @click.stop @dblclick.stop>
               <div class="lj-u-flex lj-u-justify-end">
@@ -114,6 +125,8 @@
                   :name="item.name"
                   :music-subtitle="musicTitle(item, 'Música')"
                   :has_instrumental_music="!!item.has_instrumental_music"
+                  :custom-song-id="item.custom_song_id"
+                  :has-audio="item.has_audio !== false"
                   :run-action="(action: MusicActionEnum) => onAction(item, action)"
                   :extra-menu="programMenu(item)"
                   defer-quick-actions
@@ -136,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, useId, watch } from "vue";
+import { computed, nextTick, onMounted, ref, useId, watch } from "vue";
 import { LjCheckbox, LjChip, LjIcon, LjInput, LjSwitch } from "@/components/ui";
 import Table from "@/components/DataTable.vue";
 import MusicMenuTable from "@/components/MusicMenuTable.vue";
@@ -149,6 +162,8 @@ import $appdata from "@/helpers/AppData";
 import $userdata from "@/helpers/UserData";
 import DateTime from "@/helpers/DateTime";
 import { useModuleI18n } from "@/composables/useModuleI18n";
+import { loadCustomMusicCatalog } from "@/helpers/CustomMusicCatalog";
+import type { SearchMusicItem } from "@/types/Music";
 import { albumLabel, musicTitle } from "@root/config/musicCatalog.mjs";
 import { modeOfAction, modesFor, type MusicMode } from "../program/musicModes";
 import { songPlayable, type LibrarySong } from "../program/song";
@@ -176,6 +191,10 @@ interface CatalogRow {
   duration?: string;
   has_instrumental_music?: number | boolean;
   albums?: CatalogAlbum[];
+  /** Música personalizada: o UUID que a executa, e as coletâneas pessoais dela. */
+  custom_song_id?: string;
+  custom_collection_names?: string[];
+  has_audio?: boolean;
 }
 
 defineProps<{ liveSongId: number | null }>();
@@ -252,12 +271,38 @@ watch([search, letter, album, instrumental], () => {
 
 /* ─── Linhas ─── */
 
+/**
+ * O acervo pessoal entra na mesma tabela, como no módulo Músicas: a coletânea
+ * pessoal é procurada junto com o nome e pelo filtro de álbum.
+ */
+const customMusics = ref<
+  (SearchMusicItem & { albums_names: string; custom_collections: string })[]
+>([]);
+async function loadCustomMusics(): Promise<void> {
+  const items = await loadCustomMusicCatalog().catch(() => []);
+  customMusics.value = items.map((item) => ({
+    ...item,
+    albums_names: (item.custom_collection_names ?? []).join(", "),
+    custom_collections: (item.custom_collection_names ?? []).join(", "),
+  }));
+}
+onMounted(() => void loadCustomMusics());
+
 const selectedId = ref<number | null>(null);
 
 function toSong(item: CatalogRow): LibrarySong {
   const first = album.value
     ? item.albums?.find((a) => a.id_album === album.value?.id_album)
     : item.albums?.[0];
+  if (item.custom_song_id) {
+    return {
+      id_music: item.id_music,
+      name: item.name,
+      album: (item.custom_collection_names ?? []).join(", "),
+      has_instrumental_music: !!item.has_instrumental_music,
+      customId: item.custom_song_id,
+    };
+  }
   return {
     id_music: item.id_music,
     name: item.name,
@@ -391,6 +436,10 @@ function programMenu(item: CatalogRow) {
 .pm-music__albums {
   max-width: 0;
   width: 40%;
+}
+
+.pm-music__chip--static {
+  cursor: default;
 }
 
 .pm-music__chip {

@@ -174,7 +174,11 @@ import {
 } from "../composables/useOutputs";
 import { formatHHMM, plannedStarts } from "../program/time";
 import { useProgram } from "../composables/useProgram";
-import { playMusicInMode, useProgramExecution } from "../composables/useProgramExecution";
+import {
+  playCustomMusicInMode,
+  playMusicInMode,
+  useProgramExecution,
+} from "../composables/useProgramExecution";
 import type { MusicMode } from "../program/musicModes";
 import $path from "@/helpers/Path";
 import { kindFromPath } from "../program/liturgy";
@@ -290,7 +294,8 @@ function dispatch(
     projectPath(playable.entry.path, playable.entry.name);
     Telemetry.track("presentation_library_projected", { ext: playable.entry.ext });
   } else if (playable.type === "song") {
-    playMusicInMode(playable.id_music, mode);
+    if (playable.customId) playCustomMusicInMode(playable.customId, mode);
+    else playMusicInMode(playable.id_music, mode);
   } else if (playable.type === "bible") {
     sendBible(playable.ref);
   } else if (playable.type === "online") {
@@ -335,6 +340,7 @@ const liveOrigin = computed<Playable | null>(() => {
     kind: liveKind.value,
     audio: audioLive.value,
     songId: liveSongId.value,
+    songTitle: liveKind.value === "music" ? slides.title.value || null : null,
     passage: live.bible.value?.passage ?? null,
     // O ID vale enquanto o vídeo for o que está por cima na tela.
     videoId:

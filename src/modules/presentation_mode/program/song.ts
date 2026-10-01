@@ -9,8 +9,16 @@ export interface LibrarySong {
   album: string;
   track?: number;
   has_instrumental_music: boolean;
+  /** Música personalizada (acervo do operador): o UUID que a executa. */
+  customId?: string;
 }
 
 export function songPlayable(song: LibrarySong): Playable {
-  return { type: "song", id_music: song.id_music, title: song.name, subtitle: song.album };
+  return {
+    type: "song",
+    id_music: song.id_music,
+    title: song.name,
+    subtitle: song.album,
+    ...(song.customId ? { customId: song.customId } : {}),
+  };
 }

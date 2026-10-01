@@ -10,6 +10,8 @@ const stop = vi.fn();
 const executeItem = vi.fn();
 
 vi.mock("@/composables/useMedia", () => ({ default: { open, openAudio, stop } }));
+const openCustomMusic = vi.fn(async () => true);
+vi.mock("@/helpers/CustomMusicCatalog", () => ({ openCustomMusic }));
 vi.mock("@/modules/liturgy/composables/useLiturgyExecution", () => ({
   useLiturgyExecution: () => ({ executeItem }),
 }));
@@ -63,11 +65,17 @@ describe("useProgramExecution", () => {
     expect(executeItem).not.toHaveBeenCalled();
   });
 
-  it("música a escolher e personalizada seguem pela liturgia", () => {
+  it("música a escolher segue pela liturgia, que pede a escolha", () => {
     useProgramExecution().execute(music({ escolha: true }));
-    useProgramExecution().execute(music({ id_music: -3, ref_id: "custom" }));
     expect(open).not.toHaveBeenCalled();
-    expect(executeItem).toHaveBeenCalledTimes(2);
+    expect(executeItem).toHaveBeenCalledTimes(1);
+  });
+
+  it("música personalizada toca pelo palco, minimizada, no formato do item", () => {
+    openCustomMusic.mockClear();
+    useProgramExecution().execute(music({ id_music: -3, ref_id: "custom", subtipo: "pb" }));
+    expect(openCustomMusic).toHaveBeenCalledWith("custom", MusicActionEnum.INSTRUMENTAL, { minimized: true });
+    expect(executeItem).not.toHaveBeenCalled();
   });
 
   it("item com sub-itens não executa", () => {

@@ -43,5 +43,7 @@ export function previewViewOf(target: Playable, item: ProgramItem | null): Previ
     const { reference, text } = target.ref;
     return { kind: "text", title: reference, icon: KIND_ICONS.bible, playable: true, text, reference };
   }
+  // A grade de prévia lê os slides do acervo; a música personalizada mostra só o título e o ▶.
+  if (target.customId) return { kind: "other", title: target.title, icon: KIND_ICONS.music, playable: true };
   return { kind: "song", title: target.title, icon: KIND_ICONS.music, playable: true, songId: target.id_music, chooseMode: true };
 }

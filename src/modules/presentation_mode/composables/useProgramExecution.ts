@@ -6,6 +6,8 @@ import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { KEYS } from "@/constants/UserDataKeys";
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
 import { MusicActionEnum } from "@/enums/MusicActionEnum";
+import { LITURGY_VERSION_ACTION } from "@/config/MusicAction";
+import { openCustomMusic } from "@/helpers/CustomMusicCatalog";
 import Media from "@/composables/useMedia";
 import type { LiturgyItem } from "@/types/Liturgy";
 import { useLiturgyExecution } from "@/modules/liturgy/composables/useLiturgyExecution";
@@ -41,10 +43,21 @@ export function playMusicInMode(idMusic: number, mode: MusicMode | string = "sun
   void Media.open({ id_music: idMusic, mode: SLIDE_MODES[mode] ?? MusicActionEnum.AUDIO, minimized: true });
 }
 
-/** Música a escolher na hora e música personalizada seguem o caminho da liturgia. */
+/**
+ * Música personalizada no formato pedido, também minimizada. O caminho é o
+ * mesmo das listas e da liturgia (`openCustomMusic`), que relê o documento.
+ */
+export function playCustomMusicInMode(customId: string, mode: MusicMode | string = "sung"): void {
+  void openCustomMusic(customId, LITURGY_VERSION_ACTION[mode] ?? MusicActionEnum.AUDIO, { minimized: true });
+}
+
+/** Música a escolher na hora segue o caminho da liturgia, que pede a escolha. */
 function playMusicOnStage(source: LiturgyItem): boolean {
-  if (source.escolha || !source.id_music || source.id_music < 0) return false;
-  playMusicInMode(source.id_music, source.subtipo || "sung");
+  if (source.escolha || !source.id_music) return false;
+  const mode = source.subtipo || "sung";
+  if (source.id_music > 0) playMusicInMode(source.id_music, mode);
+  else if (source.ref_id) playCustomMusicInMode(source.ref_id, mode);
+  else return false;
   return true;
 }
 

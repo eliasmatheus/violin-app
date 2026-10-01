@@ -28,6 +28,8 @@ export function songItem(song: LibrarySong, mode: MusicMode, modeLabel: string):
       subtipo: mode,
       id_music: song.id_music,
       musica: song.id_music,
+      // Como a liturgia: id negativo + `ref_id` com o UUID da música personalizada.
+      ...(song.customId ? { ref_id: song.customId } : {}),
       item: song.name,
       has_instrumental_music: song.has_instrumental_music,
     }),

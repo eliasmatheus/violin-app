@@ -1637,7 +1637,9 @@ const _self = {
    */
   async openCustomSong(
     song: CustomSongSource,
-    mode: MusicActionEnum | string = MusicActionEnum.AUDIO
+    mode: MusicActionEnum | string = MusicActionEnum.AUDIO,
+    /** Como `open`: quem tem o próprio palco (modo apresentação) abre o player minimizado. */
+    { minimized }: { minimized?: boolean } = {}
   ): Promise<boolean> {
     if (mode === MusicActionEnum.INSTRUMENTAL && !song?.playback_token) {
       Telemetry.track("custom_music_open_failed", { name: song?.nome, mode, reason: "no_playback" });
@@ -1760,7 +1762,7 @@ const _self = {
       audioUrl,
       idCheck: null,
       retryFn: () => {},
-      minimized: !!minimizeOnStart,
+      minimized: minimized ?? !!minimizeOnStart,
       mode: audioUrl ? mode : MusicActionEnum.NO_AUDIO,
       playbackId: playback_id,
     });
