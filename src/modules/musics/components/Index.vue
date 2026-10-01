@@ -106,6 +106,7 @@
       :search_min_length="3"
       :searchable_fields="{
         name: search_name,
+        custom_collections: search_name,
         lyric: search_lyric,
         albums_names: search_album,
         track: search_track,
@@ -308,8 +309,8 @@ async function hydratePlaylistsAfterPaint() {
   });
 }
 
-// O acervo pessoal entra na mesma tabela; o nome da coletânea vira o campo de
-// álbum, para a busca por álbum também o encontrar.
+// O acervo pessoal entra na mesma tabela. A coletânea é procurada junto com o
+// nome (como na busca rápida) e também pelo filtro de álbum.
 const customMusics = ref([]);
 async function loadCustomMusics() {
   if (Platform.isRemote) return;
@@ -317,6 +318,7 @@ async function loadCustomMusics() {
   customMusics.value = items.map((item) => ({
     ...item,
     albums_names: (item.custom_collection_names || []).join(", "),
+    custom_collections: (item.custom_collection_names || []).join(", "),
   }));
 }
 onActivated(loadCustomMusics);

@@ -123,10 +123,7 @@ test("tela Músicas: título, coletânea e execução do acervo pessoal", async 
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Juventude sábado");
   await expect(rows.first()).toContainText("Equipe do culto");
-  // Coletânea ocupa o lugar do álbum: segue o mesmo filtro "Buscar em".
   await input.fill("Juventude");
-  await expect(rows).toHaveCount(0);
-  await page.getByText("Álbum", { exact: true }).first().click();
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Esperança viva");
 
