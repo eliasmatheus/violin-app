@@ -1,13 +1,14 @@
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
-import type { ProgramItem } from "@/types/Presentation";
+import type { ProgramBibleRef, ProgramItem } from "@/types/Presentation";
 import type { LibraryEntry } from "../composables/useFileLibrary";
 import type { LiveKind } from "../composables/useLiveContent";
 import type { MusicMode } from "./musicModes";
+import { sameBibleRef } from "./bible";
 import { kindFromPath } from "./liturgy";
 
 /**
  * Algo que o operador pode pôr no palco e mandar ao ar: um item do programa,
- * um arquivo da biblioteca ou uma música do acervo.
+ * um arquivo da biblioteca, uma música do acervo ou um trecho da Bíblia.
  *
  * O módulo guarda qual deles foi mandado ao ar — não tenta reconhecê-lo pelo
  * título que a projeção anuncia, que muda de formato conforme a origem (com ou
@@ -16,12 +17,14 @@ import { kindFromPath } from "./liturgy";
 export type Playable =
   | { type: "program"; itemId: string }
   | { type: "file"; entry: LibraryEntry }
-  | { type: "song"; id_music: number; title: string; subtitle?: string };
+  | { type: "song"; id_music: number; title: string; subtitle?: string }
+  | { type: "bible"; ref: ProgramBibleRef };
 
 export function samePlayable(a: Playable, b: Playable): boolean {
   if (a.type === "program" && b.type === "program") return a.itemId === b.itemId;
   if (a.type === "file" && b.type === "file") return a.entry.path === b.entry.path;
   if (a.type === "song" && b.type === "song") return a.id_music === b.id_music;
+  if (a.type === "bible" && b.type === "bible") return sameBibleRef(a.ref, b.ref);
   return false;
 }
 
@@ -33,6 +36,8 @@ export interface LiveExpectation {
   kind: LiveKind | "audio" | null;
   /** Música: os slides no ar têm de ser desta. */
   songId?: number;
+  /** Bíblia: o versículo no ar tem de ser este. */
+  reference?: string;
 }
 
 /** O que está no ar agora, do ponto de vista do palco. */
@@ -40,6 +45,7 @@ export interface LiveSignal {
   kind: LiveKind | null;
   audio: boolean;
   songId: number | null;
+  bibleReference: string | null;
 }
 
 function fromPath(path: string): LiveExpectation {
@@ -61,8 +67,9 @@ export function expectationOf(
 ): LiveExpectation {
   if (playable.type === "file") return fromPath(playable.entry.path);
   if (playable.type === "song") return fromMusic(playable.id_music, mode);
+  if (playable.type === "bible") return { kind: "bible", reference: playable.ref.reference };
   if (!item) return { kind: null };
-  if (item.bible) return { kind: "bible" };
+  if (item.bible) return { kind: "bible", reference: item.bible.reference };
   const src = item.source;
   switch (src?.tipo) {
     case LiturgyItemTypeEnum.MUSICA:
@@ -84,5 +91,6 @@ export function isOnAir(expected: LiveExpectation, signal: LiveSignal): boolean 
   if (expected.kind === null) return true;
   if (expected.kind === "audio") return signal.audio;
   if (signal.kind !== expected.kind) return false;
+  if (expected.reference !== undefined && signal.bibleReference !== expected.reference) return false;
   return expected.songId === undefined || signal.songId === expected.songId;
 }

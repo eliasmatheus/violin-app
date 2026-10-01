@@ -35,5 +35,9 @@ export function programView(item: ProgramItem): PreviewView {
 export function previewViewOf(target: Playable, item: ProgramItem | null): PreviewView | null {
   if (target.type === "program") return item ? programView(item) : null;
   if (target.type === "file") return fileView(target.entry.path, target.entry.name);
+  if (target.type === "bible") {
+    const { reference, text } = target.ref;
+    return { kind: "text", title: reference, icon: KIND_ICONS.bible, playable: true, text, reference };
+  }
   return { kind: "song", title: target.title, icon: KIND_ICONS.music, playable: true, songId: target.id_music, chooseMode: true };
 }

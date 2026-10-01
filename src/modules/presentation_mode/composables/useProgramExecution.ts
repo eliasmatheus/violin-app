@@ -12,6 +12,8 @@ import { useLiturgyExecution } from "@/modules/liturgy/composables/useLiturgyExe
 import type { ProgramBibleRef, ProgramItem } from "@/types/Presentation";
 import { liturgyItem } from "../program/liturgy";
 import type { MusicMode } from "../program/musicModes";
+import { nextVerseOf } from "../program/bible";
+import { useBibleLibrary } from "./useBibleLibrary";
 
 /** Versões da música que têm letra para a grade. */
 const SLIDE_MODES: Record<string, MusicActionEnum> = {
@@ -57,10 +59,17 @@ function playMusicOnStage(source: LiturgyItem): boolean {
  */
 export function useProgramExecution() {
   const { executeItem } = useLiturgyExecution();
+  const bible = useBibleLibrary();
+
+  /** O retorno de palco mostra o versículo seguinte quando o capítulo é conhecido. */
+  async function nextOf(ref: ProgramBibleRef): Promise<{ text: string; reference: string } | null> {
+    const chapter = await bible.chapterOf(ref);
+    return chapter ? nextVerseOf(chapter, ref.verses) : null;
+  }
 
   async function projectBible(ref: ProgramBibleRef): Promise<void> {
     $userdata.set(KEYS.MODULES.BIBLE.IS_PLAYING, true);
-    await ProjectionWindows.openBibleWindow();
+    const [next] = await Promise.all([nextOf(ref), ProjectionWindows.openBibleWindow()]);
     Broadcast.send(BROADCAST_TYPE.BIBLE_VERSE_INTENT, {
       text: ref.text,
       reference: ref.reference,
@@ -68,7 +77,15 @@ export function useProgramExecution() {
       chapter: ref.chapter,
       verses: ref.verses,
       version_id: ref.version_id,
+      next_text: next?.text ?? "",
+      next_reference: next?.reference ?? "",
       active: true,
+    });
+  }
+
+  function sendBible(ref: ProgramBibleRef): void {
+    void projectBible(ref).catch((error: unknown) => {
+      Telemetry.captureException(error, { source: "presentation_mode.execute.bible" });
     });
   }
 
@@ -79,9 +96,7 @@ export function useProgramExecution() {
   function execute(item: ProgramItem): boolean {
     if (item.children?.length) return false;
     if (item.bible) {
-      void projectBible(item.bible).catch((error: unknown) => {
-        Telemetry.captureException(error, { source: "presentation_mode.execute.bible" });
-      });
+      sendBible(item.bible);
       return true;
     }
     if (item.source) {
@@ -97,5 +112,5 @@ export function useProgramExecution() {
     executeItem(liturgyItem({ id: crypto.randomUUID(), tipo: LiturgyItemTypeEnum.ARQUIVO, dir: path, item: name }));
   }
 
-  return { execute, projectPath };
+  return { execute, projectPath, sendBible };
 }

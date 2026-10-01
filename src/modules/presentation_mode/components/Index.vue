@@ -20,8 +20,13 @@
 
       <section class="pm-stage" data-testid="pm-stage">
         <header class="pm-bar">
-          <span v-if="stagePreview" class="pm-preview-badge" data-testid="pm-stage-badge">{{ tm("stage.preview") }}</span>
-          <span v-else-if="onAir" class="pm-on-air" data-testid="pm-stage-badge"><span class="pm-on-air__dot" />{{ tm("stage.on_air") }}</span>
+          <span v-if="stagePreview" class="pm-preview-badge" data-testid="pm-stage-badge">
+            {{ tm("stage.preview") }}
+          </span>
+          <span v-else-if="onAir" class="pm-on-air" data-testid="pm-stage-badge">
+            <span class="pm-on-air__dot" />
+            {{ tm("stage.on_air") }}
+          </span>
           <LjIcon v-if="stageIcon" :icon="stageIcon" :size="14" />
           <span class="pm-bar__title" data-testid="pm-stage-title">{{ stageTitle }}</span>
           <span v-if="stageMeta" class="pm-bar__meta">{{ stageMeta }}</span>
@@ -74,10 +79,14 @@
         :height="libraryLayout.height.value"
         :live-path="libraryLivePath"
         :return-path="returnOverride?.path ?? null"
+        :live-bible="liveBibleRef"
         @show-on-return="onShowOnReturn"
         @preview="(entry: LibraryEntry) => stage.show({ type: 'file', entry })"
         @stop="stopMedia"
-        @preview-song="(s: LibrarySong) => stage.show({ type: 'song', id_music: s.id_music, title: s.name, subtitle: s.album })"
+        @preview-song="
+          (s: LibrarySong) =>
+            stage.show({ type: 'song', id_music: s.id_music, title: s.name, subtitle: s.album })
+        "
         @play-song="(s: LibrarySong, m: MusicMode) => playSong(s.id_music, s.name, s.album, 0, m)"
         @add-song="addSongToProgram"
         @toggle-width="libraryLayout.toggleWidth"
@@ -86,6 +95,9 @@
         @resize-end="libraryLayout.saveHeight"
         @project="projectFile"
         @add-to-program="addFileToProgram"
+        @preview-bible="(r: ProgramBibleRef) => stage.show({ type: 'bible', ref: r })"
+        @play-bible="(r: ProgramBibleRef) => dispatch({ type: 'bible', ref: r })"
+        @add-bible="(r: ProgramBibleRef) => addItem(bibleItem(r), ensureSession())"
       />
 
       <OutputsPanel
@@ -95,7 +107,11 @@
         :locked="outputLocked"
         :can-navigate="canNavigate"
         :flash="upNextFlash"
-        :file-counter="libraryQueueLive && library.queue.value ? `${library.queue.value.index + 1}/${library.queue.value.entries.length}` : undefined"
+        :file-counter="
+          libraryQueueLive && library.queue.value
+            ? `${library.queue.value.index + 1}/${library.queue.value.entries.length}`
+            : undefined
+        "
         @first="navigate('first')"
         @prev="navigate('prev')"
         @next="navigate('next')"
@@ -139,7 +155,7 @@ import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import { isModuleExpanded, toggleModuleExpanded } from "@/composables/useModuleExpanded";
-import type { ProgramItem, ProgramSession } from "@/types/Presentation";
+import type { ProgramBibleRef, ProgramItem, ProgramSession } from "@/types/Presentation";
 import ProgramPanel from "./ProgramPanel.vue";
 import ProgramItemDialog from "./ProgramItemDialog.vue";
 import ProgramSessionDialog from "./ProgramSessionDialog.vue";
@@ -151,7 +167,7 @@ import type { LibrarySong } from "./LibrarySongRow.vue";
 import StagePreview from "./StagePreview.vue";
 import { useStage } from "../composables/useStage";
 import { expectationOf, isOnAir, samePlayable, type Playable } from "../program/playable";
-import LibraryPanel from "./LibraryPanel.vue";
+import LibraryPanel, { type LibraryTab } from "./LibraryPanel.vue";
 import LiveMirror from "./LiveMirror.vue";
 import $appdata from "@/helpers/AppData";
 import { KEYS } from "@/constants/UserDataKeys";
@@ -175,7 +191,9 @@ import { playMusicInMode, useProgramExecution } from "../composables/useProgramE
 import { MUSIC_MODES, type MusicMode } from "../program/musicModes";
 import $path from "@/helpers/Path";
 import { kindFromPath } from "../program/liturgy";
-import { fileItem, songItem } from "../program/items";
+import { bibleItem, fileItem, songItem } from "../program/items";
+import { bibleRefOf, stepVerse } from "../program/bible";
+import { useBibleLibrary } from "../composables/useBibleLibrary";
 import { previewViewOf } from "../program/previewView";
 import { useLibraryLayout } from "../composables/useLibraryLayout";
 import { useProgramLiturgy } from "../composables/useProgramLiturgy";
@@ -207,7 +225,8 @@ const {
   setOutputLocked,
   prepare,
 } = useProgram();
-const { execute, projectPath } = useProgramExecution();
+const { execute, projectPath, sendBible } = useProgramExecution();
+const bibleLibrary = useBibleLibrary();
 const { importFromLiturgy, saveAsLiturgy } = useProgramLiturgy();
 const stage = useStage();
 onBeforeUnmount(stage.reset);
@@ -230,7 +249,8 @@ function projectFile(entry: LibraryEntry): void {
 
 function addSongToProgram(song: LibrarySong, mode: MusicMode = "sung"): void {
   // O formato aparece no subtítulo quando não é o de sempre ("Cantado").
-  const modeLabel = mode === "sung" ? "" : tm(MUSIC_MODES.find((m) => m.value === mode)?.label ?? "");
+  const modeLabel =
+    mode === "sung" ? "" : tm(MUSIC_MODES.find((m) => m.value === mode)?.label ?? "");
   addItem(songItem(song, mode, modeLabel), ensureSession());
 }
 
@@ -264,7 +284,10 @@ interface DispatchOptions {
  * operador escolher. Com a saída travada, a tela fica como está: o item do
  * programa espera na fila; o resto não vai.
  */
-function dispatch(playable: Playable, { slideIndex = 0, mode = "sung", force = false }: DispatchOptions = {}): void {
+function dispatch(
+  playable: Playable,
+  { slideIndex = 0, mode = "sung", force = false }: DispatchOptions = {}
+): void {
   const item = playable.type === "program" ? findItem(playable.itemId) : null;
   if (playable.type === "program") {
     if (!item) return;
@@ -290,6 +313,8 @@ function dispatch(playable: Playable, { slideIndex = 0, mode = "sung", force = f
     Telemetry.track("presentation_library_projected", { ext: playable.entry.ext });
   } else if (playable.type === "song") {
     playMusicInMode(playable.id_music, mode);
+  } else if (playable.type === "bible") {
+    sendBible(playable.ref);
   }
   stage.markSent(playable, expected);
   if (expected.songId) goToSlideWhenLoaded(expected.songId, slideIndex);
@@ -312,7 +337,6 @@ const audioLive = computed(
 const audioTitle = computed(() => $appdata.get<string>(KEYS.MODULES.MEDIA.CONFIG.TITLE, "") ?? "");
 const onAir = computed(() => !!liveKind.value || audioLive.value);
 
-
 const liveSongId = computed(() => {
   const id = Number(slides.slides.value[0]?.id_music);
   return liveKind.value === "music" && id > 0 ? id : null;
@@ -325,7 +349,12 @@ const liveSongId = computed(() => {
 const liveOrigin = computed<Playable | null>(() => {
   const sent = stage.sent.value;
   if (!sent) return null;
-  const signal = { kind: liveKind.value, audio: audioLive.value, songId: liveSongId.value };
+  const signal = {
+    kind: liveKind.value,
+    audio: audioLive.value,
+    songId: liveSongId.value,
+    bibleReference: live.bible.value?.reference ?? null,
+  };
   return isOnAir(sent.expected, signal) ? sent.playable : null;
 });
 
@@ -373,7 +402,13 @@ function goToSlideWhenLoaded(idMusic: number, index: number): void {
 }
 onBeforeUnmount(() => cancelSlideWait?.());
 
-function playSong(idMusic: number, title: string, subtitle?: string, slideIndex = 0, mode: MusicMode = "sung"): void {
+function playSong(
+  idMusic: number,
+  title: string,
+  subtitle?: string,
+  slideIndex = 0,
+  mode: MusicMode = "sung"
+): void {
   dispatch({ type: "song", id_music: idMusic, title, subtitle }, { slideIndex, mode });
 }
 
@@ -397,13 +432,22 @@ function playPreviewOnReturn(): void {
   if (t?.type === "file") onShowOnReturn(t.entry);
   else if (t?.type === "program") {
     const dir = findItem(t.itemId)?.source?.dir;
-    if (dir) onShowOnReturn({ name: dir.split(/[\\/]/).pop() ?? dir, path: dir, isDir: false, ext: "", size: 0, mtimeMs: 0 });
+    if (dir)
+      onShowOnReturn({
+        name: dir.split(/[\\/]/).pop() ?? dir,
+        path: dir,
+        isDir: false,
+        ext: "",
+        size: 0,
+        mtimeMs: 0,
+      });
   }
 }
 
 function focusLive(): void {
   if (liveOrigin.value) stage.show(liveOrigin.value);
-  else if (liveSongId.value) stage.show({ type: "song", id_music: liveSongId.value, title: slides.title.value });
+  else if (liveSongId.value)
+    stage.show({ type: "song", id_music: liveSongId.value, title: slides.title.value });
   else stage.show(null);
 }
 
@@ -482,6 +526,13 @@ const libraryQueueLive = computed(() => {
   return !!q && origin?.type === "file" && q.entries[q.index]?.path === origin.entry.path;
 });
 
+/** Trecho da Bíblia que o módulo pôs no ar — da biblioteca ou de um item do programa. */
+const liveBibleRef = computed<ProgramBibleRef | null>(() => {
+  const origin = liveOrigin.value;
+  if (origin?.type === "bible") return origin.ref;
+  return liveProgramItem.value?.bible ?? null;
+});
+
 /** Arquivo da biblioteca que está no ar — borda de destaque e ✕ na grade. */
 const libraryLivePath = computed(() => {
   const q = library.queue.value;
@@ -498,7 +549,8 @@ const canNavigate = computed(
   () =>
     !outputLocked.value &&
     ((liveKind.value === "music" && slides.totalSlides.value > 0) ||
-      (libraryQueueLive.value && (library.queue.value?.entries.length ?? 0) > 1))
+      (libraryQueueLive.value && (library.queue.value?.entries.length ?? 0) > 1) ||
+      !!liveBibleRef.value?.version_id)
 );
 
 const upNextFlash = ref(false);
@@ -517,6 +569,10 @@ function navigate(to: "first" | "prev" | "next" | "last"): void {
   if (outputLocked.value) return;
   if (!canNavigate.value) {
     if (to === "next") flashUpNext();
+    return;
+  }
+  if (liveBibleRef.value) {
+    void stepBible(liveBibleRef.value, to);
     return;
   }
   if (libraryQueueLive.value) {
@@ -538,6 +594,20 @@ function navigate(to: "first" | "prev" | "next" | "last"): void {
   else if (to === "prev") Media.prevSlide();
   else if (to === "next") Media.nextSlide();
   else Media.lastSlide();
+}
+
+/** Anda de versículo em versículo pelo capítulo do trecho no ar. */
+async function stepBible(
+  ref: ProgramBibleRef,
+  to: "first" | "prev" | "next" | "last"
+): Promise<void> {
+  const chapter = await bibleLibrary.chapterOf(ref);
+  const verse = chapter ? stepVerse(chapter, ref.verses, to) : null;
+  if (!chapter || verse === null) {
+    if (to === "next") flashUpNext();
+    return;
+  }
+  dispatch({ type: "bible", ref: bibleRefOf(chapter, [verse]) });
 }
 
 const upNextMeta = computed(() => {
@@ -600,11 +670,14 @@ function onSaveItem({ item, sessionId }: { item: ProgramItem; sessionId: string 
 function confirmRemoveItem(itemId: string | null): void {
   const item = itemId ? findItem(itemId) : null;
   if (!item) return;
-  $alert.yesno({ title: alertKey("alerts.remove_item_title"), text: alertKey("alerts.remove_item") }, (resp?: string) => {
-    if (resp !== "yes") return;
-    removeItem(item.id);
-    itemDialogOpen.value = false;
-  });
+  $alert.yesno(
+    { title: alertKey("alerts.remove_item_title"), text: alertKey("alerts.remove_item") },
+    (resp?: string) => {
+      if (resp !== "yes") return;
+      removeItem(item.id);
+      itemDialogOpen.value = false;
+    }
+  );
 }
 
 function duplicateSelected(): void {
@@ -635,11 +708,14 @@ function confirmRemoveSession(): void {
   const session = editingSession.value;
   if (!session) return;
   const text = session.items.length ? "alerts.remove_session_items" : "alerts.remove_session";
-  $alert.yesno({ title: alertKey("alerts.remove_session_title"), text: alertKey(text) }, (resp?: string) => {
-    if (resp !== "yes") return;
-    removeSession(session.id);
-    sessionDialogOpen.value = false;
-  });
+  $alert.yesno(
+    { title: alertKey("alerts.remove_session_title"), text: alertKey(text) },
+    (resp?: string) => {
+      if (resp !== "yes") return;
+      removeSession(session.id);
+      sessionDialogOpen.value = false;
+    }
+  );
 }
 
 /* ─── Programa ─── */
@@ -648,7 +724,7 @@ const settingsDialogOpen = ref(false);
 
 // Todas as ações do ribbon contextual chegam aqui. As que ainda não têm
 // handler são ignoradas até a fase que as implementa.
-const libraryTab = ref<"files" | "musics">("files");
+const libraryTab = ref<LibraryTab>("files");
 
 const RIBBON_HANDLERS: Record<string, () => void> = {
   toggle_expand: toggleExpand,
@@ -667,6 +743,7 @@ const RIBBON_HANDLERS: Record<string, () => void> = {
   go_to_slide: goToSlidePrompt,
   library_files: () => (libraryTab.value = "files"),
   library_musics: () => (libraryTab.value = "musics"),
+  library_bible: () => (libraryTab.value = "bible"),
   slide_grid: focusLive,
 };
 

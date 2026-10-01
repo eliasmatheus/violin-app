@@ -1,6 +1,6 @@
 import DateTime from "@/helpers/DateTime";
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
-import type { ProgramItem } from "@/types/Presentation";
+import type { ProgramBibleRef, ProgramItem } from "@/types/Presentation";
 import type { LibrarySong } from "../components/LibrarySongRow.vue";
 import type { LibraryEntry } from "../composables/useFileLibrary";
 import type { MediaMeta } from "../composables/useMediaMeta";
@@ -44,5 +44,17 @@ export function fileItem(entry: LibraryEntry, meta: MediaMeta | null): ProgramIt
     // Imagem não tem duração própria: um minuto é o ponto de partida mais comum.
     plannedMinutes: seconds > 0 ? Math.ceil(seconds / 60) : 1,
     source: liturgyItem({ id: newId(), tipo: LiturgyItemTypeEnum.ARQUIVO, dir: entry.path, item: fileTitle(entry) }),
+  };
+}
+
+/** Trecho da Bíblia como item do programa: o título é a referência. */
+export function bibleItem(ref: ProgramBibleRef): ProgramItem {
+  return {
+    id: newId(),
+    kind: "bible",
+    title: ref.reference,
+    // Leitura curta: um minuto a cada três versículos, no mínimo um.
+    plannedMinutes: Math.max(1, Math.ceil(ref.verses.length / 3)),
+    bible: ref,
   };
 }

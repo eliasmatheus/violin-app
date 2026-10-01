@@ -22,7 +22,16 @@ const music = (id: number, subtipo = "sung"): ProgramItem => ({
   source: liturgyItem({ id: "s", tipo: LiturgyItemTypeEnum.MUSICA, subtipo, id_music: id, musica: id, item: "Hino" }),
 });
 
-const signal = (s: Partial<LiveSignal>): LiveSignal => ({ kind: null, audio: false, songId: null, ...s });
+const signal = (s: Partial<LiveSignal>): LiveSignal => ({
+  kind: null,
+  audio: false,
+  songId: null,
+  bibleReference: null,
+  ...s,
+});
+
+const verse = (verses: number[], reference = "João 3:16 (NVI)") =>
+  ({ type: "bible", ref: { reference, text: "", book_id: 43, chapter: 3, verses, version_id: 1 } }) as const;
 
 describe("samePlayable", () => {
   it("compara arquivo pelo caminho, não pelo nome", () => {
@@ -34,6 +43,19 @@ describe("samePlayable", () => {
 
   it("tipos diferentes nunca são o mesmo", () => {
     expect(samePlayable({ type: "program", itemId: "1" }, { type: "song", id_music: 1, title: "" })).toBe(false);
+  });
+});
+
+describe("Bíblia", () => {
+  it("o mesmo trecho é o mesmo Playable; outro versículo não é", () => {
+    expect(samePlayable(verse([16]), verse([16]))).toBe(true);
+    expect(samePlayable(verse([16]), verse([17]))).toBe(false);
+  });
+
+  it("só está no ar enquanto a referência no ar for a enviada", () => {
+    const expected = expectationOf(verse([16]), null);
+    expect(isOnAir(expected, signal({ kind: "bible", bibleReference: "João 3:16 (NVI)" }))).toBe(true);
+    expect(isOnAir(expected, signal({ kind: "bible", bibleReference: "João 3:17 (NVI)" }))).toBe(false);
   });
 });
 

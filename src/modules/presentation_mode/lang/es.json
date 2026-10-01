@@ -23,6 +23,7 @@
       "stop_stage_return": "Detener retorno",
       "library_files": "Archivos",
       "library_musics": "Músicas",
+      "library_bible": "Biblia",
       "library_videos": "Videos",
       "library_media": "Medios",
       "expand": "Expandir módulo",
@@ -197,6 +198,7 @@
     "add_to_program": "Agregar al programa",
     "resize": "Arrastre para cambiar la altura (doble clic alterna)",
     "musics": "Músicas",
+    "bible": "Biblia",
     "play": "Reproducir",
     "stop": "Dejar de reproducir",
     "details": "Detalles",
@@ -237,5 +239,16 @@
     "play_as": "Reproducir como…",
     "add_as": "Agregar al programa como…",
     "more": "Más opciones"
+  },
+  "bible": {
+    "title": "Biblia",
+    "books": "Libros",
+    "find_book": "Buscar libro",
+    "chapters": "Capítulos",
+    "prev_chapter": "Capítulo anterior",
+    "next_chapter": "Capítulo siguiente",
+    "version": "Versión",
+    "pick_book": "Elige un libro para ver los capítulos.",
+    "hint": "Clic para ver en el escenario · Shift o Ctrl para varios versículos · doble clic proyecta"
   }
 }

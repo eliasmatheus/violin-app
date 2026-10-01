@@ -1,7 +1,11 @@
 <template>
   <div class="pm-return" data-testid="pm-return-mirror">
     <div v-if="cleared" class="pm-return__fill" :style="background" />
-    <div v-else-if="override" class="pm-return__fill pm-return__override" data-testid="pm-return-override">
+    <div
+      v-else-if="override"
+      class="pm-return__fill pm-return__override"
+      data-testid="pm-return-override"
+    >
       <img v-if="override.type === 'image'" :src="override.url" alt="" />
       <video v-else :src="override.url" muted autoplay playsinline />
       <span class="pm-return__only">{{ tm("outputs.return_only") }}</span>
@@ -72,7 +76,12 @@ const view = computed(() => {
       };
     }
     case "bible":
-      return { title: bible.value?.reference ?? "", text: bible.value?.text ?? "", next: props.upNext, counter: "1/1" };
+      return {
+        title: bible.value?.reference ?? "",
+        text: bible.value?.text ?? "",
+        next: bible.value?.nextReference || props.upNext,
+        counter: "",
+      };
     case "file":
       return {
         title: file.value?.title ?? "",
@@ -81,7 +90,12 @@ const view = computed(() => {
         counter: props.fileCounter || "1/1",
       };
     case "online_video":
-      return { title: onlineTitle.value, text: onlineTitle.value, next: props.upNext, counter: "1/1" };
+      return {
+        title: onlineTitle.value,
+        text: onlineTitle.value,
+        next: props.upNext,
+        counter: "1/1",
+      };
     case "announcements":
       return {
         title: announcement.value?.nome ?? "",

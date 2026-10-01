@@ -34,7 +34,7 @@ interface AnnouncementSlide {
 }
 
 const _stamps = reactive<Partial<Record<LiveKind, number>>>({});
-const _bible = ref<{ text: string; reference: string } | null>(null);
+const _bible = ref<{ text: string; reference: string; nextReference: string } | null>(null);
 const _file = ref<LiveFile | null>(null);
 const _onlineTitle = ref("");
 const _announcements = ref<{ slides: AnnouncementSlide[]; index: number } | null>(null);
@@ -61,7 +61,11 @@ function _handle(type: string, payload: Record<string, unknown> | null | undefin
     }
     case BROADCAST_TYPE.BIBLE_VERSE:
       if (p.active && p.text) {
-        _bible.value = { text: String(p.text), reference: String(p.reference ?? "") };
+        _bible.value = {
+          text: String(p.text),
+          reference: String(p.reference ?? ""),
+          nextReference: String(p.next_reference ?? ""),
+        };
         _on("bible");
       } else {
         _bible.value = null;

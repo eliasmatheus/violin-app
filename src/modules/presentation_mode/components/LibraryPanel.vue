@@ -26,7 +26,8 @@
           :data-testid="`pm-library-tab-${libTab.id}`"
           @click="tab = libTab.id"
         >
-          <LjIcon :icon="libTab.icon" :size="15" />{{ tm(libTab.label) }}
+          <LjIcon :icon="libTab.icon" :size="15" />
+          {{ tm(libTab.label) }}
         </button>
       </div>
       <div class="pm-library__tools">
@@ -56,6 +57,14 @@
       @preview-song="(s: LibrarySong) => emit('preview-song', s)"
       @play-song="(s: LibrarySong, m: MusicMode) => emit('play-song', s, m)"
       @add-song="(s: LibrarySong, m: MusicMode) => emit('add-song', s, m)"
+    />
+
+    <LibraryBible
+      v-else-if="tab === 'bible'"
+      :live="liveBible"
+      @preview="(r: ProgramBibleRef) => emit('preview-bible', r)"
+      @play="(r: ProgramBibleRef) => emit('play-bible', r)"
+      @add="(r: ProgramBibleRef) => emit('add-bible', r)"
     />
 
     <div v-else-if="!lib.supported" class="pm-library__unsupported">
@@ -119,7 +128,12 @@
             </div>
           </template>
         </draggable>
-        <button type="button" class="pm-folder pm-folder--add" data-testid="pm-library-add-folder" @click="lib.addFolder()">
+        <button
+          type="button"
+          class="pm-folder pm-folder--add"
+          data-testid="pm-library-add-folder"
+          @click="lib.addFolder()"
+        >
           <LjIcon :icon="ICONS.UI.FOLDER_PLUS" :size="15" />
           <span class="pm-folder__label">{{ tm("library.add_folder") }}</span>
         </button>
@@ -128,12 +142,21 @@
       <div class="pm-files">
         <div v-if="emptyMessage" class="pm-files__empty">
           <p>{{ emptyMessage }}</p>
-          <LjButton v-if="!lib.folders.value.length" size="sm" :icon="ICONS.UI.FOLDER_PLUS" @click="lib.addFolder()">
+          <LjButton
+            v-if="!lib.folders.value.length"
+            size="sm"
+            :icon="ICONS.UI.FOLDER_PLUS"
+            @click="lib.addFolder()"
+          >
             {{ tm("library.add_folder") }}
           </LjButton>
         </div>
         <div v-else class="pm-files__grid" data-testid="pm-library-grid">
-          <LjContextMenu v-for="entry in lib.entries.value" :key="entry.path" :items="menuFor(entry)">
+          <LjContextMenu
+            v-for="entry in lib.entries.value"
+            :key="entry.path"
+            :items="menuFor(entry)"
+          >
             <div
               class="pm-file"
               :class="{
@@ -154,18 +177,27 @@
                 <img v-if="thumbOf(entry)" :src="thumbOf(entry)" alt="" loading="lazy" />
                 <LjIcon v-else :icon="iconOf(entry)" :size="22" class="pm-file__icon" />
                 <span v-if="durationOf(entry)" class="pm-file__badge">{{ durationOf(entry) }}</span>
-                <span v-if="entry.path === returnPath" class="pm-file__return">{{ tm("library.on_return") }}</span>
+                <span v-if="entry.path === returnPath" class="pm-file__return">
+                  {{ tm("library.on_return") }}
+                </span>
                 <template v-if="!entry.isDir">
-                  <LjTooltip :text="entry.path === livePath ? tm('library.stop') : tm('library.play')">
+                  <LjTooltip
+                    :text="entry.path === livePath ? tm('library.stop') : tm('library.play')"
+                  >
                     <button
                       type="button"
                       class="pm-file__action"
-                      :aria-label="entry.path === livePath ? tm('library.stop') : tm('library.play')"
+                      :aria-label="
+                        entry.path === livePath ? tm('library.stop') : tm('library.play')
+                      "
                       :data-testid="`pm-file-action-${entry.name}`"
                       @click.stop="entry.path === livePath ? emit('stop') : emit('project', entry)"
                       @dblclick.stop
                     >
-                      <LjIcon :icon="entry.path === livePath ? ICONS.ACTIONS.CLOSE : ICONS.PLAYER.PLAY" :size="26" />
+                      <LjIcon
+                        :icon="entry.path === livePath ? ICONS.ACTIONS.CLOSE : ICONS.PLAYER.PLAY"
+                        :size="26"
+                      />
                     </button>
                   </LjTooltip>
                   <LjTooltip :text="tm('library.details')">
@@ -198,7 +230,9 @@
           />
           <LjIcon v-else :icon="ICONS.UI.FOLDER" :size="12" />
           <!-- rtl corta o começo do caminho; o bdi mantém a ordem dos caracteres. -->
-          <span class="pm-files__path" :title="locationLabel"><bdi dir="ltr">{{ locationLabel }}</bdi></span>
+          <span class="pm-files__path" :title="locationLabel">
+            <bdi dir="ltr">{{ locationLabel }}</bdi>
+          </span>
           <span class="pm-files__count">{{ countLabel }}</span>
           <span class="pm-files__hint">{{ tm("library.hint") }}</span>
         </footer>
@@ -216,7 +250,10 @@
             :title="lib.isFavorite(details) ? tm('library.unfavorite') : tm('library.favorite')"
             @click="lib.toggleFavorite(details)"
           >
-            <LjIcon :icon="lib.isFavorite(details) ? ICONS.UI.STAR : ICONS.UI.STAR_OUTLINE" :size="15" />
+            <LjIcon
+              :icon="lib.isFavorite(details) ? ICONS.UI.STAR : ICONS.UI.STAR_OUTLINE"
+              :size="15"
+            />
           </button>
           <button
             type="button"
@@ -246,10 +283,21 @@
           <dd>{{ formatDate(details.mtimeMs) }}</dd>
         </dl>
         <div class="pm-details__actions">
-          <LjButton variant="primary" block :icon="ICONS.PROJECTION.START" data-testid="pm-library-send" @click="emit('project', details)">
+          <LjButton
+            variant="primary"
+            block
+            :icon="ICONS.PROJECTION.START"
+            data-testid="pm-library-send"
+            @click="emit('project', details)"
+          >
             {{ tm("library.send") }}
           </LjButton>
-          <LjButton block :icon="ICONS.ACTIONS.ADD" data-testid="pm-library-add" @click="emit('add-to-program', details, detailsMeta)">
+          <LjButton
+            block
+            :icon="ICONS.ACTIONS.ADD"
+            data-testid="pm-library-add"
+            @click="emit('add-to-program', details, detailsMeta)"
+          >
             {{ tm("library.add_to_program") }}
           </LjButton>
         </div>
@@ -263,14 +311,29 @@ import DateTime from "@/helpers/DateTime";
 import { computed, onMounted, ref, watch } from "vue";
 import draggable from "vuedraggable";
 import LibraryMusic from "./LibraryMusic.vue";
+import LibraryBible from "./LibraryBible.vue";
+import type { ProgramBibleRef } from "@/types/Presentation";
 import type { LibrarySong } from "./LibrarySongRow.vue";
 import type { MusicMode } from "../program/musicModes";
-import { LjButton, LjContextMenu, LjEmpty, LjIcon, LjTooltip, type LjMenuItem } from "@/components/ui";
+import {
+  LjButton,
+  LjContextMenu,
+  LjEmpty,
+  LjIcon,
+  LjTooltip,
+  type LjMenuItem,
+} from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import $alert from "@/helpers/Alert";
 import { useModuleI18n } from "@/composables/useModuleI18n";
-import { ALL, FAVORITES, fileKind, useFileLibrary, type LibraryEntry } from "../composables/useFileLibrary";
+import {
+  ALL,
+  FAVORITES,
+  fileKind,
+  useFileLibrary,
+  type LibraryEntry,
+} from "../composables/useFileLibrary";
 import { useVerticalResize } from "../composables/useVerticalResize";
 import { useMediaMeta, type MediaMeta } from "../composables/useMediaMeta";
 
@@ -281,6 +344,8 @@ const props = defineProps<{
   /** Caminho do arquivo que está no ar, para a borda de destaque e o ✕. */
   livePath: string | null;
   returnPath: string | null;
+  /** Trecho da Bíblia no ar, para marcar os versículos na aba Bíblia. */
+  liveBible: ProgramBibleRef | null;
 }>();
 
 const emit = defineEmits<{
@@ -299,6 +364,9 @@ const emit = defineEmits<{
   "play-song": [song: LibrarySong, mode: MusicMode];
   "add-song": [song: LibrarySong, mode: MusicMode];
   "add-to-program": [entry: LibraryEntry, meta: MediaMeta | null];
+  "preview-bible": [ref: ProgramBibleRef];
+  "play-bible": [ref: ProgramBibleRef];
+  "add-bible": [ref: ProgramBibleRef];
 }>();
 
 const { t, tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
@@ -306,9 +374,11 @@ const { t, tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 const TABS = [
   { id: "files", label: "library.files", icon: ICONS.UI.FOLDER_OPEN },
   { id: "musics", label: "library.musics", icon: ICONS.MUSIC.MUSIC },
+  { id: "bible", label: "library.bible", icon: ICONS.MODULES.BIBLE },
 ] as const;
+export type LibraryTab = (typeof TABS)[number]["id"];
 /** Controlada de fora: o ribbon também troca a aba. */
-const tab = defineModel<(typeof TABS)[number]["id"]>("tab", { default: "files" });
+const tab = defineModel<LibraryTab>("tab", { default: "files" });
 
 const root = ref<HTMLElement | null>(null);
 const resize = useVerticalResize({
@@ -325,9 +395,7 @@ const selected = computed(() => lib.selected.value);
 
 /** Detalhes abertos pelo (i) ou pelo menu de contexto. */
 const detailsPath = ref<string | null>(null);
-const details = computed(
-  () => lib.entries.value.find((e) => e.path === detailsPath.value) ?? null
-);
+const details = computed(() => lib.entries.value.find((e) => e.path === detailsPath.value) ?? null);
 const detailsMeta = computed(() => (details.value ? (meta.get(details.value.path) ?? null) : null));
 
 function openDetails(entry: LibraryEntry): void {
@@ -341,18 +409,37 @@ function onClick(entry: LibraryEntry): void {
 }
 
 function menuFor(entry: LibraryEntry): LjMenuItem[] {
-  if (entry.isDir) return [{ label: tm("library.open_folder"), icon: ICONS.UI.FOLDER_OPEN, action: () => void lib.enter(entry) }];
+  if (entry.isDir)
+    return [
+      {
+        label: tm("library.open_folder"),
+        icon: ICONS.UI.FOLDER_OPEN,
+        action: () => void lib.enter(entry),
+      },
+    ];
   const live = entry.path === props.livePath;
   return [
     live
       ? { label: tm("library.stop"), icon: ICONS.ACTIONS.CLOSE, action: () => emit("stop") }
-      : { label: tm("library.play"), icon: ICONS.PLAYER.PLAY, action: () => emit("project", entry) },
+      : {
+          label: tm("library.play"),
+          icon: ICONS.PLAYER.PLAY,
+          action: () => emit("project", entry),
+        },
     { label: tm("library.preview"), icon: ICONS.UI.EYE, action: () => onClick(entry) },
     ...(fileKind(entry.ext) === "image" || fileKind(entry.ext) === "video"
       ? [
           entry.path === props.returnPath
-            ? { label: tm("library.remove_from_return"), icon: ICONS.PROJECTION.RETURN, action: () => emit("show-on-return", null) }
-            : { label: tm("library.play_on_return"), icon: ICONS.PROJECTION.RETURN, action: () => emit("show-on-return", entry) },
+            ? {
+                label: tm("library.remove_from_return"),
+                icon: ICONS.PROJECTION.RETURN,
+                action: () => emit("show-on-return", null),
+              }
+            : {
+                label: tm("library.play_on_return"),
+                icon: ICONS.PROJECTION.RETURN,
+                action: () => emit("show-on-return", entry),
+              },
         ]
       : []),
     {
@@ -366,7 +453,11 @@ function menuFor(entry: LibraryEntry): LjMenuItem[] {
       icon: lib.isFavorite(entry) ? ICONS.UI.STAR : ICONS.UI.STAR_OUTLINE,
       action: () => lib.toggleFavorite(entry),
     },
-    { label: tm("library.details"), icon: ICONS.UI.INFORMATION_OUTLINE, action: () => openDetails(entry) },
+    {
+      label: tm("library.details"),
+      icon: ICONS.UI.INFORMATION_OUTLINE,
+      action: () => openDetails(entry),
+    },
   ];
 }
 
@@ -401,7 +492,6 @@ function thumbOf(entry: LibraryEntry): string | undefined {
   return entry.isDir ? undefined : meta.get(entry.path)?.thumb;
 }
 
-
 function durationOf(entry: LibraryEntry): string {
   const d = meta.get(entry.path)?.duration;
   return d ? DateTime.shortTime(d) : "";
@@ -420,7 +510,11 @@ function formatSize(bytes: number): string {
 }
 
 function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString(locale.value, { day: "2-digit", month: "2-digit", year: "numeric" });
+  return new Date(ms).toLocaleDateString(locale.value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 function onOpen(entry: LibraryEntry): void {
@@ -430,7 +524,10 @@ function onOpen(entry: LibraryEntry): void {
 
 function confirmRemove(path: string): void {
   $alert.yesno(
-    { title: `modules.${ModuleEnum.PRESENTATION_MODE}.library.remove_folder`, text: `modules.${ModuleEnum.PRESENTATION_MODE}.library.remove_folder_text` },
+    {
+      title: `modules.${ModuleEnum.PRESENTATION_MODE}.library.remove_folder`,
+      text: `modules.${ModuleEnum.PRESENTATION_MODE}.library.remove_folder_text`,
+    },
     (resp?: string) => {
       if (resp === "yes") void lib.removeFolder(path);
     }
