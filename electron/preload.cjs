@@ -257,6 +257,11 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
      * começa sem consultar o YouTube. `opts`: `{ maxHeight }`. Resolve `{ ok }`.
      */
     prefetch: (id, opts) => ipcRenderer.invoke("onlineVideo:prefetch", id, opts),
+    /** Conta do YouTube para o yt-dlp: `{ loggedIn }`. Os cookies nunca chegam ao renderer. */
+    accountStatus: () => ipcRenderer.invoke("onlineVideo:accountStatus"),
+    /** Abre a janela de login do Google; resolve quando ela fecha, com o novo estado. */
+    accountLogin: () => ipcRenderer.invoke("onlineVideo:accountLogin"),
+    accountLogout: () => ipcRenderer.invoke("onlineVideo:accountLogout"),
     /**
      * Vídeos de um canal (do mais recente ao mais antigo) ou de uma playlist, sem baixar.
      * `source`: `{ kind: "channel" | "playlist", id }` — id do canal (UC…), @ dele ou id

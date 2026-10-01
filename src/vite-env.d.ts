@@ -269,6 +269,9 @@ declare global {
       has: (id: string) => Promise<boolean>;
       list: () => Promise<import("./helpers/OnlineVideo").OnlineVideoFile[]>;
       prefetch?: (id: string, opts?: { maxHeight?: number }) => Promise<{ ok: boolean }>;
+      accountStatus?: () => Promise<import("./helpers/OnlineVideo").YouTubeAccountStatus>;
+      accountLogin?: () => Promise<import("./helpers/OnlineVideo").YouTubeAccountStatus>;
+      accountLogout?: () => Promise<import("./helpers/OnlineVideo").YouTubeAccountStatus>;
       collection?: (
         source: import("./helpers/OnlineVideo").YouTubeCollectionSource,
         range: { start: number; count: number; lang?: string }

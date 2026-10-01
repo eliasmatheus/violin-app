@@ -231,6 +231,7 @@ export function actionForFailure(kind: string): FailureAction {
 
 /** Chave i18n (global) da explicação para o operador. */
 export function messageKeyForFailure(kind: string): string {
+  if (kind === "bot") return "online_video.errors.bot";
   return VIDEO_ITSELF_UNPLAYABLE.has(kind)
     ? `online_video.errors.${kind}`
     : "online_video.errors.fallback";
@@ -241,6 +242,7 @@ export function messageKeyForFailure(kind: string): string {
  * pode prometer um. Se o problema é o próprio vídeo, a explicação é a mesma.
  */
 export function messageKeyForDownloadFailure(kind: string): string {
+  if (kind === "bot") return "online_video.errors.bot";
   return VIDEO_ITSELF_UNPLAYABLE.has(kind)
     ? `online_video.errors.${kind}`
     : "online_video.errors.download";
@@ -251,6 +253,7 @@ export function messageKeyForDownloadFailure(kind: string): string {
  * fala em download. O que é do próprio vídeo tem a mesma explicação de sempre.
  */
 export function messageKeyForStreamFailure(kind: string): string {
+  if (kind === "bot") return "online_video.errors.bot";
   return VIDEO_ITSELF_UNPLAYABLE.has(kind)
     ? `online_video.errors.${kind}`
     : "online_video.errors.stream";
@@ -299,6 +302,24 @@ export function maxHeight(): number {
   return normalizeMaxHeight(
     $userdata.get(KEYS.OPTIONS.ONLINE_VIDEO_PROJECTION.MAX_HEIGHT, DEFAULT_MAX_HEIGHT)
   );
+}
+
+export interface YouTubeAccountStatus {
+  loggedIn: boolean;
+}
+
+/** Conta do YouTube do operador (só desktop). Os cookies ficam no main. */
+export async function youtubeAccountStatus(): Promise<YouTubeAccountStatus> {
+  return (await Platform.onlineVideo?.accountStatus?.().catch(() => null)) ?? { loggedIn: false };
+}
+
+/** Abre a janela de login do Google; resolve quando ela fecha. */
+export async function youtubeAccountLogin(): Promise<YouTubeAccountStatus> {
+  return (await Platform.onlineVideo?.accountLogin?.().catch(() => null)) ?? { loggedIn: false };
+}
+
+export async function youtubeAccountLogout(): Promise<YouTubeAccountStatus> {
+  return (await Platform.onlineVideo?.accountLogout?.().catch(() => null)) ?? { loggedIn: false };
 }
 
 /**

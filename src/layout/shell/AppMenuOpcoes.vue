@@ -1208,6 +1208,38 @@
             {{ $t("options.videos.cache_clear") }}
           </LjButton>
         </div>
+        <div class="opt-row">
+          <span class="opt-label">
+            {{ $t("options.videos.account_title") }} —
+            {{
+              youtubeLoggedIn
+                ? $t("options.videos.account_connected")
+                : $t("options.videos.account_none")
+            }}
+          </span>
+          <LjButton
+            v-if="youtubeLoggedIn"
+            variant="default"
+            size="sm"
+            :disabled="youtubeBusy"
+            data-testid="opt-youtube-logout"
+            @click="youtubeLogout"
+          >
+            {{ $t("options.videos.account_logout") }}
+          </LjButton>
+          <LjButton
+            v-else
+            variant="default"
+            size="sm"
+            :icon="ICONS.MEDIA.YOUTUBE"
+            :loading="youtubeBusy"
+            data-testid="opt-youtube-login"
+            @click="youtubeLogin"
+          >
+            {{ $t("options.videos.account_login") }}
+          </LjButton>
+        </div>
+        <p class="opt-hint">{{ $t("options.videos.account_hint") }}</p>
       </template>
       <div class="opt-row">
         <label class="opt-checkbox">
@@ -1542,7 +1574,14 @@ import $userdata from "@/helpers/UserData";
 import Platform from "@/helpers/Platform";
 import Telemetry from "@/helpers/Telemetry";
 import $alert from "@/helpers/Alert";
-import { DEFAULT_MAX_HEIGHT, MAX_HEIGHTS, normalizeMaxHeight } from "@/helpers/OnlineVideo";
+import {
+  DEFAULT_MAX_HEIGHT,
+  MAX_HEIGHTS,
+  normalizeMaxHeight,
+  youtubeAccountLogin,
+  youtubeAccountLogout,
+  youtubeAccountStatus,
+} from "@/helpers/OnlineVideo";
 import { ICONS } from "@/config/Icons";
 import { KEYS } from "@/constants/UserDataKeys";
 import { DEFAULT_BACKGROUND_COLOR, MAIN_BACKGROUND_ID, Settings } from "@/types/Settings";
@@ -1968,8 +2007,32 @@ function clearVideoCache(): void {
   });
 }
 
+/* Conta do YouTube: só a pedido, quando o YouTube começa a pedir "não é um robô". */
+const youtubeLoggedIn = ref(false);
+const youtubeBusy = ref(false);
+
+async function youtubeLogin(): Promise<void> {
+  youtubeBusy.value = true;
+  try {
+    youtubeLoggedIn.value = (await youtubeAccountLogin()).loggedIn;
+  } finally {
+    youtubeBusy.value = false;
+  }
+}
+
+async function youtubeLogout(): Promise<void> {
+  youtubeBusy.value = true;
+  try {
+    youtubeLoggedIn.value = (await youtubeAccountLogout()).loggedIn;
+  } finally {
+    youtubeBusy.value = false;
+  }
+}
+
 onMounted(() => {
-  if (isDesktop.value) void refreshVideoCache();
+  if (!isDesktop.value) return;
+  void refreshVideoCache();
+  void youtubeAccountStatus().then((s) => (youtubeLoggedIn.value = s.loggedIn));
 });
 
 const bibleReturnEnabled: ComputedRef<boolean> = computed(

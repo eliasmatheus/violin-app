@@ -52,7 +52,7 @@ function page(opts) {
   return { start, count, lang };
 }
 
-function buildListArgs({ url, start, count, lang = "pt", cacheDir, jsRuntime, systemCerts }) {
+function buildListArgs({ url, start, count, lang = "pt", cacheDir, cookiesFile, jsRuntime, systemCerts }) {
   const args = [
     "--ignore-config",
     "--flat-playlist",
@@ -69,6 +69,7 @@ function buildListArgs({ url, start, count, lang = "pt", cacheDir, jsRuntime, sy
     "-J",
   ];
   if (cacheDir) args.push("--cache-dir", cacheDir);
+  if (cookiesFile) args.push("--cookies", cookiesFile);
   if (jsRuntime) args.push("--js-runtimes", jsRuntime);
   if (systemCerts) args.push(...SYSTEM_CERTS_ARGS);
   args.push(url);

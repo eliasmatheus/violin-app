@@ -1433,6 +1433,13 @@ describe("stream (tocar já, enquanto baixa uma vez só)", () => {
       await manager.ensure(A);
     });
 
+    it("depois de um bloqueio \"não é um robô\", para de adiantar consultas", async () => {
+      const { manager, resolve } = makeStream({ cfg: { now: () => BEFORE_EXPIRY } });
+      manager.noteBlocked();
+      expect(await manager.prefetch(A)).toEqual({ ok: true, skipped: "blocked" });
+      expect(resolve).not.toHaveBeenCalled();
+    });
+
     it("não resolve o que já está baixado nem aceita ID inválido", async () => {
       const { manager, resolve } = makeStream({ cfg: { now: () => BEFORE_EXPIRY } });
       await manager.stream(A);

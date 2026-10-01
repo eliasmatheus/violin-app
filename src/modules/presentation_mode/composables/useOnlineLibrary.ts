@@ -74,8 +74,12 @@ export const VIDEOS = "__videos__";
 const TABLE = DB_TABLE.PRESENTATION_ONLINE;
 const CACHE = DB_TABLE.PRESENTATION_ONLINE_CACHE;
 const PAGE = 50;
-/** Depois disto a cópia guardada é mostrada, mas a lista é consultada de novo. */
-const STALE_MS = 30 * 60 * 1000;
+/**
+ * Depois disto a cópia guardada é mostrada, mas a lista é consultada de novo.
+ * Folgado de propósito: cada consulta conta para o bloqueio "não é um robô" do
+ * YouTube, e num culto a lista não muda — atualizar continua a um clique.
+ */
+const STALE_MS = 6 * 60 * 60 * 1000;
 
 const favorites = ref<OnlineFavorite[]>([]);
 let loaded: Promise<void> | null = null;

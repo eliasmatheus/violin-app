@@ -59,7 +59,7 @@ const SYSTEM_CERTS_ARGS = ["--compat-options", "no-certifi"];
 /** Vale para o processo todo: depois que o repositório do sistema resolveu, as chamadas já começam com ele. */
 const defaultCertTrust = { system: false };
 
-function buildArgs({ id, outDir, ffmpegPath, maxHeight, cacheDir, jsRuntime, systemCerts }) {
+function buildArgs({ id, outDir, ffmpegPath, maxHeight, cacheDir, cookiesFile, jsRuntime, systemCerts }) {
   const args = [
     "--ignore-config",
     "--no-playlist",
@@ -89,6 +89,8 @@ function buildArgs({ id, outDir, ffmpegPath, maxHeight, cacheDir, jsRuntime, sys
     path.join(outDir, "%(id)s.%(ext)s"),
   ];
   if (cacheDir) args.push("--cache-dir", cacheDir);
+  // Sessão do operador logado no YouTube: é o que passa pelo "confirme que você não é um robô".
+  if (cookiesFile) args.push("--cookies", cookiesFile);
   if (jsRuntime) args.push("--js-runtimes", jsRuntime);
   if (systemCerts) args.push(...SYSTEM_CERTS_ARGS);
   args.push(watchUrl(id));
@@ -411,7 +413,7 @@ function run(opts) {
   return withSystemCerts(runOnce, opts);
 }
 
-function buildResolveArgs({ id, maxHeight, cacheDir, jsRuntime, systemCerts }) {
+function buildResolveArgs({ id, maxHeight, cacheDir, cookiesFile, jsRuntime, systemCerts }) {
   const args = [
     "--ignore-config",
     "--no-playlist",
@@ -426,6 +428,8 @@ function buildResolveArgs({ id, maxHeight, cacheDir, jsRuntime, systemCerts }) {
     "-J",
   ];
   if (cacheDir) args.push("--cache-dir", cacheDir);
+  // Sessão do operador logado no YouTube: é o que passa pelo "confirme que você não é um robô".
+  if (cookiesFile) args.push("--cookies", cookiesFile);
   if (jsRuntime) args.push("--js-runtimes", jsRuntime);
   if (systemCerts) args.push(...SYSTEM_CERTS_ARGS);
   args.push(watchUrl(id));

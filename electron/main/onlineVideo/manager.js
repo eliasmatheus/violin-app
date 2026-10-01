@@ -48,6 +48,9 @@ async function defaultFreeBytes(dir) {
   }
 }
 
+/** Depois de um bloqueio "não é um robô", as consultas adiantadas param por este tempo. */
+const BLOCKED_PAUSE_MS = 10 * 60 * 1000;
+
 /** Quantos vídeos com links prontos ficam à espera: a prévia, o "a seguir" e o próximo da fila. */
 const PREFETCH_MAX = 6;
 /** Links que vencem antes disto são resolvidos de novo: o vídeo precisa tocar até o fim. */
@@ -111,6 +114,8 @@ function createManager(cfg) {
     maxBytes = DEFAULT_MAX_BYTES,
     freeBytes = defaultFreeBytes,
     jsRuntime = () => undefined,
+    /** Arquivo de cookies da conta do YouTube, quando o operador entrou nela. */
+    cookies = () => undefined,
     now = Date.now,
     monotonicNow = () => performance.now(),
     refreshCooldownMs = REFRESH_COOLDOWN_MS,
@@ -452,6 +457,7 @@ function createManager(cfg) {
       outDir: partial,
       maxHeight: job.maxHeight,
       cacheDir,
+      cookiesFile: cookies(),
       jsRuntime: jsRuntime(),
       signal,
       onProgress: (p) =>
@@ -685,6 +691,7 @@ function createManager(cfg) {
           id,
           maxHeight: clampHeight(opts.maxHeight),
           cacheDir,
+          cookiesFile: cookies(),
           jsRuntime: jsRuntime(),
           signal: entry.controller.signal,
         })
@@ -1082,6 +1089,16 @@ function createManager(cfg) {
   }
 
   /**
+   * O YouTube recusou com "não é um robô". Continuar consultando só piora o
+   * bloqueio: por um tempo, nada de consultas adiantadas — só o que o operador pede.
+   */
+  let blockedUntil = 0;
+  function noteBlocked() {
+    blockedUntil = now() + BLOCKED_PAUSE_MS;
+    prefetched.clear();
+  }
+
+  /**
    * Resolve os links de um vídeo antes do play, sem baixar nada: é o que o
    * operador está vendo na prévia ou o que vem a seguir. Quando ele mandar tocar,
    * o `stream` pula a consulta ao YouTube (~2 s). Pedido do operador, então
@@ -1089,6 +1106,7 @@ function createManager(cfg) {
    */
   async function prefetch(id, opts = {}) {
     if (!isVideoId(id)) return fail(new OnlineVideoError("invalid", "ID de vídeo inválido"));
+    if (now() < blockedUntil) return { ok: true, skipped: "blocked" };
     if (!tools.supported || !tools.ready()) return { ok: true, skipped: "tools" };
     if (store.has(id) || jobs.has(id) || sessions.has(id)) return { ok: true, skipped: "ready" };
     const maxHeight = clampHeight(opts.maxHeight);
@@ -1113,7 +1131,14 @@ function createManager(cfg) {
     if (!tools.supported) return fail(new OnlineVideoError("unsupported", "Plataforma sem suporte"));
     try {
       if (!tools.ready()) await tools.ensure();
-      const result = await listCollection({ tools: tools.paths(), cacheDir, jsRuntime: jsRuntime(), source, range });
+      const result = await listCollection({
+        tools: tools.paths(),
+        cacheDir,
+        cookiesFile: cookies(),
+        jsRuntime: jsRuntime(),
+        source,
+        range,
+      });
       return { ok: true, ...result };
     } catch (error) {
       return fail(error);
@@ -1158,6 +1183,7 @@ function createManager(cfg) {
     diagnosticSnapshot,
     list,
     prefetch,
+    noteBlocked,
     collection,
     init,
     close,

@@ -7,6 +7,21 @@ const { createManager } = require("./manager.js");
 const { isVideoId } = require("./ids.js");
 const { safeSend } = require("../safeWebContents.js");
 const { migrateDownloads } = require("./migration.js");
+const { createYoutubeAccount, PARTITION } = require("./youtubeAccount.js");
+
+let _account = null;
+/** Conta do YouTube do operador (sessão separada do app; cookies fora da pasta de dados). */
+function account() {
+  if (!_account) {
+    const { session, BrowserWindow } = require("electron");
+    _account = createYoutubeAccount({
+      session: () => session.fromPartition(PARTITION),
+      cookiesFile: path.join(paths.bootstrapDir(), "youtube-cookies.txt"),
+      createWindow: (opts) => new BrowserWindow(opts),
+    });
+  }
+  return _account;
+}
 
 let _manager = null;
 let _ready = null;
@@ -55,6 +70,7 @@ function getManager() {
       // liberar os formatos. O próprio Electron, rodando como Node, faz isso sem
       // baixar mais nada (o runner liga ELECTRON_RUN_AS_NODE só para esse filho).
       jsRuntime: () => `node:${process.execPath}`,
+      cookies: () => account().cookiesFor(),
       // O E2E provoca a renovação de propósito; uma renovação de minutos antes,
       // feita por uma falha passageira de rede, não pode deixá-lo sem o que testar.
       refreshCooldownMs: process.env.LJ_E2E_USER_DATA ? 0 : undefined,
@@ -83,6 +99,8 @@ async function readyManager() {
 
 /** Sem isto a falha só vira um aviso na tela, e não se sabe por quê (no Windows, sobretudo). */
 function logFailure(operation, id, res) {
+  // Bloqueio "não é um robô": para de adiantar consultas por um tempo (ver manager.noteBlocked).
+  if (res && res.ok === false && res.error?.kind === "bot") _manager?.noteBlocked();
   if (res && res.ok === false && res.error?.kind !== "cancelled") {
     console.warn(`[onlineVideo] ${operation} falhou (${process.platform}-${process.arch}):`, id, res.error?.kind, res.error?.message);
   }
@@ -142,6 +160,10 @@ function registerIpc(ipcMain) {
   ipcMain.handle("onlineVideo:keep", async (_event, id) => (await readyManager()).keep(id));
   ipcMain.handle("onlineVideo:prepare", async () => (await readyManager()).prepare());
   ipcMain.handle("onlineVideo:list", async () => (await readyManager()).list());
+  // Conta do YouTube: o renderer só pede abrir o login, sair ou o estado — nunca vê os cookies.
+  ipcMain.handle("onlineVideo:accountStatus", () => account().status());
+  ipcMain.handle("onlineVideo:accountLogin", () => account().login());
+  ipcMain.handle("onlineVideo:accountLogout", () => account().logout());
   // Resolve os links antes do play (prévia, "a seguir"); só ID e altura máxima, como `stream`.
   ipcMain.handle("onlineVideo:prefetch", async (_event, id, opts) => {
     const o = opts && typeof opts === "object" ? opts : {};
