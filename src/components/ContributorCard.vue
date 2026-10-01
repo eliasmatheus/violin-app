@@ -6,6 +6,9 @@
           v-if="currentSrc && !showFallbackAvatar"
           class="contributor-card__photo"
           :src="currentSrc"
+          width="68"
+          height="68"
+          decoding="async"
           alt=""
           @error="onAvatarError"
         />
@@ -75,8 +78,10 @@ const avatarSources = computed<string[]>(() => {
   const c = props.contributor;
   const sources: string[] = [];
   if (c.image) sources.push(c.image);
-  if (c.github) sources.push(`https://github.com/${c.github}.png`);
-  if (c.facebook) sources.push(`https://graph.facebook.com/${c.facebook}/picture?type=square`);
+  // 144px cobre o círculo de 68px em tela 2×; o padrão do GitHub é 460px.
+  // O Facebook não entra: a Graph API recusa a foto sem token (HTTP 400), e cada
+  // abertura da tela fazia um pedido perdido por contribuidor.
+  if (c.github) sources.push(`https://github.com/${c.github}.png?size=144`);
   if (c.website) {
     const domain = c.website.replace(/^https?:\/\//, "").split("/")[0];
     sources.push(`https://www.google.com/s2/favicons?domain=${domain}&sz=128`);
@@ -143,16 +148,10 @@ const links = computed<ContributorLink[]>(() => {
 </script>
 
 <style scoped>
+/* Sem realce no hover: o cartão não é clicável, e ao rolar a lista cada um que
+   passava sob o cursor repintava borda e sombra. */
 .contributor-card {
   height: 100%;
-  transition:
-    box-shadow var(--lj-transition-normal),
-    border-color var(--lj-transition-normal);
-}
-
-.contributor-card:hover {
-  border-color: var(--lj-ui-accent);
-  box-shadow: var(--lj-shadow-2);
 }
 
 /* O corpo do LjCard vem sem padding (`flush`); aqui ele vira a coluna que
