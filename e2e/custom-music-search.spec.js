@@ -110,3 +110,31 @@ for (const surface of surfaces) {
     await expect(rows).toHaveCount(1);
   });
 }
+
+test("tela Músicas: título, coletânea e execução do acervo pessoal", async ({ page, context }) => {
+  await start(page, context);
+  await page.evaluate(async () => {
+    const { default: modules } = await import("/src/helpers/Modules.js");
+    modules.open("musics");
+  });
+  const input = page.locator(".musics-searchbar").getByRole("textbox");
+  const rows = page.locator('[data-testid^="music-row-"]');
+  await input.fill("Esperança viva");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Juventude sábado");
+  await expect(rows.first()).toContainText("Equipe do culto");
+  // Coletânea ocupa o lugar do álbum: segue o mesmo filtro "Buscar em".
+  await input.fill("Juventude");
+  await expect(rows).toHaveCount(0);
+  await page.getByText("Álbum", { exact: true }).first().click();
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Esperança viva");
+
+  const projection = await context.newPage();
+  await projection.goto("/projection");
+  await expect(projection.locator(".projection-stage")).toBeVisible();
+  await page.bringToFront();
+  await rows.first().getByRole("button", { name: "Executar", exact: true }).click();
+  await expect(projection.locator('[data-testid="slide-content"]')).toBeVisible();
+  await projection.close();
+});

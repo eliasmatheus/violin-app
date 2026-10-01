@@ -20,7 +20,8 @@ vi.mock("@/helpers/ProjectionWindows", () => ({
   currentMediaKind: vi.fn(),
   openMediaWindow: vi.fn(),
 }));
-vi.mock("@/helpers/CustomMusicCatalog", () => ({
+vi.mock("@/helpers/CustomMusicCatalog", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/helpers/CustomMusicCatalog")>()),
   loadCustomMusicCatalog: mocks.loadCustomMusicCatalog,
 }));
 vi.mock("@/helpers/CustomSongs", () => ({ getSong: mocks.getSong }));

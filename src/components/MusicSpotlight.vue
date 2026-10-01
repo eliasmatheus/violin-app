@@ -151,9 +151,7 @@ import { useI18n } from "vue-i18n";
 import LMusicMenuTable from "@/components/MusicMenuTable.vue";
 import { LjButton, LjDialog, LjEmpty, LjInput, LjSpinner } from "@/components/ui";
 import Database from "@/helpers/Database";
-import { loadCustomMusicCatalog } from "@/helpers/CustomMusicCatalog";
-import { getSong } from "@/helpers/CustomSongs";
-import Media from "@/composables/useMedia";
+import { loadCustomMusicCatalog, openCustomMusic } from "@/helpers/CustomMusicCatalog";
 import Strings from "@/helpers/Strings";
 import { isHymnalTrack } from "@/helpers/Hymnal";
 import { useMusicCatalog } from "@/composables/useMusicCatalog";
@@ -297,8 +295,7 @@ async function executeCustomMusic(music: SearchMusicItem): Promise<void> {
   if (!music.custom_song_id) return;
   open.value = false;
   try {
-    const song = await getSong(music.custom_song_id);
-    if (song) await Media.openCustomSong(song);
+    await openCustomMusic(music.custom_song_id);
   } catch (error) {
     console.error("[MusicSpotlight] Falha ao executar música personalizada:", error);
   }

@@ -1,5 +1,7 @@
 /** Índice leve do acervo pessoal para as buscas; slides e áudio são lidos só ao executar. */
 import DocStore from "@/helpers/DocStore";
+import { getSong } from "@/helpers/CustomSongs";
+import Media from "@/composables/useMedia";
 import { DB_TABLE } from "@/constants/DbTables";
 import type { SearchMusicItem } from "@/types/Music";
 
@@ -52,4 +54,10 @@ export async function loadCustomMusicCatalog(): Promise<SearchMusicItem[]> {
     });
   }
   return [...items.values()];
+}
+
+/** Único caminho de execução para busca rápida, paleta de comandos e tela de Músicas. */
+export async function openCustomMusic(customSongId: string): Promise<void> {
+  const song = await getSong(customSongId);
+  if (song) await Media.openCustomSong(song);
 }

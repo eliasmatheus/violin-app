@@ -74,6 +74,8 @@ const props = defineProps({
    * do gate — são match exato e barato.
    */
   search_min_length: { type: Number, default: 0 },
+  /** Linhas locais somadas ao arquivo (acervo pessoal na tela de Músicas). */
+  extra_rows: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(["update:modelValue"]);
@@ -84,6 +86,26 @@ const { disabledAlbums, years } = useMusicCatalog(
   () => /_musics$/.test(props.file || "")
 );
 let sourceData = null;
+let fileData = null;
+
+function withExtraRows(rows) {
+  return props.extra_rows.length ? [...rows, ...props.extra_rows] : rows;
+}
+
+function applySource() {
+  sourceData = withExtraRows(fileData);
+  const prepared = prepareDataset(sourceData);
+  _preparedDataset = prepared;
+  all_data.value = prepared.items;
+  _indexedData = prepared.indexed || [];
+  // Watchers de filtros podem rodar enquanto o dataset ainda está vazio.
+  // O índice acabou de ser preenchido, então o recorte anterior não é mais
+  // válido mesmo que os filtros tenham a mesma assinatura.
+  _baseCacheSignature = "";
+  _baseCache = [];
+  _fuseCache = null;
+  filterData();
+}
 
 function disabledAlbumIds() {
   return [...disabledAlbums.value, ...props.disabled_albums];
@@ -239,6 +261,13 @@ watch(
 );
 
 watch(
+  () => props.extra_rows,
+  () => {
+    if (fileData) applySource();
+  }
+);
+
+watch(
   () => props.search,
   (search) => {
     // Limpar a busca acontece ao fechar o módulo. Não deixe o resultado
@@ -331,6 +360,7 @@ async function loadData() {
   filter_data.value = [];
   data.value = [];
   sourceData = null;
+  fileData = null;
   clearIndexes();
   error.value = null;
   loading.value = true;
@@ -351,18 +381,8 @@ async function loadData() {
       return;
     }
 
-    sourceData = loadedData;
-    const prepared = prepareDataset(loadedData);
-    _preparedDataset = prepared;
-    all_data.value = prepared.items;
-    _indexedData = prepared.indexed || [];
-    // Watchers de filtros podem rodar enquanto o dataset ainda está vazio.
-    // O índice acabou de ser preenchido, então o recorte anterior não é mais
-    // válido mesmo que os filtros tenham a mesma assinatura.
-    _baseCacheSignature = "";
-    _baseCache = [];
-    _fuseCache = null;
-    filterData();
+    fileData = loadedData;
+    applySource();
     await nextTick();
     reportLoad("ready", {
       total_rows: all_data.value.length,

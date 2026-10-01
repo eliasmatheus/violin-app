@@ -19,8 +19,7 @@ import Fuse from "fuse.js";
 import Modules from "@/helpers/Modules";
 import Media from "@/composables/useMedia";
 import Platform from "@/helpers/Platform";
-import { loadCustomMusicCatalog } from "@/helpers/CustomMusicCatalog";
-import { getSong } from "@/helpers/CustomSongs";
+import { loadCustomMusicCatalog, openCustomMusic } from "@/helpers/CustomMusicCatalog";
 import { currentMediaKind, openMediaWindow } from "@/helpers/ProjectionWindows";
 import { ICONS } from "@/config/Icons";
 import { hymnalTracks } from "@/helpers/Hymnal";
@@ -348,10 +347,7 @@ export async function getAll($database, $userdata, t) {
         customLabel,
         icon: ICONS.MUSIC.NOTE,
         category: "music",
-        run: async () => {
-          const song = await getSong(music.custom_song_id);
-          if (song) await Media.openCustomSong(song);
-        },
+        run: () => openCustomMusic(music.custom_song_id),
       })),
     ];
   }
