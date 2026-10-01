@@ -142,6 +142,24 @@ declare global {
           }
         | { ok: false; error: string }
       >;
+      seriesRead?: (
+        dirPath: string
+      ) => Promise<
+        | {
+            ok: true;
+            series: import("./types/Series").SeriesDoc | null;
+            versions: import("./types/Series").SeriesVersion[];
+          }
+        | { ok: false; error: string }
+      >;
+      seriesResolve?: (
+        dirPath: string,
+        choice: string
+      ) => Promise<{ ok: true; series: import("./types/Series").SeriesDoc | null } | { ok: false; error: string }>;
+      seriesWrite?: (
+        dirPath: string,
+        data: import("./types/Series").SeriesDoc
+      ) => Promise<{ ok: true; series: import("./types/Series").SeriesDoc } | { ok: false; error: string }>;
       setDataDir: (dir: string, opts?: { moveExisting?: boolean }) => Promise<void>;
       enforceQuota: (maxBytes: number) => Promise<void>;
       checkLocal: (paths: string[]) => Promise<Record<string, "own" | "classic" | false>>;

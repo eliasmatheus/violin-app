@@ -184,6 +184,7 @@ import $path from "@/helpers/Path";
 import { kindFromPath } from "../program/liturgy";
 import { itemVideoId, openOnline, useOnlineQueue } from "../composables/useOnlinePlayback";
 import { useOnlinePrefetch } from "../composables/useOnlinePrefetch";
+import { useSeriesRecorder } from "../composables/useSeries";
 import {
   bibleSource,
   fileQueueSource,
@@ -588,6 +589,12 @@ const navigation = useLiveNavigation(
 );
 const { canNavigate, navigate } = navigation;
 const queueCounter = navigation.counter;
+
+useSeriesRecorder(() => {
+  const origin = liveOrigin.value;
+  if (origin?.type === "file") return origin.entry.path;
+  return origin?.type === "program" ? (findItem(origin.itemId)?.source?.dir ?? null) : null;
+});
 
 useOnlinePrefetch(() => {
   const preview = stage.preview.value;

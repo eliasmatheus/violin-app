@@ -72,6 +72,14 @@
     </nav>
 
     <div class="pm-files">
+      <SeriesBar
+        v-if="seriesDir"
+        ref="seriesBar"
+        :dir="seriesDir"
+        :files="seriesFiles"
+        @preview="(file: string) => byName(file) && onClick(byName(file)!)"
+        @play="(file: string) => byName(file) && emit('play', filePlayable(byName(file)!))"
+      />
       <div v-if="emptyMessage" class="pm-files__empty">
         <p>{{ emptyMessage }}</p>
         <LjButton
@@ -91,6 +99,7 @@
               'pm-file--selected': entry.path === selected?.path,
               'pm-file--live': entry.path === livePath,
               'pm-file--return': entry.path === returnPath,
+              'pm-file--played': !!playedOf(entry),
             }"
             role="button"
             tabindex="0"
@@ -105,6 +114,19 @@
               <img v-if="thumbOf(entry)" :src="thumbOf(entry)" alt="" loading="lazy" />
               <LjIcon v-else :icon="iconOf(entry)" :size="22" class="pm-file__icon" />
               <span v-if="durationOf(entry)" class="pm-file__badge">{{ durationOf(entry) }}</span>
+              <span
+                v-if="playedOf(entry)"
+                class="pm-file__series"
+                :title="tm('series.played_at', { date: playedOf(entry) })"
+              >
+                ✓ {{ playedOf(entry) }}
+              </span>
+              <span
+                v-else-if="entry.name === seriesNext"
+                class="pm-file__series pm-file__series--next"
+              >
+                {{ tm("series.next_badge") }}
+              </span>
               <span v-if="entry.path === returnPath" class="pm-file__return">
                 {{ tm("library.on_return") }}
               </span>
@@ -162,6 +184,16 @@
           <bdi dir="ltr">{{ locationLabel }}</bdi>
         </span>
         <span class="pm-files__count">{{ countLabel }}</span>
+        <button
+          v-if="seriesDir && !seriesDoc"
+          type="button"
+          class="pm-files__make-series"
+          data-testid="pm-series-make"
+          @click="seriesBar?.openDialog()"
+        >
+          <LjIcon :icon="ICONS.MEDIA.PLAYLIST" :size="12" />
+          {{ tm("series.make") }}
+        </button>
         <span class="pm-files__hint">{{ tm("library.hint") }}</span>
       </footer>
     </div>
@@ -235,6 +267,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import SeriesBar from "./SeriesBar.vue";
+import { useSeries } from "../composables/useSeries";
+import { playedInCycle, progressOf } from "../program/series";
 import draggable from "vuedraggable";
 import {
   LjButton,
@@ -355,6 +390,7 @@ function menuFor(entry: LibraryEntry): LjMenuItem[] {
       icon: ICONS.UI.INFORMATION_OUTLINE,
       action: () => openDetails(entry),
     },
+    ...seriesMenu(entry),
   ];
 }
 
@@ -429,6 +465,47 @@ function confirmRemove(path: string): void {
       if (resp === "yes") void lib.removeFolder(path);
     }
   );
+}
+
+/* ─── Série: a pasta aberta pode guardar o histórico do que já passou ─── */
+
+const series = useSeries();
+const seriesBar = ref<{ openDialog: () => void } | null>(null);
+/** Só uma pasta de verdade vira série — "Todos" e "Favoritos" juntam várias. */
+const seriesDir = computed(() => lib.location.value);
+const seriesDoc = computed(() => series.of(seriesDir.value));
+const seriesFiles = computed(() => lib.entries.value.filter((e) => !e.isDir).map((e) => e.name));
+const seriesPlayed = computed(() => (seriesDoc.value ? playedInCycle(seriesDoc.value) : null));
+const seriesNext = computed(() =>
+  seriesDoc.value ? progressOf(seriesDoc.value, seriesFiles.value).next : null
+);
+const byName = (name: string) => lib.entries.value.find((e) => e.name === name && !e.isDir) ?? null;
+
+/** Data em que o vídeo passou neste ciclo da série ("24/09"), ou "" se não passou. */
+function playedOf(entry: LibraryEntry): string {
+  const play = entry.isDir ? null : seriesPlayed.value?.get(entry.name);
+  return play
+    ? new Date(play.at).toLocaleDateString(locale.value, { day: "2-digit", month: "2-digit" })
+    : "";
+}
+
+function seriesMenu(entry: LibraryEntry): LjMenuItem[] {
+  const dir = seriesDir.value;
+  if (!dir || !seriesDoc.value || entry.isDir) return [];
+  return [
+    { separator: true },
+    playedOf(entry)
+      ? {
+          label: tm("series.unmark"),
+          icon: ICONS.ACTIONS.UNDO,
+          action: () => void series.unmark(dir, entry.name),
+        }
+      : {
+          label: tm("series.mark"),
+          icon: ICONS.UI.CHECK,
+          action: () => void series.markPlayed(dir, entry.name),
+        },
+  ];
 }
 
 const locationLabel = computed(() => {
@@ -692,6 +769,41 @@ const emptyMessage = computed(() => {
 .pm-file__info:focus-visible {
   outline: none;
   box-shadow: var(--lj-ui-focus);
+}
+
+.pm-file__series {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--lj-black-alpha-75);
+  color: var(--lj-white);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.pm-file__series--next {
+  background: var(--lj-orange);
+}
+
+/* Já passou neste ciclo: continua clicável, mas recua para o próximo se destacar. */
+.pm-file--played .pm-file__thumb img {
+  opacity: 0.45;
+}
+
+.pm-files__make-series {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--lj-orange);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
 }
 
 .pm-file__return {

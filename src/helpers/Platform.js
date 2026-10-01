@@ -334,6 +334,29 @@ export default {
     return api?.storage?.listDir?.(dirPath) ?? Promise.resolve({ ok: false, error: "unsupported" });
   },
 
+  /** Histórico da série de vídeos da pasta. No navegador: `{ ok: false }`. */
+  seriesRead(dirPath) {
+    return (
+      api?.storage?.seriesRead?.(dirPath) ?? Promise.resolve({ ok: false, error: "unsupported" })
+    );
+  },
+
+  /** Resolve as cópias em conflito do histórico: `"merge"` ou o nome da versão a manter. */
+  seriesResolve(dirPath, choice) {
+    return (
+      api?.storage?.seriesResolve?.(dirPath, choice) ??
+      Promise.resolve({ ok: false, error: "unsupported" })
+    );
+  },
+
+  /** Grava o histórico da série (o main junta com o que já está no disco). */
+  seriesWrite(dirPath, data) {
+    return (
+      api?.storage?.seriesWrite?.(dirPath, data) ??
+      Promise.resolve({ ok: false, error: "unsupported" })
+    );
+  },
+
   /**
    * Detecção da versão clássica Delphi (Windows).
    * { detect() } — retorna { detected, installDir, configDir, lang, folders }.

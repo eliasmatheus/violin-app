@@ -384,6 +384,12 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     readDir: (dirPath) => ipcRenderer.invoke("storage:readDir", dirPath),
     /** Um nível de uma pasta, com tamanho e data (navegador de arquivos). */
     listDir: (dirPath) => ipcRenderer.invoke("files:listDir", dirPath),
+    /** Histórico da série de vídeos da pasta (`.louvorja-serie.json`); `series: null` se não é série. */
+    seriesRead: (dirPath) => ipcRenderer.invoke("files:seriesRead", dirPath),
+    /** Grava o histórico juntando com o que já está no disco; devolve o resultado. */
+    seriesWrite: (dirPath, data) => ipcRenderer.invoke("files:seriesWrite", dirPath, data),
+    /** Resolve cópias em conflito do histórico: `"merge"` ou o nome da versão a manter. */
+    seriesResolve: (dirPath, choice) => ipcRenderer.invoke("files:seriesResolve", dirPath, choice),
     /** Verifica quais arquivos remotos já estão no disco. */
     checkLocal: (remotePaths) => ipcRenderer.invoke("storage:checkLocal", remotePaths),
     /** Remove arquivos de mídia do cache local (paths remotos relativos). */
