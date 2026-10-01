@@ -256,7 +256,9 @@ function displayValue(item: unknown): string {
   flex-shrink: 0;
 }
 
+/* A camada é teleportada para o <body>, que não carrega a cor do app. */
 .lj-combobox__content {
+  color: var(--lj-text);
   min-width: var(--reka-combobox-trigger-width);
   max-height: 280px;
   overflow: hidden;
