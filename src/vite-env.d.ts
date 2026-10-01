@@ -250,6 +250,7 @@ declare global {
       cancel: (id: string) => Promise<boolean>;
       has: (id: string) => Promise<boolean>;
       list: () => Promise<import("./helpers/OnlineVideo").OnlineVideoFile[]>;
+      prefetch?: (id: string, opts?: { maxHeight?: number }) => Promise<{ ok: boolean }>;
       collection?: (
         source: import("./helpers/OnlineVideo").YouTubeCollectionSource,
         range: { start: number; count: number; lang?: string }

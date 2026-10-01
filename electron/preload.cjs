@@ -253,6 +253,11 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     /** Vídeos em disco: [{ id, size, usedAt, kept }] */
     list: () => ipcRenderer.invoke("onlineVideo:list"),
     /**
+     * Resolve os links do vídeo antes do play, sem baixar: o próximo `stream` dele
+     * começa sem consultar o YouTube. `opts`: `{ maxHeight }`. Resolve `{ ok }`.
+     */
+    prefetch: (id, opts) => ipcRenderer.invoke("onlineVideo:prefetch", id, opts),
+    /**
      * Vídeos de um canal (do mais recente ao mais antigo) ou de uma playlist, sem baixar.
      * `source`: `{ kind: "channel" | "playlist", id }` — id do canal (UC…), @ dele ou id
      * da playlist. `range`: `{ start, count }` (1-based, até 50). Resolve

@@ -22,7 +22,7 @@ const MAIN = file("../../main.cjs");
 const PROTOCOL = file("../protocol.js");
 const PATHS = file("../paths.js");
 
-const FUNCTIONS = ["status", "ensure", "stream", "cancel", "has", "list", "collection", "keep", "prepare", "remove", "clear"];
+const FUNCTIONS = ["status", "ensure", "stream", "cancel", "has", "list", "prefetch", "collection", "keep", "prepare", "remove", "clear"];
 
 async function withFakeElectron(platform, fn) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lj-video-ipc-"));

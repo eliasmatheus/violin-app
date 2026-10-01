@@ -192,8 +192,14 @@ import { MUSIC_MODES, type MusicMode } from "../program/musicModes";
 import $path from "@/helpers/Path";
 import { kindFromPath } from "../program/liturgy";
 import { bibleItem, fileItem, onlineItem, songItem } from "../program/items";
-import { useOnlineLibrary, type OnlineEntry } from "../composables/useOnlineLibrary";
-import { youtubeEmbedUrl } from "@/helpers/OnlineVideo";
+import type { OnlineEntry } from "../composables/useOnlineLibrary";
+import {
+  itemVideoId,
+  onlinePlayable,
+  openOnline,
+  useOnlineQueue,
+} from "../composables/useOnlinePlayback";
+import { useOnlinePrefetch } from "../composables/useOnlinePrefetch";
 import { bibleRefOf, stepVerse } from "../program/bible";
 import { useBibleLibrary } from "../composables/useBibleLibrary";
 import { previewViewOf } from "../program/previewView";
@@ -229,18 +235,6 @@ const {
 } = useProgram();
 const { execute, projectPath, sendBible } = useProgramExecution();
 const bibleLibrary = useBibleLibrary();
-const onlineLibrary = useOnlineLibrary();
-
-function onlinePlayable(video: OnlineEntry): Playable {
-  return { type: "online", videoId: video.id, title: video.title, channel: video.channel };
-}
-
-/** O vídeo vai ao ar pelo mesmo caminho dos outros módulos: baixado, transmitido ou embutido. */
-function openOnline(videoId: string, title: string): void {
-  void Media.openYouTube(youtubeEmbedUrl(videoId), title).catch((error: unknown) => {
-    Telemetry.captureException(error, { source: "presentation_mode.online.open" });
-  });
-}
 const { importFromLiturgy, saveAsLiturgy } = useProgramLiturgy();
 const stage = useStage();
 onBeforeUnmount(stage.reset);
@@ -330,7 +324,7 @@ function dispatch(
   } else if (playable.type === "bible") {
     sendBible(playable.ref);
   } else if (playable.type === "online") {
-    onlineLibrary.startQueue(playable.videoId);
+    onlineQueue.start(playable.videoId);
     openOnline(playable.videoId, playable.title);
     Telemetry.track("presentation_library_online_projected", {});
   }
@@ -557,19 +551,14 @@ const liveBibleRef = computed<ProgramBibleRef | null>(() => {
   return liveProgramItem.value?.bible ?? null;
 });
 
-/** O vídeo no ar saiu de uma lista da aba Vídeos on-line? Então Anterior/Próximo andam por ela. */
-const onlineQueueLive = computed(() => {
-  const q = onlineLibrary.queue.value;
-  const origin = liveOrigin.value;
-  return !!q && origin?.type === "online" && q.entries[q.index]?.id === origin.videoId;
-});
+const onlineQueue = useOnlineQueue(liveOrigin);
 
 /** Posição na pasta ou na lista de vídeos de onde saiu o que está no ar: "3/12". */
 const queueCounter = computed(() => {
   const q = libraryQueueLive.value
     ? library.queue.value
-    : onlineQueueLive.value
-      ? onlineLibrary.queue.value
+    : onlineQueue.live.value
+      ? onlineQueue.queue.value
       : null;
   return q ? `${q.index + 1}/${q.entries.length}` : undefined;
 });
@@ -592,7 +581,7 @@ const canNavigate = computed(
     ((liveKind.value === "music" && slides.totalSlides.value > 0) ||
       (libraryQueueLive.value && (library.queue.value?.entries.length ?? 0) > 1) ||
       !!liveBibleRef.value?.version_id ||
-      (onlineQueueLive.value && (onlineLibrary.queue.value?.entries.length ?? 0) > 1))
+      (onlineQueue.live.value && (onlineQueue.queue.value?.entries.length ?? 0) > 1))
 );
 
 const upNextFlash = ref(false);
@@ -617,14 +606,11 @@ function navigate(to: "first" | "prev" | "next" | "last"): void {
     void stepBible(liveBibleRef.value, to);
     return;
   }
-  if (onlineQueueLive.value) {
-    const video = onlineLibrary.stepQueue(to);
-    if (video) {
-      // Sem `dispatch`: ele recomeçaria a fila pela lista aberta agora.
-      const playable = onlinePlayable(video);
-      openOnline(video.id, video.title);
-      stage.markSent(playable, expectationOf(playable, null));
-    } else if (to === "next") flashUpNext();
+  if (onlineQueue.live.value) {
+    // Sem `dispatch`: ele recomeçaria a fila pela lista aberta agora.
+    const playable = onlineQueue.step(to);
+    if (playable) stage.markSent(playable, expectationOf(playable, null));
+    else if (to === "next") flashUpNext();
     return;
   }
   if (libraryQueueLive.value) {
@@ -661,6 +647,19 @@ async function stepBible(
   }
   dispatch({ type: "bible", ref: bibleRefOf(chapter, [verse]) });
 }
+
+useOnlinePrefetch(() => {
+  const preview = stage.preview.value;
+  return [
+    preview?.type === "online"
+      ? preview.videoId
+      : preview?.type === "program"
+        ? itemVideoId(findItem(preview.itemId))
+        : null,
+    itemVideoId(upNextItem.value),
+    onlineQueue.nextId.value,
+  ];
+});
 
 const upNextMeta = computed(() => {
   const item = upNextItem.value;

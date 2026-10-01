@@ -282,6 +282,16 @@ export function maxHeight(): number {
 }
 
 /**
+ * Deixa os links do vídeo prontos antes do play (prévia, "a seguir"): o próximo
+ * `stream` dele começa sem consultar o YouTube. Só vale quando o app toca o
+ * vídeo por conta própria; com o player do YouTube não há o que adiantar.
+ */
+export function prefetch(id: string): void {
+  if (!downloadEnabled() || !/^[A-Za-z0-9_-]{11}$/.test(id)) return;
+  void Platform.onlineVideo?.prefetch?.(id, { maxHeight: maxHeight() }).catch(() => {});
+}
+
+/**
  * Baixa (ou acha em cache) o vídeo. Nunca rejeita: a resposta diz se deu certo e,
  * se não, por quê — quem chama decide entre avisar e cair no player do YouTube.
  */

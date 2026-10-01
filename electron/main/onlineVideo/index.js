@@ -142,6 +142,11 @@ function registerIpc(ipcMain) {
   ipcMain.handle("onlineVideo:keep", async (_event, id) => (await readyManager()).keep(id));
   ipcMain.handle("onlineVideo:prepare", async () => (await readyManager()).prepare());
   ipcMain.handle("onlineVideo:list", async () => (await readyManager()).list());
+  // Resolve os links antes do play (prévia, "a seguir"); só ID e altura máxima, como `stream`.
+  ipcMain.handle("onlineVideo:prefetch", async (_event, id, opts) => {
+    const o = opts && typeof opts === "object" ? opts : {};
+    return logFailure("prefetch", id, await (await readyManager()).prefetch(id, { maxHeight: o.maxHeight }));
+  });
   // Canal ou playlist: `source` é `{ kind, id }`, validado e transformado em URL no main.
   ipcMain.handle("onlineVideo:collection", async (_event, source, range) =>
     logFailure("collection", source?.id, await (await readyManager()).collection(source, range))

@@ -48,6 +48,11 @@ async function defaultFreeBytes(dir) {
   }
 }
 
+/** Quantos vídeos com links prontos ficam à espera: a prévia, o "a seguir" e o próximo da fila. */
+const PREFETCH_MAX = 6;
+/** Links que vencem antes disto são resolvidos de novo: o vídeo precisa tocar até o fim. */
+const PREFETCH_MARGIN_MS = 30 * 60 * 1000;
+
 function urlFor(id) {
   return `${URL_PREFIX}${id}.mp4`;
 }
@@ -120,6 +125,12 @@ function createManager(cfg) {
   const jobs = new Map();
   /** Pedidos de URL direta em andamento (tocar já, sem baixar). */
   const resolutions = new Map();
+  /**
+   * Links resolvidos antes do play (`prefetch`), à espera de quem for tocar. Cada
+   * entrada serve uma vez: o `stream` que a usa abre a sessão dela.
+   * @type {Map<string, { links: any, maxHeight: number }>}
+   */
+  const prefetched = new Map();
   /** Vídeos tocando enquanto baixam, por ID: as trilhas em disco de que as janelas leem. */
   const sessions = new Map();
   /** Descartes já retirados de `sessions`, mas que ainda podem apagar a pasta compartilhada. */
@@ -646,7 +657,18 @@ function createManager(cfg) {
   }
 
   /** Os links diretos do YouTube (vídeo e áudio) que o yt-dlp descobre em ~6 s; um pedido só por vídeo. */
+  /** Links guardados pelo `prefetch` que ainda valem por um bom tempo; null se não há. */
+  function takePrefetched(id, maxHeight) {
+    const hit = prefetched.get(id);
+    if (!hit) return null;
+    prefetched.delete(id);
+    const fresh = !hit.links.expiresAt || hit.links.expiresAt - now() > PREFETCH_MARGIN_MS;
+    return hit.maxHeight === maxHeight && fresh ? hit.links : null;
+  }
+
   function resolveLinks(id, opts) {
+    const ready = takePrefetched(id, clampHeight(opts.maxHeight));
+    if (ready) return Promise.resolve({ ok: true, id, ...ready });
     const existing = resolutions.get(id);
     if (existing && !existing.controller.signal.aborted) return existing.promise;
 
@@ -934,6 +956,7 @@ function createManager(cfg) {
   }
 
   function remove(id) {
+    prefetched.delete(id);
     if (clearing) return clearing.then(() => remove(id));
     if (!isVideoId(id)) return Promise.resolve(false);
     const existing = removals.get(id);
@@ -971,6 +994,7 @@ function createManager(cfg) {
 
   async function clear() {
     if (clearing) return clearing;
+    prefetched.clear();
     clearGeneration++;
     const jobsToSettle = [...jobs.values()].map((job) => job.promise);
     const resolutionsToSettle = [...resolutions.values()].map((resolution) => resolution.promise);
@@ -1053,6 +1077,32 @@ function createManager(cfg) {
   }
 
   /**
+   * Resolve os links de um vídeo antes do play, sem baixar nada: é o que o
+   * operador está vendo na prévia ou o que vem a seguir. Quando ele mandar tocar,
+   * o `stream` pula a consulta ao YouTube (~2 s). Pedido do operador, então
+   * interativo — roda mesmo com a apresentação no ar; é só uma consulta curta.
+   */
+  async function prefetch(id, opts = {}) {
+    if (!isVideoId(id)) return fail(new OnlineVideoError("invalid", "ID de vídeo inválido"));
+    if (!tools.supported || !tools.ready()) return { ok: true, skipped: "tools" };
+    if (store.has(id) || jobs.has(id) || sessions.has(id)) return { ok: true, skipped: "ready" };
+    const maxHeight = clampHeight(opts.maxHeight);
+    const hit = prefetched.get(id);
+    if (hit && hit.maxHeight === maxHeight && (!hit.links.expiresAt || hit.links.expiresAt - now() > PREFETCH_MARGIN_MS)) {
+      return { ok: true, cached: true };
+    }
+    const res = await resolveLinks(id, { maxHeight });
+    if (!res.ok) return res;
+    // Enquanto resolvia, o operador pode ter mandado tocar — aí a sessão já existe.
+    if (sessions.has(id) || jobs.has(id)) return { ok: true, skipped: "ready" };
+    const { ok: _ok, id: _id, ...links } = res;
+    prefetched.delete(id);
+    prefetched.set(id, { links, maxHeight });
+    while (prefetched.size > PREFETCH_MAX) prefetched.delete(prefetched.keys().next().value);
+    return { ok: true };
+  }
+
+  /**
    * Os vídeos de um canal ou de uma playlist, uma página por vez. Instala as
    * ferramentas na primeira vez, como o tocar faria.
    */
@@ -1104,6 +1154,7 @@ function createManager(cfg) {
     status,
     diagnosticSnapshot,
     list,
+    prefetch,
     collection,
     init,
     close,
