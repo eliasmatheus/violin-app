@@ -85,6 +85,11 @@ export function usePlayerState(): {
   const has_instrumental_music = computed<boolean>(
     () => !!(media.value?.data as Record<string, unknown>)?.url_instrumental_music
   );
+  // Só a música personalizada pode existir sem a faixa cantada (playback ou slides apenas).
+  const sung_missing = computed<boolean>(() => {
+    const data = media.value?.data as Record<string, unknown> | undefined;
+    return data?.custom === true && !data.url_music;
+  });
 
   const compact   = computed<boolean>(() => width.value <= 500);
   const is_mobile = computed(() => AppData.get("is_mobile"));
@@ -161,6 +166,7 @@ export function usePlayerState(): {
         title: t("modules.media.general.sung"),
         color: "info",
         active: cfg.mode === "audio",
+        disabled: sung_missing.value,
         icon: ICONS.MUSIC.SLIDES_AUDIO,
         tray_icon: ICONS.MUSIC.SUNG,
         click: () => switchMode(MusicActionEnum.AUDIO),

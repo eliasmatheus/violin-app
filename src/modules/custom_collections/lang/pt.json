@@ -25,6 +25,8 @@
     "songs_count": "música(s)",
     "no_audio": "sem áudio",
     "audio": "com áudio",
+    "audio_playback": "cantado e playback",
+    "playback_only": "só playback",
     "slides": "slide(s)"
   },
   "data": {
@@ -35,7 +37,9 @@
     "confirm_delete_collection": "Excluir esta coletânea? As músicas continuam disponíveis em \"Minhas Músicas\".",
     "name_placeholder": "Nome da coletânea",
     "import_result": "{ok} importada(s)",
+    "import_paired": ", {paired} com cantado e playback",
     "import_failed": ", {fail} falha(s)",
+    "import_unmatched_playback": ". {unmatched} playback com slides diferentes do cantado entrou(aram) como música à parte",
     "import_without_media": ". {loose} veio(vieram) de arquivo .lja, sem áudio nem imagens"
   }
 }

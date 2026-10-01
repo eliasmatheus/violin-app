@@ -65,6 +65,8 @@
     "replicate_text": "Replicar Formatação de Texto",
     "resolution": "Resolução",
     "audio_file": "Arquivo de Áudio",
+    "track_sung": "Cantado",
+    "track_playback": "Playback",
     "recording": "Gravação"
   },
   "data": {

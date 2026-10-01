@@ -547,6 +547,7 @@ Helpers principais:
 | `ImageConvert.ts`      | HEIC/HEIF → JPEG (`heic2any`) na importação                                  |
 | `SljaConverter.js`     | Import/export `.slja` do editor legado Delphi (JSZip + INI)                  |
 | `SljaPlayer.ts`        | `openSlja()` — apresenta um `.slja` na projeção do app, sem gravar nada      |
+| `CustomSongPackage.ts` | Música personalizada ↔ arquivos `.slja`, com o par cantado/playback (`-PB`)  |
 | `SettingsStorage.ts`   | CRUD na tabela `settings` do IDB                                             |
 | `FilePicker.ts`        | `pickImage()` e `pickImageData()` — seletor de imagens                       |
 | `UserData.ts`          | Preferências do usuário (Pinia + persistência)                               |
@@ -1089,6 +1090,24 @@ Quem chama `openSlja()`:
 | Item de liturgia / item agendado com arquivo `.slja` | `useLiturgyExecution.openFile()`               |
 | Liturgia executada pelo controle remoto (HTTP)     | `projectByExt()` em `src/main.js`                |
 | Duplo clique / "Abrir com" no sistema operacional  | `Platform.onOpenFiles()` em `src/main.js`        |
+
+**Cantado e playback.** Um `.slja` comporta uma faixa de áudio só. A música
+personalizada guarda as duas na mesma ficha (`audio_token` e `playback_token`,
+com `tempo_seconds_pb` por slide onde o playback diverge do cantado), e na
+fronteira de arquivo segue a convenção do clássico 26.11: `Música.slja` e
+`Música -PB.slja` na mesma pasta. O sufixo é reconhecido como lá
+(`playbackBaseName`, porte do `ehNomePlayback`): "-PB", " -PB", "- PB", em
+qualquer caixa. `CustomSongPackage.ts` é o único lugar que exporta e importa —
+o módulo de coletâneas e o editor passam por ele. Na importação o par só vira
+uma música quando os slides são os mesmos; se diferem, o playback entra como
+música à parte, sem perder nada. Uma chave nova dentro do `.slja` não serviria:
+o clássico ignoraria a segunda faixa e a descartaria ao salvar.
+
+Tocar passa por `playCustomSong()` / `openCustomMusic()`
+(`src/helpers/CustomMusicCatalog.ts`), com os mesmos modos do acervo
+(`MUSIC_EXECUTIONS` em `src/config/MusicAction.ts`); listas, cartões, busca,
+paleta, liturgia e controle remoto não chamam o player direto. No ar, a troca de
+modo é a mesma `Media.switchMode()` das músicas do acervo.
 
 **Associação com o sistema.** `fileAssociations` em `electron-builder.yml`
 declara a extensão: NSIS grava a classe em HKCU (ou HKLM no upgrade legado por

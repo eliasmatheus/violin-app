@@ -47,8 +47,8 @@ import { AUDIO_EXT } from "@/constants/FileTypes";
 import { openSlja, SLJA_EXT } from "@/helpers/SljaPlayer";
 import { heicToJpeg, isHeic } from "@/helpers/ImageConvert";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
-import AudioLibrary from "@/helpers/AudioLibrary";
-import { getSong as getCustomSong } from "@/helpers/CustomSongs";
+import { openCustomMusic } from "@/helpers/CustomMusicCatalog";
+import { LITURGY_VERSION_ACTION } from "@/config/MusicAction";
 import { DB_TABLE } from "@/constants/DbTables";
 import $idb from "@/helpers/IndexedDB";
 import $docs from "@/helpers/DocStore";
@@ -712,32 +712,20 @@ $storage.hydrate().then(async () => {
                     // item é que decide se há slides ou somente áudio.
                     const mode = litItem.subtipo || "sung";
                     overlayItem = { ...litItem, subtipo: mode };
-                    if (mode === "audio" || mode === "audio_pb") {
+                    if (litItem.ref_id && litItem.id_music < 0) {
+                      projected = await openCustomMusic(
+                        litItem.ref_id,
+                        LITURGY_VERSION_ACTION[mode] ?? MusicActionEnum.AUDIO
+                      );
+                    } else if (mode === "audio" || mode === "audio_pb") {
                       Media.stop();
-                      if (litItem.ref_id && litItem.id_music < 0) {
-                        const song = await getCustomSong(litItem.ref_id);
-                        const audioUrl = song?.audio_token
-                          ? await AudioLibrary.resolveAudio(song.audio_token)
-                          : null;
-                        if (audioUrl) {
-                          await Media.openAudio({
-                            url: audioUrl,
-                            title: song.nome,
-                            mediaType: "audio",
-                          });
-                        }
-                      } else {
-                        await Media.openAudio({
-                          id_music: litItem.id_music,
-                          mode:
-                            mode === "audio_pb"
-                              ? MusicActionEnum.INSTRUMENTAL
-                              : MusicActionEnum.AUDIO,
-                        });
-                      }
-                    } else if (litItem.ref_id && litItem.id_music < 0) {
-                      const song = await getCustomSong(litItem.ref_id);
-                      if (song) projected = await Media.openCustomSong(song);
+                      await Media.openAudio({
+                        id_music: litItem.id_music,
+                        mode:
+                          mode === "audio_pb"
+                            ? MusicActionEnum.INSTRUMENTAL
+                            : MusicActionEnum.AUDIO,
+                      });
                     } else {
                       const playbackMode =
                         mode === "pb"

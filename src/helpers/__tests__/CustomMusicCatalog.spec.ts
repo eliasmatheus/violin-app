@@ -32,6 +32,7 @@ describe("catálogo pessoal de busca", () => {
         name: "Esperança",
         custom_song_id: "song-a",
         custom_collection_names: ["Juventude", "Culto"],
+        has_audio: false,
         has_instrumental_music: false,
         albums: [],
       },
@@ -39,6 +40,22 @@ describe("catálogo pessoal de busca", () => {
     expect(musicAlbumLabel(items[0], "Coletânea personalizada")).toBe(
       "Coletânea personalizada · Juventude · Culto"
     );
+  });
+
+  it("diz que faixas a música tem, para as listas oferecerem só o que toca", async () => {
+    songs = [
+      { id: "a", nome: "Cantada", audio_token: "lib://audio/1.mp3" },
+      { id: "b", nome: "Com as duas", audio_token: "lib://audio/1.mp3", playback_token: "lib://audio/2.mp3" },
+      { id: "c", nome: "Só playback", audio_token: "", playback_token: "lib://audio/2.mp3" },
+      { id: "d", nome: "Só slides", audio_token: "", playback_token: 5 },
+    ];
+    const items = await loadCustomMusicCatalog();
+    expect(items.map((item) => [item.has_audio, item.has_instrumental_music])).toEqual([
+      [true, false],
+      [true, true],
+      [false, true],
+      [false, false],
+    ]);
   });
 
   it("mantém músicas sem coletânea pesquisáveis e com o título normal", async () => {

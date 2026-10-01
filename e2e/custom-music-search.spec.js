@@ -39,7 +39,11 @@ const surfaces = [
       page.evaluate(() => window.dispatchEvent(new CustomEvent("louvorja:open-music-search"))),
     input: ".music-search__bar input",
     rows: ".music-search__table tbody tr",
-    execute: (_page, row) => row.getByRole("button", { name: "Executar", exact: true }).click(),
+    // Os botões da linha só são montados quando ela é explorada, como nas do acervo.
+    execute: async (_page, row) => {
+      await row.hover();
+      await row.getByTestId("mmt-btn-sing").click();
+    },
   },
   {
     name: "Ctrl+K",
@@ -131,7 +135,8 @@ test("tela Músicas: título, coletânea e execução do acervo pessoal", async 
   await projection.goto("/projection");
   await expect(projection.locator(".projection-stage")).toBeVisible();
   await page.bringToFront();
-  await rows.first().getByRole("button", { name: "Executar", exact: true }).click();
+  await rows.first().hover();
+  await rows.first().getByTestId("mmt-btn-sing").click();
   await expect(projection.locator('[data-testid="slide-content"]')).toBeVisible();
   await projection.close();
 });

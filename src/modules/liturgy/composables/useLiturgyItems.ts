@@ -16,7 +16,7 @@ import type { OverlaySlot } from "@/types/Overlay";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import type { LiturgyItem, ScheduledCategory, LiturgyMusicItem } from "@/types/Liturgy";
-import { listSongs as listCustomSongs } from "@/helpers/CustomSongs";
+import { hasPlayback, listSongs as listCustomSongs } from "@/helpers/CustomSongs";
 import { AUDIO_EXT, VIDEO_EXT } from "@constants/FileTypes";
 import { useMusicCatalog } from "@/composables/useMusicCatalog";
 import { musicTitle } from "@root/config/musicCatalog.mjs";
@@ -681,6 +681,7 @@ export function useLiturgyItems(
         id_music: -(i + 2),
         name: s.nome,
         custom_song_id: s.id,
+        has_instrumental_music: hasPlayback(s),
       }));
 
       musicsCache.value = [...catalog, ...customItems];

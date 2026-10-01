@@ -17,19 +17,21 @@
           <strong>{{ current + 1 }}</strong>
           /{{ slides.length }}
         </span>
-        <span v-if="activeSlide.tempo_seconds > 0" class="se-status-cell">
+        <span v-if="slideTime(activeSlide) > 0" class="se-status-cell">
           <LjIcon size="13" :icon="ICONS.TIMER.TIMER_OUTLINE" />
-          {{ formatTime(activeSlide.tempo_seconds) }}
+          {{ formatTime(slideTime(activeSlide)) }}
         </span>
-        <span v-if="song.audio_name" class="se-status-cell">
+        <span v-if="trackName || showTrack" class="se-status-cell" :title="trackName">
           <LjIcon
             size="13"
             :color="audioPlaying ? 'success' : undefined"
             :icon="audioPlaying ? ICONS.MUSIC.NOTE_EIGHTH : ICONS.MUSIC.NOTE"
           />
-          <span class="se-audio-time">
+          <strong v-if="showTrack" data-testid="se-track">{{ trackLabel }}</strong>
+          <span v-if="trackName" class="se-audio-time">
             {{ formatTime(audioCurrentTime) }} / {{ formatTime(audioDuration) }}
           </span>
+          <span v-else class="se-audio-time">{{ tm("data.no_audio") }}</span>
         </span>
         <span class="se-status-cell">
           <LjIcon size="13" :icon="ICONS.FORMAT.ASPECT_RATIO" />
@@ -72,9 +74,9 @@
                 @keydown.enter="selectSlide(index)"
               >
                 <span class="se-thumb-num">{{ index + 1 }}</span>
-                <span v-if="element.tempo_seconds > 0" class="se-thumb-time">
+                <span v-if="slideTime(element) > 0" class="se-thumb-time">
                   <LjIcon size="9" :icon="ICONS.TIMER.CLOCK" />
-                  {{ formatTime(element.tempo_seconds) }}
+                  {{ formatTime(slideTime(element)) }}
                 </span>
                 <div
                   class="se-thumb-text"
@@ -148,7 +150,7 @@
             />
             <div class="se-timeline-thumb" :style="{ left: `${timelineProgress}%` }" />
           </div>
-          <div class="se-player-slide-badge" :title="song.audio_name">
+          <div class="se-player-slide-badge" :title="trackName">
             <LjIcon size="12" :icon="ICONS.MUSIC.NOTE" />
             {{ current + 1 }}/{{ slides.length }}
           </div>
@@ -445,6 +447,7 @@ import SljaConverter from "@/helpers/SljaConverter";
 import AudioLibrary from "@/helpers/AudioLibrary";
 import { ensureRenderableImage } from "@/helpers/ImageConvert";
 import CustomSongs from "@/helpers/CustomSongs";
+import { downloadSongPackages, readSongFile } from "@/helpers/CustomSongPackage";
 import $alert from "@/helpers/Alert";
 import $userdata from "@/helpers/UserData";
 import { KEYS } from "@/constants/UserDataKeys";
@@ -490,6 +493,49 @@ const audioDuration = ref(0);
 const tm = (key) => moduleContainer.value?.tm(key) || key;
 
 const activeSlide = computed(() => slides.value[current.value] || CustomSongs.newSlide());
+
+// Faixa em edição: anexar, tocar e gravar os tempos valem para ela. A ribbon
+// acompanha pelo UserData, como faz com o botão de projeção.
+const playbackTrack = ref(false);
+
+function setTrack(playback) {
+  if (playbackTrack.value === playback) return;
+  audioEl.value?.pause();
+  playbackTrack.value = playback;
+  $userdata.set(KEYS.MODULES.SLIDE_EDITOR.PLAYBACK_TRACK, playback);
+}
+
+function toggleTrack() {
+  setTrack(!playbackTrack.value);
+}
+
+/** Música só com playback abre na faixa dele; as demais, na cantada. */
+function resetTrack() {
+  setTrack(!song.value.audio_token && !!song.value.playback_token);
+}
+
+const trackToken = computed(() =>
+  playbackTrack.value ? song.value.playback_token || "" : song.value.audio_token || ""
+);
+const trackName = computed(() =>
+  playbackTrack.value ? song.value.playback_name || "" : song.value.audio_name || ""
+);
+const trackLabel = computed(() =>
+  tm(playbackTrack.value ? "labels.track_playback" : "labels.track_sung")
+);
+// O nome da faixa só aparece quando há o que distinguir.
+const showTrack = computed(() => playbackTrack.value || !!song.value.playback_token);
+
+/** Início do slide na faixa em edição; o playback segue o cantado enquanto não tem o seu. */
+function slideTime(slide) {
+  const own = playbackTrack.value ? slide?.tempo_seconds_pb : undefined;
+  return Number(own ?? slide?.tempo_seconds) || 0;
+}
+
+function setSlideTime(slide, seconds) {
+  if (playbackTrack.value) slide.tempo_seconds_pb = seconds;
+  else slide.tempo_seconds = seconds;
+}
 
 const transparentBg = computed({
   get: () => activeSlide.value.fundo_letra === false,
@@ -654,7 +700,7 @@ function goSlide(idx) {
   // Paridade Delphi (carregaSlide em fmEditorSlides.pas:1136): primeiro slide
   // sempre dá seek para 0, mesmo que não tenha tempo gravado — "começo da
   // música" é implícito. Outros slides só fazem seek se têm tempo gravado.
-  const ts = slides.value[clamped]?.tempo_seconds || 0;
+  const ts = slideTime(slides.value[clamped]);
   if (clamped === 0) {
     audioEl.value.currentTime = 0;
     audioCurrentTime.value = 0;
@@ -698,17 +744,21 @@ watch(
 );
 
 async function rebuildAudioUrl() {
-  if (!song.value.audio_token) {
+  const token = trackToken.value;
+  // Trocar de faixa desmonta o <audio> sem evento de pausa.
+  audioPlaying.value = false;
+  audioCurrentTime.value = 0;
+  audioDuration.value = 0;
+  if (!token) {
     audioUrl.value = "";
-    audioCurrentTime.value = 0;
-    audioDuration.value = 0;
     return;
   }
-  const url = await AudioLibrary.resolveAudio(song.value.audio_token);
+  const url = await AudioLibrary.resolveAudio(token);
+  if (token !== trackToken.value) return;
   audioUrl.value = url || "";
 }
 
-watch(() => song.value.audio_token, rebuildAudioUrl, { immediate: true });
+watch(trackToken, rebuildAudioUrl, { immediate: true });
 
 // Invariante: sempre ter pelo menos 1 slide para evitar escritas perdidas em
 // activeSlide (que faria fallback a um objeto descartável).
@@ -749,7 +799,7 @@ function syncSlideFromAudio() {
   if (Math.abs(t - last) > 1.5) return; // delta grande = seek, não sincroniza
   // Avanço linear: procura primeiro marker cruzado em (last, t].
   for (let i = 0; i < slides.value.length; i++) {
-    const ts = slides.value[i].tempo_seconds;
+    const ts = slideTime(slides.value[i]);
     if (ts > 0 && ts > last && ts <= t && i !== current.value) {
       current.value = i;
       break;
@@ -775,7 +825,7 @@ const timelineProgress = computed(() => {
 });
 
 const slidesWithTime = computed(() =>
-  slides.value.map((s, index) => ({ index, time: s.tempo_seconds })).filter((s) => s.time > 0)
+  slides.value.map((s, index) => ({ index, time: slideTime(s) })).filter((s) => s.time > 0)
 );
 
 function onTimelineClick(ev) {
@@ -798,6 +848,7 @@ function loadSongFromShare() {
       song.value = data;
       current.value = 0;
       dirty.value = false;
+      resetTrack();
       sessionStorage.removeItem(SESSION_KEY);
     }
   } catch {
@@ -811,12 +862,20 @@ function onOpenSong(ev) {
     song.value = data;
     current.value = 0;
     dirty.value = false;
+    resetTrack();
   }
 }
 
 function actAudioRemove() {
-  song.value.audio_token = "";
-  song.value.audio_name = "";
+  if (playbackTrack.value) {
+    song.value.playback_token = "";
+    song.value.playback_name = "";
+    // Sem a faixa, os tempos gravados para ela não têm a que se referir.
+    for (const slide of slides.value) delete slide.tempo_seconds_pb;
+  } else {
+    song.value.audio_token = "";
+    song.value.audio_name = "";
+  }
   audioUrl.value = "";
   audioPlaying.value = false;
   markDirty();
@@ -839,6 +898,7 @@ const RIBBON_HANDLERS = {
   prev: () => goSlide(current.value - 1),
   next: () => goSlide(current.value + 1),
   last: () => goSlide(slides.value.length - 1),
+  audio_track: toggleTrack,
   audio_attach: actAttachAudio,
   audio_remove: actAudioRemove,
   play_pause: togglePlay,
@@ -858,6 +918,10 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
 });
 
 onMounted(() => {
+  // O estado da ribbon fica no UserData e sobrevive ao fechamento do app.
+  if ($userdata.get(KEYS.MODULES.SLIDE_EDITOR.PLAYBACK_TRACK, false)) {
+    $userdata.set(KEYS.MODULES.SLIDE_EDITOR.PLAYBACK_TRACK, false);
+  }
   loadSongFromShare();
   window.addEventListener("lj:open-song", onOpenSong);
 });
@@ -896,6 +960,7 @@ async function actNew() {
   song.value = CustomSongs.newSong(tm("data.untitled"));
   current.value = 0;
   dirty.value = false;
+  resetTrack();
   AudioLibrary.clearSession();
 }
 
@@ -908,129 +973,32 @@ async function onLoadSlja(e) {
   e.target.value = "";
   if (!file) return;
   try {
-    const data = await SljaConverter.loadSlja(file);
-
-    // Capa/abertura sem fundo herda a imagem do próximo slide que a tenha.
-    SljaConverter.fillMissingImages(data.slides);
-
-    let audioToken = "";
-    let audioName = "";
-    if (data.audio) {
-      const name = (data.audioName || "audio.mp3").replace(/^audio\//, "");
-      audioToken = AudioLibrary.setSessionAudio(name, data.audio);
-      audioName = name;
-    }
-
-    const imgTokenByName = new Map();
-    for (const [path, blob] of (data.images || new Map()).entries()) {
-      const name = path.replace(/^(imagens|images)\//, "");
-      const tok = AudioLibrary.setSessionImage(name, blob);
-      imgTokenByName.set(name, tok);
-      imgTokenByName.set(path, tok);
-    }
-
-    const newSong = {
-      id: crypto.randomUUID(),
-      // Nome: [Geral].nome → letra do 1º slide (capa) → nome do arquivo.
-      nome: SljaConverter.resolveSongName(data, file.name) || tm("data.untitled"),
-      audio_token: audioToken,
-      audio_name: audioName,
-      slides: data.slides.map((s) => {
-        const imgName = s.imagem ? s.imagem.split(/[\\/]/).pop() : "";
-        const imgTok = imgName
-          ? imgTokenByName.get(s.imagem) || imgTokenByName.get(imgName) || ""
-          : "";
-        if (s.imagem && !imgTok) {
-          console.warn(
-            `[slide_editor] import: imagem "${s.imagem}" referenciada mas ausente no pacote .slja`
-          );
-        }
-        return {
-          id: crypto.randomUUID(),
-          tipo: s.tipo,
-          letra: s.letra,
-          letra_aux: s.letra_aux,
-          tamanho_letra: s.tamanho_letra,
-          tamanho_letra_aux: s.tamanho_letra_aux,
-          cor_letra: s.cor_letra,
-          cor_letra_aux: s.cor_letra_aux,
-          cor_fundo: s.cor_fundo,
-          imagem: imgTok,
-          imagem_posicao: s.imagem_posicao,
-          fundo_letra: s.fundo_letra,
-          tempo_seconds: s.tempo_seconds,
-          text_align: s.text_align || "center",
-        };
-      }),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    if (!newSong.slides.some((sl) => sl.tempo_seconds > 0)) {
-      console.warn(
-        "[slide_editor] import: arquivo .slja sem tempos de sincronia (todos tempo_seconds=0)"
-      );
-    }
-    song.value = newSong;
+    // Um arquivo `Música -PB.slja` é o playback da música: abre nessa faixa.
+    const opened = await readSongFile(file, tm("data.untitled"));
+    song.value = opened.song;
     current.value = 0;
     dirty.value = false;
-    if (data.loose) $alert.message(tm("data.lja_without_media"));
+    resetTrack();
+    if (opened.loose) $alert.message(tm("data.lja_without_media"));
   } catch (err) {
     $alert.message(tm("data.invalid_file") + "\n\n" + (err?.message || err));
   }
 }
 
-async function buildExportSlja() {
-  const slidesForExport = [];
-  const imagesMap = new Map();
-
-  for (const s of song.value.slides) {
-    const exportSlide = { ...s };
-    if (s.imagem) {
-      const blob = await AudioLibrary.getImageBlob(s.imagem);
-      if (blob) {
-        const baseName = `${s.imagem.replace(/^.*\//, "").replace(/\.[^.]+$/, "")}.${(blob.type.split("/")[1] || "png").replace("jpeg", "jpg")}`;
-        const path = `imagens/${baseName}`;
-        if (!imagesMap.has(path)) imagesMap.set(path, blob);
-        exportSlide.imagem = path;
-      } else {
-        exportSlide.imagem = "";
-        console.warn(
-          `[slide_editor] export: blob da imagem não encontrado (${s.imagem}) — slide sairá sem fundo`
-        );
-      }
-    }
-    slidesForExport.push(exportSlide);
-  }
-
-  let audioBlob = null;
-  let audioName = song.value.audio_name || "audio.mp3";
-  if (song.value.audio_token) {
-    audioBlob = await AudioLibrary.getAudioBlob(song.value.audio_token);
-    if (!audioBlob) {
-      console.warn(
-        `[slide_editor] export: blob do áudio não encontrado (${song.value.audio_token}) — pacote sairá sem áudio`
-      );
-    }
-  }
-
-  return SljaConverter.writeSlja({
-    slides: slidesForExport,
-    audio: audioBlob,
-    audioName,
-    images: imagesMap,
-    nome: song.value.nome || "",
-  });
-}
-
 async function materializeMedia(s) {
   const out = { ...s };
   // Áudio: pkg:// é volátil (sessionAudio), só persiste se importado como lib://
-  if (out.audio_token && out.audio_token.startsWith("pkg://audio/")) {
-    const blob = await AudioLibrary.getAudioBlob(out.audio_token);
+  for (const [tokenKey, nameKey, fallback] of [
+    ["audio_token", "audio_name", "audio.mp3"],
+    ["playback_token", "playback_name", "playback.mp3"],
+  ]) {
+    const token = out[tokenKey];
+    if (!token || !token.startsWith("pkg://audio/")) continue;
+    const blob = await AudioLibrary.getAudioBlob(token);
     if (blob) {
-      out.audio_token = await AudioLibrary.importAudio(
+      out[tokenKey] = await AudioLibrary.importAudio(
         blob,
-        out.audio_name || out.audio_token.split("/").pop() || "audio.mp3"
+        out[nameKey] || token.split("/").pop() || fallback
       );
     }
   }
@@ -1101,20 +1069,10 @@ async function actSaveAs() {
   }
 }
 
-// Exporta a apresentação atual como arquivo .slja para download.
+// Exporta a apresentação atual como .slja; com playback sai também o `-PB.slja`.
 async function actExport() {
-  await downloadSlja(songTitle.value);
-}
-
-async function downloadSlja(name) {
   try {
-    const blob = await buildExportSlja();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${name.replace(/[\\/:*?"<>|]/g, "_")}.slja`;
-    a.click();
-    URL.revokeObjectURL(url);
+    await downloadSongPackages(song.value, songTitle.value);
   } catch (err) {
     $alert.message(tm("data.invalid_file") + "\n\n" + (err?.message || err));
   }
@@ -1145,6 +1103,7 @@ async function onImportTxt(e) {
     letra: text,
     id: crypto.randomUUID(),
     tempo_seconds: 0,
+    tempo_seconds_pb: undefined,
   });
   slides.value.splice(idx + 1, 0, newSlide);
   current.value = idx + 1;
@@ -1361,6 +1320,7 @@ function splitSlideAt(idx) {
       id: crypto.randomUUID(),
       letra,
       tempo_seconds: 0,
+      tempo_seconds_pb: undefined,
     };
   });
   slides.value.splice(idx, 1, ...fragments);
@@ -1390,8 +1350,13 @@ async function onPickAudio(e) {
   e.target.value = "";
   if (!file) return;
   const token = await AudioLibrary.importAudio(file, file.name);
-  song.value.audio_token = token;
-  song.value.audio_name = file.name;
+  if (playbackTrack.value) {
+    song.value.playback_token = token;
+    song.value.playback_name = file.name;
+  } else {
+    song.value.audio_token = token;
+    song.value.audio_name = file.name;
+  }
   markDirty();
 }
 
@@ -1416,10 +1381,8 @@ function togglePlay() {
   // Seek para o tempo do slide atual antes de iniciar (paridade Delphi:1136).
   // Slide sem tempo gravado: toca de onde estiver — não bloqueia, pois o
   // operador pode estar avaliando ou querendo gravar a partir daqui.
-  const slide = activeSlide.value;
-  if (slide && slide.tempo_seconds > 0) {
-    audioEl.value.currentTime = slide.tempo_seconds;
-  }
+  const start = slideTime(activeSlide.value);
+  if (start > 0) audioEl.value.currentTime = start;
   audioEl.value.play();
 }
 
@@ -1430,15 +1393,15 @@ function recordAdvance() {
   // "este tempo é o início do próximo slide". Gravar no slide atual e depois
   // avançar fazia o syncSlideFromAudio puxar o operador de volta.
   if (current.value >= slides.value.length - 1) return;
-  const t = Math.round(audioEl.value.currentTime);
+  const seconds = Math.round(audioEl.value.currentTime);
   current.value += 1;
-  activeSlide.value.tempo_seconds = t;
+  setSlideTime(activeSlide.value, seconds);
   markDirty();
 }
 
 function recordStart() {
   if (!requireAudio() || !slides.value.length) return;
-  activeSlide.value.tempo_seconds = Math.round(audioEl.value.currentTime);
+  setSlideTime(activeSlide.value, Math.round(audioEl.value.currentTime));
   markDirty();
 }
 
@@ -1454,16 +1417,20 @@ function recordRetroactive() {
     audioCurrentTime.value = 0;
     return;
   }
-  const cur = activeSlide.value.tempo_seconds || Math.round(audioEl.value.currentTime);
+  const cur = slideTime(activeSlide.value) || Math.round(audioEl.value.currentTime);
   const newTime = Math.max(0, cur - RETROACTIVE_OFFSET_S);
   audioEl.value.currentTime = newTime;
   audioCurrentTime.value = newTime;
-  activeSlide.value.tempo_seconds = newTime;
+  setSlideTime(activeSlide.value, newTime);
   markDirty();
 }
 
 function recordClear() {
-  for (const s of slides.value) s.tempo_seconds = 0;
+  // No playback, limpar devolve os slides aos tempos do cantado.
+  for (const s of slides.value) {
+    if (playbackTrack.value) delete s.tempo_seconds_pb;
+    else s.tempo_seconds = 0;
+  }
   markDirty();
 }
 

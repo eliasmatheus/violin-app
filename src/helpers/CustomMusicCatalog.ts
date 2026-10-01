@@ -1,13 +1,16 @@
 /** Índice leve do acervo pessoal para as buscas; slides e áudio são lidos só ao executar. */
 import DocStore from "@/helpers/DocStore";
-import { getSong } from "@/helpers/CustomSongs";
+import { getSong, hasPlayback, hasSung, type CustomSong } from "@/helpers/CustomSongs";
 import Media from "@/composables/useMedia";
 import { DB_TABLE } from "@/constants/DbTables";
+import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import type { SearchMusicItem } from "@/types/Music";
 
 function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
+
+const filled = (value: unknown): boolean => typeof value === "string" && !!value;
 
 export async function loadCustomMusicCatalog(): Promise<SearchMusicItem[]> {
   // Uma coletânea ilegível não deve esconder músicas que continuam disponíveis.
@@ -49,15 +52,48 @@ export async function loadCustomMusicCatalog(): Promise<SearchMusicItem[]> {
       name: song.nome,
       custom_song_id: song.id,
       custom_collection_names: [...(namesBySong.get(song.id) || [])],
-      has_instrumental_music: false,
+      has_audio: filled(song.audio_token),
+      has_instrumental_music: filled(song.playback_token),
       albums: [],
     });
   }
   return [...items.values()];
 }
 
-/** Único caminho de execução para busca rápida, paleta de comandos e tela de Músicas. */
-export async function openCustomMusic(customSongId: string): Promise<void> {
+/**
+ * Único caminho de execução da música personalizada — listas, busca rápida,
+ * paleta de comandos, liturgia e controle remoto passam por aqui.
+ *
+ * Sem ação pedida vale o cantado; o playback assume quando só ele existe.
+ *
+ * @returns `true` quando os slides foram projetados (tocar só o áudio não projeta).
+ */
+export async function playCustomSong(
+  song: CustomSong,
+  action?: MusicActionEnum | string
+): Promise<boolean> {
+  switch (action) {
+    case MusicActionEnum.AUDIO_ONLY:
+      await Media.openCustomAudio(song, MusicActionEnum.AUDIO);
+      return false;
+    case MusicActionEnum.PLAYBACK_ONLY:
+      await Media.openCustomAudio(song, MusicActionEnum.INSTRUMENTAL);
+      return false;
+    case undefined:
+      return Media.openCustomSong(
+        song,
+        hasSung(song) || !hasPlayback(song) ? MusicActionEnum.AUDIO : MusicActionEnum.INSTRUMENTAL
+      );
+    default:
+      return Media.openCustomSong(song, action);
+  }
+}
+
+/** Executa pelo UUID, relendo o documento: a lista em tela pode estar desatualizada. */
+export async function openCustomMusic(
+  customSongId: string,
+  action?: MusicActionEnum | string
+): Promise<boolean> {
   const song = await getSong(customSongId);
-  if (song) await Media.openCustomSong(song);
+  return song ? playCustomSong(song, action) : false;
 }

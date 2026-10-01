@@ -98,6 +98,24 @@ describe("openSlja", () => {
     expect(mocks.openCustomSong.mock.calls[0][0].audio_token).toBe("");
   });
 
+  it("arquivo com o sufixo de playback entra no player como playback", async () => {
+    await openSlja(await pacote(), { fileName: "Hino do Pacote - PB.slja" });
+
+    const [song, mode] = mocks.openCustomSong.mock.calls[0];
+    expect(mode).toBe("instrumental");
+    expect(song.audio_token).toBe("");
+    expect(song.playback_token).toMatch(/^blob:/);
+    expect(song.playback_name).toBe("musica.mp3");
+  });
+
+  it("sem o sufixo, ou sem áudio no pacote, segue como cantado", async () => {
+    await openSlja(await pacote(), { fileName: "Hino do Pacote.slja" });
+    await openSlja(await pacote({ comAudio: false }), { fileName: "Hino -PB.slja" });
+
+    expect(mocks.openCustomSong.mock.calls.map((call) => call[1])).toEqual(["audio", "audio"]);
+    expect(mocks.openCustomSong.mock.calls[0][0].playback_token).toBeUndefined();
+  });
+
   it("o título do chamador vence o nome gravado no pacote", async () => {
     await openSlja(await pacote(), { title: "  Abertura do culto " });
 

@@ -903,6 +903,8 @@
       "draw_action": "Sortear",
       "draw_reset": "Reiniciar",
       "dynamic_text": "Texto Dinámico",
+      "editor_track_sung": "Pista: Cantado",
+      "editor_track_playback": "Pista: Playback",
       "editor_audio_attach": "Audio",
       "editor_audio_remove": "Quitar Audio",
       "editor_aux_color": "Color del Texto",

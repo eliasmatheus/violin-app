@@ -203,22 +203,13 @@
           </td>
           <td>
             <div class="lj-u-flex lj-u-justify-end">
-              <LjButton
-                v-if="item.custom_song_id"
-                variant="ghost"
-                size="sm"
-                icon-only
-                :icon="ICONS.PLAYER.PLAY_OUTLINE"
-                :title="$t('components.music_menu.execute')"
-                :aria-label="$t('components.music_menu.execute')"
-                @click="openCustomMusic(item.custom_song_id)"
-              />
               <MusicMenuTable
-                v-else
                 :id_music="item.id_music"
                 :name="item.name"
                 :music-subtitle="musicTitle(item, 'Música')"
                 :has_instrumental_music="item.has_instrumental_music"
+                :custom-song-id="item.custom_song_id"
+                :has-audio="item.has_audio !== false"
                 :show-playlist-menu="true"
                 defer-quick-actions
               />
@@ -273,7 +264,7 @@ import PlaylistPanel from "./PlaylistPanel.vue";
 import PlaylistSongs from "./PlaylistSongs.vue";
 import { ICONS } from "@/config/Icons";
 import Telemetry from "@/helpers/Telemetry";
-import { loadCustomMusicCatalog, openCustomMusic } from "@/helpers/CustomMusicCatalog";
+import { loadCustomMusicCatalog } from "@/helpers/CustomMusicCatalog";
 import { albumLabel, musicTitle } from "@root/config/musicCatalog.mjs";
 
 const moduleContainer = ref(null);

@@ -32,6 +32,8 @@ export interface CustomSlide {
   imagem_posicao: ImagemPosicao;
   fundo_letra: boolean;
   tempo_seconds: number;
+  /** Início do slide na faixa de playback; ausente, vale o mesmo instante do cantado. */
+  tempo_seconds_pb?: number;
   text_align?: "left" | "center" | "right";
 }
 
@@ -40,9 +42,33 @@ export interface CustomSong {
   nome: string;
   audio_token: string;
   audio_name: string;
+  /** Faixa de playback da mesma música; os slides são os do cantado. */
+  playback_token?: string;
+  playback_name?: string;
   slides: CustomSlide[];
   createdAt: string;
   updatedAt: string;
+}
+
+type SongTracks = Pick<CustomSong, "audio_token" | "playback_token">;
+
+export function hasSung(song: Partial<SongTracks> | null | undefined): boolean {
+  return !!song?.audio_token;
+}
+
+export function hasPlayback(song: Partial<SongTracks> | null | undefined): boolean {
+  return !!song?.playback_token;
+}
+
+/** Instante de início de cada slide na faixa pedida. */
+export function slideTimes(
+  slides: Array<{ tempo_seconds?: number; tempo_seconds_pb?: number }>,
+  playback = false
+): number[] {
+  return slides.map((slide) => {
+    const own = playback ? slide.tempo_seconds_pb : undefined;
+    return Number(own ?? slide.tempo_seconds) || 0;
+  });
 }
 
 export interface CustomCollection {
@@ -155,6 +181,9 @@ export async function deleteCollection(id: string): Promise<void> {
 }
 
 export default {
+  hasSung,
+  hasPlayback,
+  slideTimes,
   newSlide,
   newSong,
   newCollection,

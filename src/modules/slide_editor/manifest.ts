@@ -103,6 +103,22 @@ export const contextualPages: RibbonPage[] = [
         id: "ctx_se_audio",
         title: "ribbon.groups.audio_file",
         buttons: [
+          {
+            id: "editor_audio_track",
+            icon: ICONS.MUSIC.SING,
+            label: "ribbon.btn.editor_track_sung",
+            action: "editor_audio_track",
+            color: "#c0392b",
+            stateBinding: {
+              watchPath: KEYS.MODULES.SLIDE_EDITOR.PLAYBACK_TRACK,
+              iconOn: ICONS.MUSIC.PLAYBACK,
+              iconOff: ICONS.MUSIC.SING,
+              colorOn: "#1b4f8a",
+              colorOff: "#c0392b",
+              labelOn: "ribbon.btn.editor_track_playback",
+              labelOff: "ribbon.btn.editor_track_sung",
+            },
+          },
           { id: "editor_audio_attach", icon: ICONS.MEDIA.ADD, label: "ribbon.btn.editor_audio_attach", action: "editor_audio_attach", color: "#1b4f8a" },
           { id: "editor_audio_remove", icon: ICONS.MUSIC.NO_AUDIO, label: "ribbon.btn.editor_audio_remove", action: "editor_audio_remove", color: "#7f8c8d" },
           { id: "editor_play_pause", icon: ICONS.PLAYER.PLAY_PAUSE, label: "ribbon.btn.editor_play_pause", action: "editor_play_pause", color: "#27ae60" },

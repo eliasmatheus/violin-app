@@ -278,6 +278,30 @@ function resolveSongName(data = {}, fileName = "") {
     .replace(/\.(slja|lja)$/i, "");
 }
 
+/**
+ * Sufixo do nome do arquivo de playback. Um .slja comporta uma faixa só, então
+ * o LouvorJA clássico (26.11+) pareia `Música.slja` com `Música -PB.slja` na
+ * pasta da coletânea personalizada.
+ */
+const PLAYBACK_SUFFIX = " -PB";
+
+/**
+ * Nome da música a que um playback pertence, ou `null` quando o nome não é de
+ * playback. Mesma regra do `ehNomePlayback` do clássico: o sufixo é digitado à
+ * mão, então vale "-PB", " -PB", "- PB" e " - PB", em qualquer caixa.
+ *
+ * @param {string} name  Nome do arquivo sem a extensão.
+ * @returns {string | null}
+ */
+function playbackBaseName(name) {
+  let s = String(name ?? "").trimEnd();
+  if (s.length < 3 || s.slice(-2).toUpperCase() !== "PB") return null;
+  s = s.slice(0, -2).trimEnd();
+  if (!s.endsWith("-")) return null;
+  // Sem nada antes do traço não há música a que o playback pertença.
+  return s.slice(0, -1).trim() || null;
+}
+
 function buildIniFromSlides({
   meta = {},
   slides = [],
@@ -472,4 +496,6 @@ export default {
   encodeLetra,
   resolveSongName,
   fillMissingImages,
+  PLAYBACK_SUFFIX,
+  playbackBaseName,
 };

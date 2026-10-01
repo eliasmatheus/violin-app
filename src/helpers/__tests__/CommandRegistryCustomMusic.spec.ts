@@ -24,7 +24,10 @@ vi.mock("@/helpers/CustomMusicCatalog", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/helpers/CustomMusicCatalog")>()),
   loadCustomMusicCatalog: mocks.loadCustomMusicCatalog,
 }));
-vi.mock("@/helpers/CustomSongs", () => ({ getSong: mocks.getSong }));
+vi.mock("@/helpers/CustomSongs", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/helpers/CustomSongs")>()),
+  getSong: mocks.getSong,
+}));
 vi.mock("@/composables/useMedia", () => ({
   default: { open: mocks.open, openCustomSong: mocks.openCustomSong },
 }));
@@ -78,8 +81,17 @@ describe("músicas personalizadas na paleta", () => {
     mocks.getSong.mockResolvedValue(song);
     await all.find((item) => item.id === "custom-music:song-a").run();
     expect(mocks.getSong).toHaveBeenCalledWith("song-a");
-    expect(mocks.openCustomSong).toHaveBeenCalledWith(song);
+    expect(mocks.openCustomSong).toHaveBeenCalledWith(song, "audio");
     expect(mocks.open).not.toHaveBeenCalled();
+  });
+
+  it("música só com playback abre no playback, que é a faixa que ela tem", async () => {
+    const registry = await import("@/helpers/CommandRegistry");
+    const all = await registry.getAll(database, userdata, translate);
+    const song = { id: "song-a", nome: "Só playback", audio_token: "", playback_token: "pb" };
+    mocks.getSong.mockResolvedValue(song);
+    await all.find((item) => item.id === "custom-music:song-a").run();
+    expect(mocks.openCustomSong).toHaveBeenCalledWith(song, "instrumental");
   });
 
   it("não executa um resultado cujo documento foi excluído enquanto a paleta estava aberta", async () => {

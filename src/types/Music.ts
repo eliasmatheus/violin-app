@@ -38,6 +38,8 @@ export interface SearchMusicItem extends MusicItem {
   album?: string;
   custom_song_id?: string;
   custom_collection_names?: string[];
+  /** Música personalizada: tem faixa cantada. No acervo oficial toda música tem. */
+  has_audio?: boolean;
 }
 
 export interface PlaylistSong {

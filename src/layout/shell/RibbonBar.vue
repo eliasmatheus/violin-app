@@ -641,6 +641,7 @@ const EDITOR_ACTIONS = new Set<string>([
   "editor_prev",
   "editor_next",
   "editor_last",
+  "editor_audio_track",
   "editor_audio_attach",
   "editor_audio_remove",
   "editor_play_pause",
