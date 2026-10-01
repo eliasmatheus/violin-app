@@ -1,4 +1,5 @@
 import { ICONS } from "@/config/Icons";
+import { MusicActionEnum } from "@/enums/MusicActionEnum";
 
 /**
  * Formatos de uma música — os mesmos da liturgia (`subtipo` do item), para o
@@ -31,4 +32,17 @@ export function modesFor(hasInstrumental: boolean): MusicModeOption[] {
 
 export function isMusicMode(value: string | undefined): value is MusicMode {
   return MUSIC_MODES.some((m) => m.value === value);
+}
+
+/** Ação dos botões de música do app → formato do módulo. A letra avulsa não é formato. */
+const MODE_OF_ACTION: Partial<Record<MusicActionEnum, MusicMode>> = {
+  [MusicActionEnum.AUDIO]: "sung",
+  [MusicActionEnum.INSTRUMENTAL]: "pb",
+  [MusicActionEnum.NO_AUDIO]: "lyric",
+  [MusicActionEnum.AUDIO_ONLY]: "audio",
+  [MusicActionEnum.PLAYBACK_ONLY]: "audio_pb",
+};
+
+export function modeOfAction(action: MusicActionEnum): MusicMode | null {
+  return MODE_OF_ACTION[action] ?? null;
 }

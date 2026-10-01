@@ -1,137 +1,181 @@
 <template>
   <div class="pm-music" data-testid="pm-library-music">
-    <nav class="pm-music__cats" :aria-label="tm('music.categories')">
-      <button
-        v-for="cat in categoryList"
-        :key="cat.id"
-        type="button"
-        class="pm-music__cat"
-        :class="{ 'pm-music__cat--active': cat.id === categoryId && !query }"
-        @click="openCategory(cat.id)"
-      >
-        <LjIcon :icon="cat.id === HYMNALS ? ICONS.MODULES.HYMNAL : ICONS.MODULES.ALBUM" :size="15" />
-        <span class="pm-music__cat-label">{{ cat.name }}</span>
-        <span class="pm-music__cat-count">{{ cat.albums.length }}</span>
-      </button>
-    </nav>
-
-    <div class="pm-music__main">
-      <header class="pm-music__head">
-        <LjButton
-          v-if="album && !query"
+    <header class="pm-music__head">
+      <div class="pm-music__search">
+        <LjInput
+          v-model="search"
           size="sm"
-          variant="ghost"
-          icon-only
-          :icon="ICONS.UI.ARROW_LEFT"
-          :title="tm('music.back')"
-          @click="album = null"
+          :icon="ICONS.ACTIONS.SEARCH"
+          :placeholder="tm('music.search')"
+          :invalid="!!search && data.filter_count <= 0"
+          :disabled="scopeEmpty"
+          clearable
+          data-testid="pm-music-search"
         />
-        <span v-if="album && !query" class="pm-music__album-title">{{ album.name }}</span>
-        <div class="pm-music__search">
-          <LjInput
-            v-model="query"
-            size="sm"
-            :icon="ICONS.ACTIONS.SEARCH"
-            :placeholder="tm('music.search')"
-            clearable
-            data-testid="pm-music-search"
-          />
-        </div>
-      </header>
-
-      <p v-if="loading" class="pm-music__note">{{ tm("library.loading") }}</p>
-
-      <!-- Busca: nome, coletânea ou número do hino. -->
-      <ol v-else-if="query" class="pm-songs" data-testid="pm-music-results">
-        <li v-if="!results.length" class="pm-music__note">{{ tm("music.no_results") }}</li>
-        <SongRow
-          v-for="song in results"
-          :key="song.id_music"
-          :song="song"
-          @preview="emit('preview-song', song)"
-          @play="(mode: MusicMode) => emit('play-song', song, mode)"
-          @add="(mode: MusicMode) => emit('add-song', song, mode)"
-        />
-      </ol>
-
-      <ol v-else-if="album" class="pm-songs" data-testid="pm-music-album">
-        <SongRow
-          v-for="song in albumSongs"
-          :key="song.id_music"
-          :song="song"
-          @preview="emit('preview-song', song)"
-          @play="(mode: MusicMode) => emit('play-song', song, mode)"
-          @add="(mode: MusicMode) => emit('add-song', song, mode)"
-        />
-      </ol>
-
-      <div v-else class="pm-albums" data-testid="pm-music-albums">
-        <button
-          v-for="a in currentAlbums"
-          :key="a.id_album"
-          type="button"
-          class="pm-album"
-          :title="a.name"
-          :data-testid="`pm-album-${a.id_album}`"
-          @click="openAlbum(a)"
-        >
-          <span class="pm-album__cover" :style="a.color ? { background: a.color } : undefined">
-            <img v-if="a.url_image" :src="Path.file(a.url_image)" alt="" loading="lazy" />
-            <LjIcon v-else :icon="ICONS.MODULES.ALBUM" :size="26" />
-          </span>
-          <span class="pm-album__name">{{ a.name }}</span>
-          <span v-if="a.subtitle" class="pm-album__sub">{{ a.subtitle }}</span>
-        </button>
       </div>
+      <div class="pm-music__scope" role="group" :aria-labelledby="scopeLabelId">
+        <span :id="scopeLabelId" class="pm-music__scope-label">{{ tm("music.search_in") }}</span>
+        <LjCheckbox v-model="scope.name" :label="tm('music.scope_name')" />
+        <LjCheckbox v-model="scope.lyric" :label="tm('music.scope_lyric')" />
+        <LjCheckbox v-model="scope.album" :label="tm('music.scope_album')" />
+        <LjCheckbox v-model="scope.track" :label="tm('music.scope_track')" />
+      </div>
+      <LjSwitch
+        v-model="instrumental"
+        :label="tm('music.with_playback')"
+        data-testid="pm-music-instrumental"
+      />
+    </header>
+
+    <div v-if="album || scopeEmpty || data.is_fuzzy" class="pm-music__notes">
+      <LjChip
+        v-if="album"
+        size="sm"
+        variant="primary"
+        :icon="ICONS.MODULES.ALBUM"
+        removable
+        data-testid="pm-music-album-filter"
+        @remove="album = null"
+      >
+        {{ album.name }}
+      </LjChip>
+      <span v-if="scopeEmpty" class="pm-music__warn">
+        <LjIcon :icon="ICONS.UI.ALERT" :size="13" />
+        {{ tm("music.scope_empty") }}
+      </span>
+      <span v-else-if="data.is_fuzzy" class="pm-music__hint">{{ tm("music.approximate") }}</span>
     </div>
+
+    <div ref="scroller" class="pm-music__table" @scroll.passive="onScroll">
+      <Table
+        v-model="data"
+        :search="search"
+        :letter="letter"
+        :search_min_length="3"
+        :searchable_fields="{
+          name: scope.name,
+          lyric: scope.lyric,
+          albums_names: scope.album,
+          track: scope.track,
+        }"
+        :filter="{ has_instrumental_music: instrumental }"
+        :disabled_albums="disabledAlbums"
+        :only_album="album?.id_album"
+        :scroll="scroll"
+        :has_scroll="hasScroll"
+        sort_by="name"
+        :file="`${locale}_musics`"
+      >
+        <thead>
+          <tr>
+            <th class="lj-u-text-start">{{ tm("music.col_name") }}</th>
+            <th class="lj-u-text-start">{{ tm("music.col_album") }}</th>
+            <th class="lj-u-text-end">{{ tm("music.col_duration") }}</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="item in data.data"
+            :key="item.id_music"
+            class="pm-music__row"
+            :class="{
+              'pm-music__row--selected': item.id_music === selectedId,
+              'pm-music__row--live': item.id_music === liveSongId,
+            }"
+            tabindex="0"
+            :data-testid="`pm-song-${item.id_music}`"
+            @click="select(item)"
+            @dblclick="play(item, 'sung')"
+            @keydown.enter.self="play(item, 'sung')"
+          >
+            <td class="pm-music__name">{{ item.name }}</td>
+            <td class="pm-music__albums">
+              <LjChip
+                v-for="a in item.albums"
+                :key="a.id_album"
+                size="sm"
+                :variant="chipVariant"
+                class="pm-music__chip"
+                :title="tm('music.filter_album')"
+                @click.stop="album = { id_album: a.id_album, name: a.name }"
+                @dblclick.stop
+              >
+                {{ albumLabel(a) }}
+              </LjChip>
+            </td>
+            <td class="lj-u-text-end pm-music__duration">
+              {{ DateTime.shortTime(item.duration ?? 0) }}
+            </td>
+            <td @click.stop @dblclick.stop>
+              <div class="lj-u-flex lj-u-justify-end">
+                <MusicMenuTable
+                  :id_music="item.id_music"
+                  :name="item.name"
+                  :music-subtitle="musicTitle(item, 'Música')"
+                  :has_instrumental_music="!!item.has_instrumental_music"
+                  :run-action="(action: MusicActionEnum) => onAction(item, action)"
+                  :extra-menu="programMenu(item)"
+                  defer-quick-actions
+                />
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </Table>
+      <p v-if="search && data.filter_count <= 0" class="pm-music__empty">
+        {{ tm("music.no_results") }}
+      </p>
+    </div>
+
+    <footer class="pm-music__foot">
+      <LetterPaginate v-model="letter" />
+      <span class="pm-music__count">{{ tm("music.records") }}: {{ data.filter_count }}</span>
+    </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
-import { LjButton, LjIcon, LjInput } from "@/components/ui";
+import { computed, nextTick, ref, useId, watch } from "vue";
+import { LjCheckbox, LjChip, LjIcon, LjInput, LjSwitch } from "@/components/ui";
+import Table from "@/components/DataTable.vue";
+import MusicMenuTable from "@/components/MusicMenuTable.vue";
+import LetterPaginate from "@/components/LetterPagination.vue";
 import { ICONS } from "@/config/Icons";
+import { KEYS } from "@/constants/UserDataKeys";
 import { ModuleEnum } from "@/enums/ModuleEnum";
-import Database from "@/helpers/Database";
-import Path from "@/helpers/Path";
-import Strings from "@/helpers/Strings";
-import Telemetry from "@/helpers/Telemetry";
+import { MusicActionEnum } from "@/enums/MusicActionEnum";
+import $appdata from "@/helpers/AppData";
+import $userdata from "@/helpers/UserData";
+import DateTime from "@/helpers/DateTime";
 import { useModuleI18n } from "@/composables/useModuleI18n";
-import { useDisabledAlbums } from "@/composables/useMusicCatalog";
-import { isAlbumEnabled } from "@root/config/musicCatalog.mjs";
-import SongRow, { type LibrarySong } from "./LibrarySongRow.vue";
-import type { MusicMode } from "../program/musicModes";
+import { albumLabel, musicTitle } from "@root/config/musicCatalog.mjs";
+import { modeOfAction, modesFor, type MusicMode } from "../program/musicModes";
+import type { LibrarySong } from "../program/song";
 
 /**
- * Aba Músicas da biblioteca: as coletâneas do LouvorJA por capa, e a busca
- * por nome, coletânea ou número de hino. Um clique leva a música para a
- * prévia do palco; ▶ ou duplo clique toca; + põe no programa.
+ * Aba Músicas da biblioteca: a mesma tabela do módulo Músicas — busca com
+ * "Buscar em", filtro de playback, letras e os botões de formato no hover —,
+ * mas tocando pelo palco do módulo. Um clique leva a música para a prévia;
+ * duplo clique ou Enter toca cantada; o chip da coletânea filtra a tabela.
  */
 
 interface CatalogAlbum {
   id_album: number;
   name: string;
-  url_image?: string;
-  color?: string;
-  subtitle?: string;
-  order?: number;
+  type?: string;
+  pivot?: { track?: number };
 }
 
-interface CatalogMusic {
+interface CatalogRow {
   id_music: number;
   name: string;
   duration?: string;
   has_instrumental_music?: number | boolean;
-  albums_names?: string;
-  albums?: { id_album: number; name: string; type?: string; pivot?: { track?: number } }[];
+  albums?: CatalogAlbum[];
 }
 
-interface Category {
-  id: string | number;
-  name: string;
-  albums: CatalogAlbum[];
-}
-
+defineProps<{ liveSongId: number | null }>();
 const emit = defineEmits<{
   "preview-song": [song: LibrarySong];
   "play-song": [song: LibrarySong, mode: MusicMode];
@@ -139,301 +183,244 @@ const emit = defineEmits<{
 }>();
 
 const { tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
-const disabledAlbums = useDisabledAlbums();
+const scopeLabelId = useId();
 
-const HYMNALS = "__hymnals__";
-const MAX_RESULTS = 100;
+/* ─── Busca e filtros (preferências próprias do modo apresentação) ─── */
 
-const categories = ref<Category[]>([]);
-const catalog = ref<CatalogMusic[]>([]);
-const loading = ref(false);
-const categoryId = ref<string | number | null>(null);
-const album = ref<CatalogAlbum | null>(null);
-const albumSongs = ref<LibrarySong[]>([]);
-const query = ref("");
+const DEFAULT_SCOPE = { name: true, lyric: false, album: false, track: true };
+type Scope = typeof DEFAULT_SCOPE;
 
-const enabled = (id: number) => isAlbumEnabled(id, disabledAlbums.value);
+const scope = ref<Scope>({
+  ...DEFAULT_SCOPE,
+  ...($userdata.get<Partial<Scope>>(KEYS.MODULES.PRESENTATION_MODE.MUSIC_SEARCH, {}) ?? {}),
+});
+watch(scope, (value) => $userdata.set(KEYS.MODULES.PRESENTATION_MODE.MUSIC_SEARCH, { ...value }), {
+  deep: true,
+});
+const scopeEmpty = computed(() => !Object.values(scope.value).some(Boolean));
 
-/** Hinários não estão nas categorias da coletânea: vêm dos álbuns do catálogo. */
-const hymnalCategory = computed<Category | null>(() => {
-  const seen = new Map<number, CatalogAlbum>();
-  for (const music of catalog.value) {
-    for (const a of music.albums ?? []) {
-      if (a.type === "hymnal" && enabled(a.id_album) && !seen.has(a.id_album)) {
-        seen.set(a.id_album, { id_album: a.id_album, name: a.name });
-      }
-    }
-  }
-  return seen.size ? { id: HYMNALS, name: tm("music.hymnals"), albums: [...seen.values()] } : null;
+const instrumental = computed<boolean>({
+  get: () =>
+    $userdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.MUSIC_INSTRUMENTAL, false) === true,
+  set: (value) => $userdata.set(KEYS.MODULES.PRESENTATION_MODE.MUSIC_INSTRUMENTAL, value),
 });
 
-const categoryList = computed<Category[]>(() => {
-  const list = categories.value.map((c) => ({ ...c, albums: c.albums.filter((a) => enabled(a.id_album)) }));
-  return hymnalCategory.value ? [hymnalCategory.value, ...list] : list;
+const disabledAlbums = computed(
+  () => $userdata.get<number[]>(KEYS.OPTIONS.DISABLED_ALBUMS, []) ?? []
+);
+const chipVariant = computed(() => ($appdata.get(KEYS.SHELL.IS_DARK) ? "neutral" : "primary"));
+
+const search = ref("");
+const letter = ref("");
+const album = ref<{ id_album: number; name: string } | null>(null);
+/** Estado que a tabela devolve pelo v-model: a página visível e quantas casaram. */
+const data = ref<{ data: CatalogRow[]; filter_count: number; is_fuzzy: boolean }>({
+  data: [],
+  filter_count: 0,
+  is_fuzzy: false,
 });
 
-const currentAlbums = computed(
-  () => categoryList.value.find((c) => c.id === categoryId.value)?.albums ?? []
+/* ─── Rolagem: a tabela cresce em lotes quando chega perto do fim ─── */
+
+const scroller = ref<HTMLElement | null>(null);
+const scroll = ref<{ scroll_bottom?: number }>({});
+const hasScroll = ref(false);
+
+function measure(): void {
+  const el = scroller.value;
+  if (!el) return;
+  hasScroll.value = el.scrollHeight > el.clientHeight;
+  scroll.value = { scroll_bottom: Math.max(0, el.scrollHeight - el.scrollTop - el.clientHeight) };
+}
+
+function onScroll(): void {
+  measure();
+}
+
+watch(
+  () => data.value.data.length,
+  () => void nextTick(measure)
 );
 
-function toSong(music: CatalogMusic, albumName?: string, track?: number): LibrarySong {
+// Outro recorte da lista volta ao topo.
+watch([search, letter, album, instrumental], () => {
+  if (scroller.value) scroller.value.scrollTop = 0;
+});
+
+/* ─── Linhas ─── */
+
+const selectedId = ref<number | null>(null);
+
+function toSong(item: CatalogRow): LibrarySong {
+  const first = album.value
+    ? item.albums?.find((a) => a.id_album === album.value?.id_album)
+    : item.albums?.[0];
   return {
-    id_music: music.id_music,
-    name: music.name,
-    duration: music.duration,
-    album: albumName ?? music.albums_names ?? "",
-    track,
-    has_instrumental_music: !!music.has_instrumental_music,
+    id_music: item.id_music,
+    name: item.name,
+    duration: item.duration,
+    album: first ? albumLabel(first) : "",
+    track: first?.pivot?.track,
+    has_instrumental_music: !!item.has_instrumental_music,
   };
 }
 
-/** Número puro procura a faixa nos hinários; texto procura nome e coletânea. */
-const results = computed<LibrarySong[]>(() => {
-  const q = query.value.trim();
-  if (!q) return [];
-  const out: LibrarySong[] = [];
-  if (/^\d+$/.test(q)) {
-    const n = Number(q);
-    for (const music of catalog.value) {
-      for (const a of music.albums ?? []) {
-        if (a.type === "hymnal" && a.pivot?.track === n && enabled(a.id_album)) {
-          out.push(toSong(music, a.name, n));
-        }
-      }
-    }
-    return out;
-  }
-  const folded = Strings.fold(q);
-  for (const music of catalog.value) {
-    if (!(music.albums ?? []).some((a) => enabled(a.id_album))) continue;
-    if (Strings.fold(music.name).includes(folded) || Strings.fold(music.albums_names ?? "").includes(folded)) {
-      out.push(toSong(music));
-      if (out.length >= MAX_RESULTS) break;
-    }
-  }
-  return out;
-});
-
-async function load(): Promise<void> {
-  loading.value = true;
-  try {
-    const [cats, musics] = await Promise.all([
-      Database.get<Category[] & { id_category?: number }[]>(`${locale.value}_categories`),
-      Database.get<CatalogMusic[]>(`${locale.value}_musics`),
-    ]);
-    categories.value = ((cats as unknown as { id_category: number; name: string; order: number; albums: CatalogAlbum[] }[]) ?? [])
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map((c) => ({
-        id: c.id_category,
-        name: c.name,
-        albums: [...(c.albums ?? [])].sort((a, b) => (b.order ?? 0) - (a.order ?? 0)),
-      }));
-    catalog.value = musics ?? [];
-    categoryId.value = categoryList.value[0]?.id ?? null;
-  } catch (e) {
-    Telemetry.captureException(e, { source: "presentation_mode.library.music" });
-  } finally {
-    loading.value = false;
-  }
+function select(item: CatalogRow): void {
+  selectedId.value = item.id_music;
+  emit("preview-song", toSong(item));
 }
 
-function openCategory(id: string | number): void {
-  query.value = "";
-  categoryId.value = id;
-  album.value = null;
+function play(item: CatalogRow, mode: MusicMode): void {
+  selectedId.value = item.id_music;
+  emit("play-song", toSong(item), mode);
 }
 
-async function openAlbum(a: CatalogAlbum): Promise<void> {
-  album.value = a;
-  albumSongs.value = [];
-  try {
-    const data = await Database.get<{ musics?: (CatalogMusic & { track?: number })[] }>(`album_${a.id_album}`);
-    if (album.value !== a) return;
-    albumSongs.value = (data?.musics ?? [])
-      .slice()
-      .sort((x, y) => (x.track ?? 0) - (y.track ?? 0))
-      .map((m) => toSong(m, a.name, m.track));
-  } catch (e) {
-    Telemetry.captureException(e, { source: "presentation_mode.library.album" });
-  }
+/** Os botões de formato da linha tocam pelo palco; a letra avulsa segue o caminho de sempre. */
+function onAction(item: CatalogRow, action: MusicActionEnum): void {
+  const mode = modeOfAction(action);
+  if (mode) play(item, mode);
 }
 
-onMounted(() => void load());
-watch(locale, () => void load());
+function programMenu(item: CatalogRow) {
+  return [
+    {
+      title: tm("library.add_to_program"),
+      icon: ICONS.ACTIONS.ADD,
+      menu: modesFor(!!item.has_instrumental_music).map((m) => ({
+        title: tm(m.label),
+        icon: m.icon,
+        click: () => emit("add-song", toSong(item), m.value),
+      })),
+    },
+  ];
+}
 </script>
 
 <style scoped>
 .pm-music {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
-}
-
-.pm-music__cats {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow-y: auto;
-  border-right: 1px solid var(--lj-surface-border);
-}
-
-.pm-music__cat {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 27px;
-  flex-shrink: 0;
-  padding: 0 8px 0 9px;
-  border: none;
-  border-left: 3px solid transparent;
-  background: transparent;
-  color: var(--lj-text);
-  font: inherit;
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 120ms var(--lj-ease);
-}
-
-.pm-music__cat:hover {
-  background: var(--lj-hover-bg);
-}
-
-.pm-music__cat :deep(svg) {
-  flex-shrink: 0;
-  color: var(--lj-orange);
-}
-
-.pm-music__cat--active {
-  background: var(--lj-live-active-bg);
-  border-left-color: var(--lj-orange);
-}
-
-.pm-music__cat-label {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pm-music__cat-count {
-  flex-shrink: 0;
-  font-family: var(--lj-font-mono);
-  font-size: 10px;
-  color: var(--lj-text-subtle);
-}
-
-.pm-music__main {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
 }
 
 .pm-music__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 6px 16px;
   padding: 6px 8px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--lj-surface-border);
 }
 
-.pm-music__album-title {
-  min-width: 0;
-  font-weight: var(--lj-weight-semibold);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .pm-music__search {
   width: 260px;
   max-width: 100%;
-  margin-left: auto;
 }
 
-.pm-music__note {
-  margin: auto;
-  padding: var(--lj-space-4);
-  color: var(--lj-text-subtle);
-  list-style: none;
-}
-
-.pm-songs {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  margin: 0;
-  padding: 4px 0;
-  list-style: none;
-}
-
-.pm-albums {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 8px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-  gap: 10px;
-  align-content: start;
-}
-
-.pm-album {
+.pm-music__scope {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--lj-text);
-  font: inherit;
-  text-align: left;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 12px;
+}
+
+.pm-music__scope-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--lj-text-subtle);
+}
+
+.pm-music__notes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--lj-surface-border);
+  font-size: 11px;
+}
+
+.pm-music__warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--lj-warning);
+}
+
+.pm-music__hint {
+  color: var(--lj-text-subtle);
+}
+
+.pm-music__table {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pm-music__row {
   cursor: pointer;
 }
 
-.pm-album__cover {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 1;
-  overflow: hidden;
-  border: 1px solid var(--lj-surface-border);
-  border-radius: 3px;
-  background: var(--lj-live-stage-bg);
-  color: var(--lj-white-alpha-50);
-  transition: border-color 120ms var(--lj-ease);
-}
-
-.pm-album:hover .pm-album__cover,
-.pm-album:focus-visible .pm-album__cover {
-  border-color: var(--lj-navy-active);
-}
-
-.pm-album:focus-visible {
+.pm-music__row:focus-visible {
   outline: none;
+  box-shadow: inset var(--lj-ui-focus);
 }
 
-.pm-album__cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.pm-music__row--selected > td {
+  background: var(--lj-live-active-bg);
 }
 
-.pm-album__name {
+.pm-music__row--live > td:first-child {
+  box-shadow: inset 3px 0 0 var(--lj-orange);
+}
+
+.pm-music__row--live .pm-music__name {
+  font-weight: var(--lj-weight-semibold);
+}
+
+.pm-music__albums {
+  max-width: 0;
+  width: 40%;
+}
+
+.pm-music__chip {
+  max-width: 100%;
+  margin: 1px 4px 1px 0;
+  cursor: pointer;
+}
+
+.pm-music__duration {
+  font-family: var(--lj-font-mono);
   font-size: 11px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.pm-album__sub {
-  font-size: 10px;
+.pm-music__empty {
+  margin: 0;
+  padding: var(--lj-space-4);
+  text-align: center;
+  color: var(--lj-text-subtle);
+}
+
+.pm-music__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--lj-surface-border);
+  overflow-x: auto;
+}
+
+.pm-music__count {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
   color: var(--lj-text-subtle);
 }
 </style>

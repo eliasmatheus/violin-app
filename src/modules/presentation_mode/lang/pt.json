@@ -220,11 +220,21 @@
     "audio_only": "Áudio — não vai para as telas"
   },
   "music": {
-    "categories": "Categorias",
-    "back": "Voltar às coletâneas",
-    "search": "Buscar música, coletânea ou nº do hino",
-    "no_results": "Nenhuma música encontrada.",
-    "hymnals": "Hinários"
+    "search": "Buscar por…",
+    "search_in": "Buscar em",
+    "scope_name": "Nome",
+    "scope_lyric": "Letra",
+    "scope_album": "Álbum",
+    "scope_track": "Número",
+    "with_playback": "Com playback",
+    "scope_empty": "Marque ao menos um campo em \"Buscar em\".",
+    "approximate": "Nenhum resultado exato; mostrando os mais parecidos.",
+    "col_name": "Nome",
+    "col_album": "Álbum",
+    "col_duration": "Duração",
+    "filter_album": "Mostrar só esta coletânea",
+    "records": "Total de registros",
+    "no_results": "Nenhuma música encontrada."
   },
   "preview": {
     "play": "Reproduzir",
@@ -237,9 +247,7 @@
     "lyric": "Só letra (sem áudio)",
     "audio": "Só áudio",
     "audio_pb": "Só áudio (playback)",
-    "play_as": "Reproduzir como…",
-    "add_as": "Adicionar ao programa como…",
-    "more": "Mais opções"
+    "play_as": "Reproduzir como…"
   },
   "bible": {
     "title": "Bíblia",

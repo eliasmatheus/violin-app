@@ -124,6 +124,10 @@ export const KEYS = {
       LIBRARY_FULL_WIDTH: `${MODULES_PRESENTATION_MODE}.library_full_width`,
       /** UserData: altura da biblioteca em px, ajustada arrastando a borda. */
       LIBRARY_HEIGHT: `${MODULES_PRESENTATION_MODE}.library_height`,
+      /** UserData: onde a busca da aba Músicas procura — `{ name, lyric, album, track }`. */
+      MUSIC_SEARCH: `${MODULES_PRESENTATION_MODE}.music_search`,
+      /** UserData: aba Músicas mostra só as que têm playback. */
+      MUSIC_INSTRUMENTAL: `${MODULES_PRESENTATION_MODE}.music_instrumental`,
     },
     MUSICS: {
       SELECTED_PLAYLIST: `${MODULES}.${ModuleEnum.MUSICS}.selected_playlist`,

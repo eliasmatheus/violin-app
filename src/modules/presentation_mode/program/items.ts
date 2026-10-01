@@ -1,7 +1,7 @@
 import DateTime from "@/helpers/DateTime";
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
 import type { ProgramBibleRef, ProgramItem } from "@/types/Presentation";
-import type { LibrarySong } from "../components/LibrarySongRow.vue";
+import type { LibrarySong } from "./song";
 import type { LibraryEntry } from "../composables/useFileLibrary";
 import type { MediaMeta } from "../composables/useMediaMeta";
 import { newId } from "../composables/useProgram";

@@ -80,6 +80,7 @@
         :live-path="libraryLivePath"
         :return-path="returnOverride?.path ?? null"
         :live-bible="liveBibleRef"
+        :live-song-id="liveSongId"
         :live-video-id="liveOrigin?.type === 'online' ? liveOrigin.videoId : null"
         @show-on-return="onShowOnReturn"
         @preview="(entry: LibraryEntry) => stage.show({ type: 'file', entry })"
@@ -163,7 +164,7 @@ import ProgramSettingsDialog from "./ProgramSettingsDialog.vue";
 import OutputsPanel from "./OutputsPanel.vue";
 import StageSlides from "./StageSlides.vue";
 import StageVideo from "./StageVideo.vue";
-import type { LibrarySong } from "./LibrarySongRow.vue";
+import type { LibrarySong } from "../program/song";
 import StagePreview from "./StagePreview.vue";
 import { useStage } from "../composables/useStage";
 import { expectationOf, isOnAir, samePlayable, type Playable } from "../program/playable";

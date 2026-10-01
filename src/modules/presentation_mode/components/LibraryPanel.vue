@@ -54,6 +54,7 @@
 
     <LibraryMusic
       v-if="tab === 'musics'"
+      :live-song-id="liveSongId"
       @preview-song="(s: LibrarySong) => emit('preview-song', s)"
       @play-song="(s: LibrarySong, m: MusicMode) => emit('play-song', s, m)"
       @add-song="(s: LibrarySong, m: MusicMode) => emit('add-song', s, m)"
@@ -97,7 +98,7 @@ import LibraryBible from "./LibraryBible.vue";
 import LibraryOnline from "./LibraryOnline.vue";
 import type { OnlineEntry } from "../composables/useOnlineLibrary";
 import type { ProgramBibleRef } from "@/types/Presentation";
-import type { LibrarySong } from "./LibrarySongRow.vue";
+import type { LibrarySong } from "../program/song";
 import type { MusicMode } from "../program/musicModes";
 import { LjButton, LjIcon } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
@@ -118,6 +119,8 @@ const props = defineProps<{
   liveBible: ProgramBibleRef | null;
   /** Vídeo do YouTube que o módulo pôs no ar. */
   liveVideoId: string | null;
+  /** Música com os slides no ar, para marcar a linha na aba Músicas. */
+  liveSongId: number | null;
 }>();
 
 const emit = defineEmits<{
