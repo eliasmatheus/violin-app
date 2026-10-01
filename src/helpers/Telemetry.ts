@@ -24,6 +24,7 @@ import {
   animationFrameDiagnostic,
   createResponsivenessContext,
 } from "@/helpers/ResponsivenessContext";
+import { createFrameDiagnostics } from "@/helpers/FrameDiagnostics";
 import $userdata from "@/helpers/UserData";
 import { setNetworkTimingReporter } from "@/helpers/Http";
 import { setDatabaseTimingReporter } from "@/helpers/Database";
@@ -290,6 +291,32 @@ function runtimeContext(): Record<string, unknown> {
     node_version: api?.runtime?.node || undefined,
     is_dev: Platform.isDev,
   };
+}
+
+const GPU_VENDORS: Record<number, string> = { 0x10de: "nvidia", 0x1002: "amd", 0x8086: "intel" };
+
+async function reportGraphics(posthog: PostHog): Promise<void> {
+  try {
+    const info = await window.louvorjaApi?.telemetry?.graphics?.();
+    if (!info) return;
+    const active = info.gpu_devices.find((d) => d.active) ?? info.gpu_devices[0];
+    posthog.capture("graphics_info", {
+      gpu_compositing: info.gpu_feature_status.gpu_compositing,
+      gpu_rasterization: info.gpu_feature_status.rasterization,
+      gpu_video_decode: info.gpu_feature_status.video_decode,
+      gpu_active_vendor: active ? GPU_VENDORS[active.vendor_id] || String(active.vendor_id) : null,
+      gpu_active_device_id: active?.device_id ?? null,
+      gpu_vendors: info.gpu_devices.map((d) => GPU_VENDORS[d.vendor_id] || String(d.vendor_id)),
+      cpu_model: info.cpu_model,
+      cpu_cores: info.cpu_cores,
+      memory_gb: info.memory_gb,
+      display_count: info.displays.length,
+      display_refresh_rates: info.displays.map((d) => d.hz),
+      display_sizes: info.displays.map((d) => `${d.width}x${d.height}@${d.scale}`),
+    });
+  } catch {
+    // Diagnóstico de melhor esforço; não participa do boot.
+  }
 }
 
 function sdkIdentity(posthog: PostHog): Record<string, unknown> {
@@ -814,6 +841,7 @@ const RUNTIME_INCIDENT_KEYS = new Set([
   "renderer_route",
   "renderer_visibility",
   "renderer_active_operations",
+  "renderer_native_picker_open",
   "renderer_long_task_count",
   "renderer_long_task_warn_count",
   "renderer_long_task_critical_count",
@@ -985,6 +1013,21 @@ function startResponsivenessMonitor(): void {
   let longTaskObserved = false;
   let scriptAttributionSupported = false;
   let lastScriptIncidentAt = -Infinity;
+  const frames = createFrameDiagnostics();
+  cleanups.push(() => frames.stop());
+
+  const flushFrameAggregate = () => {
+    const report = frames.flush();
+    if (!report) return;
+    log("info", "renderer frame aggregate", {
+      diagnostic_schema_version: 1,
+      window_role: windowRole(),
+      feature: windowFeature(),
+      route: routePath(),
+      ...report,
+      ..._runtimeContext,
+    });
+  };
 
   const activeOperations = () =>
     [..._pendingSpans.keys()]
@@ -1061,6 +1104,11 @@ function startResponsivenessMonitor(): void {
       entry_name: entry?.name,
       start_time_ms: entry ? Math.round(entry.startTime) : undefined,
       renderer_active_operations: activeOperations(),
+      // O seletor de arquivo do sistema aberto aparece como uma tarefa do
+      // tamanho do tempo que o operador levou escolhendo: não é travamento.
+      renderer_native_picker_open: entry
+        ? frames.nativePickerOverlaps(entry.startTime, entry.duration)
+        : false,
       renderer_script_attribution_supported: scriptAttributionSupported,
       renderer_overlapping_operations: entry
         ? _responsivenessContext.overlapping(
@@ -1081,8 +1129,9 @@ function startResponsivenessMonitor(): void {
           for (const entry of list.getEntries()) {
             // Buffered entries can precede initialization or an opt-in. Do not
             // collect frames that began outside this consented monitor window.
-            if (entry.startTime < monitoredFrom || entry.duration < UI_JANK_BUDGET.critical)
-              continue;
+            if (entry.startTime < monitoredFrom) continue;
+            frames.noteFrame(entry);
+            if (entry.duration < UI_JANK_BUDGET.critical) continue;
             const now = Date.now();
             if (now - lastScriptIncidentAt < RUNTIME_CRITICAL_COOLDOWN_MS) continue;
             const frame = animationFrameDiagnostic(entry);
@@ -1168,7 +1217,10 @@ function startResponsivenessMonitor(): void {
 
   sendHeartbeat();
   const heartbeatTimer = window.setInterval(sendHeartbeat, RUNTIME_HEARTBEAT_MS);
-  const aggregateTimer = window.setInterval(flushRemoteAggregate, RUNTIME_AGGREGATE_LOG_MS);
+  const aggregateTimer = window.setInterval(() => {
+    flushRemoteAggregate();
+    flushFrameAggregate();
+  }, RUNTIME_AGGREGATE_LOG_MS);
   cleanups.push(() => window.clearInterval(heartbeatTimer));
   cleanups.push(() => window.clearInterval(aggregateTimer));
 
@@ -1176,6 +1228,7 @@ function startResponsivenessMonitor(): void {
     monitorActive = false;
     sendHeartbeat();
     flushRemoteAggregate();
+    flushFrameAggregate();
     for (const cleanup of cleanups.splice(0)) cleanup();
     _responsivenessCleanup = null;
   };
@@ -1800,6 +1853,7 @@ async function _init(): Promise<void> {
     },
     { send_instantly: true, transport: "fetch" }
   );
+  if (windowRole() === "main") void reportGraphics(posthog);
   diagnostic("info", "evento app_opened solicitado ao SDK", {
     ...captureResultDetails(appOpened),
     capture_called: true,

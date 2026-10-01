@@ -73,6 +73,7 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     log: (payload) => ipcRenderer.send("telemetry:renderer-log", payload),
     heartbeat: (payload) => ipcRenderer.send("telemetry:heartbeat", payload),
     getPendingMainErrors: () => ipcRenderer.invoke("telemetry:pending-main-errors"),
+    graphics: () => ipcRenderer.invoke("telemetry:graphics"),
     ackMainError: (id) => ipcRenderer.invoke("telemetry:ack-main-error", id),
     onMainError: (cb) => {
       const handler = (_event, payload) => cb(payload);
