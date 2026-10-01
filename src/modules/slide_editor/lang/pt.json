@@ -72,6 +72,7 @@
     "of": "de",
     "empty": "Nenhum slide. Clique em Novo para criar.",
     "invalid_file": "Arquivo inválido. Esperado apresentação .slja exportada pelo LouvorJA.",
+    "lja_without_media": "Este arquivo .lja traz só os slides. O áudio e as imagens ficam em arquivos separados e não foram importados — adicione-os aqui, ou abra a apresentação no LouvorJA clássico e salve como .slja.",
     "save_error": "Não foi possível salvar o slide.",
     "no_audio": "Nenhum áudio anexado",
     "untitled": "Nova música",

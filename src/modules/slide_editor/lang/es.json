@@ -72,6 +72,7 @@
     "of": "de",
     "empty": "Sin diapositivas. Haz clic en Nuevo para crear.",
     "invalid_file": "Archivo inválido. Se espera presentación .slja exportada por LouvorJA.",
+    "lja_without_media": "Este archivo .lja solo trae las diapositivas. El audio y las imágenes están en archivos separados y no se importaron — agrégalos aquí, o abre la presentación en LouvorJA clásico y guárdala como .slja.",
     "save_error": "No se pudo guardar el slide.",
     "no_audio": "Sin audio adjunto",
     "untitled": "Nueva canción",

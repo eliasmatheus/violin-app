@@ -973,6 +973,7 @@ async function onLoadSlja(e) {
     song.value = newSong;
     current.value = 0;
     dirty.value = false;
+    if (data.loose) $alert.message(tm("data.lja_without_media"));
   } catch (err) {
     $alert.message(tm("data.invalid_file") + "\n\n" + (err?.message || err));
   }

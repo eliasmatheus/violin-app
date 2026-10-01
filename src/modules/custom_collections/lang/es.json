@@ -35,6 +35,7 @@
     "confirm_delete_collection": "¿Eliminar esta colección? Las canciones siguen disponibles en \"Mis Canciones\".",
     "name_placeholder": "Nombre de la colección",
     "import_result": "{ok} importada(s)",
-    "import_failed": ", {fail} fallo(s)"
+    "import_failed": ", {fail} fallo(s)",
+    "import_without_media": ". {loose} vino (vinieron) de archivo .lja, sin audio ni imágenes"
   }
 }

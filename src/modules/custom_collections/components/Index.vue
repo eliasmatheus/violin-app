@@ -515,7 +515,7 @@ async function importSljaFile(file) {
     );
   }
   await CustomSongs.saveSong(newSong);
-  return newSong;
+  return { song: newSong, loose: data.loose };
 }
 
 async function onImportSlja(e) {
@@ -525,17 +525,21 @@ async function onImportSlja(e) {
 
   let ok = 0;
   let fail = 0;
+  let loose = 0;
   for (const f of files) {
     try {
-      await importSljaFile(f);
+      if ((await importSljaFile(f)).loose) loose++;
       ok++;
     } catch {
       fail++;
     }
   }
   await loadAll();
-  const text = tm("data.import_result", { ok }) + (fail ? tm("data.import_failed", { fail }) : "");
-  showStatus(text, fail ? "warning" : "success");
+  const text =
+    tm("data.import_result", { ok }) +
+    (fail ? tm("data.import_failed", { fail }) : "") +
+    (loose ? tm("data.import_without_media", { loose }) : "");
+  showStatus(text, fail || loose ? "warning" : "success");
 }
 
 // ===== Collections =====

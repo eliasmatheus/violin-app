@@ -200,6 +200,44 @@ describe("SljaConverter — round trip export/import", () => {
   });
 });
 
+describe("SljaConverter — .lja solto do clássico", () => {
+  const ini = [
+    "[Geral]",
+    "slides=2",
+    "url_musica=audio\\Hino.mp3",
+    "",
+    "[Slide:1]",
+    "tipo=CAPA",
+    "letra=Bênção",
+    "imagem=imagens\\fundo.png",
+    "",
+    "[Slide:2]",
+    "tipo=LETRA",
+    "letra=Primeira linha",
+    "tempo=1764000",
+    "",
+  ].join("\r\n");
+
+  it("importa os slides sem mídia e marca o resultado como solto", async () => {
+    const data = await SljaConverter.loadSlja(new Blob([SljaConverter.encodeCp1252(ini)]));
+
+    expect(data.loose).toBe(true);
+    expect(data.audio).toBeNull();
+    expect(data.images.size).toBe(0);
+    expect(data.slides.map((s) => s.letra)).toEqual(["Bênção", "Primeira linha"]);
+    expect(data.slides[1].tempo_seconds).toBe(10);
+  });
+
+  it("recusa o que não é zip nem apresentação", async () => {
+    await expect(SljaConverter.loadSlja(new Blob(["qualquer texto"]))).rejects.toThrow();
+  });
+
+  it("o pacote .slja não vem marcado como solto", async () => {
+    const blob = await SljaConverter.writeSlja({ slides: [{ tipo: "CAPA", letra: "Hino" }] });
+    expect((await SljaConverter.loadSlja(blob)).loose).toBe(false);
+  });
+});
+
 describe("SljaConverter — compatibilidade com o Delphi", () => {
   /** Lê o slides.lja como o TIniFile do Delphi leria: bytes ANSI, sem BOM. */
   async function readIniAsDelphi(blob) {
