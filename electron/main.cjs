@@ -2129,11 +2129,24 @@ ipcMain.handle("storage:chooseDir", async (event) => {
 });
 
 /** Abre diálogo para selecionar um único arquivo (liturgia). */
-ipcMain.handle("storage:chooseFile", async (event) => {
+ipcMain.handle("storage:chooseFile", async (event, kind) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const result = await dialog.showOpenDialog(win, {
     properties: ["openFile"],
     title: "Selecionar arquivo",
+    // A Biblioteca de Mídia só guarda estes tipos; sem o filtro o operador
+    // escolhia um áudio e o arquivo era descartado.
+    ...(kind === "media"
+      ? {
+          filters: [
+            {
+              name: "Imagens, vídeos e PDF",
+              extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "heic", "heif", "mp4", "webm", "mkv", "mov", "avi", "m4v", "pdf"],
+            },
+            { name: "Todos os arquivos", extensions: ["*"] },
+          ],
+        }
+      : {}),
   });
   if (result.canceled || !result.filePaths?.length) return null;
   return result.filePaths[0];

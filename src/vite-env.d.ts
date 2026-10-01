@@ -125,7 +125,7 @@ declare global {
       onStatus: (cb: (s: { online: boolean; since: number | null }) => void) => () => void;
     };
     storage: {
-      chooseFile: () => Promise<string | null>;
+      chooseFile: (kind?: "media") => Promise<string | null>;
       chooseImage: () => Promise<string | null>;
       chooseDir: () => Promise<string | null>;
       setDataDir: (dir: string, opts?: { moveExisting?: boolean }) => Promise<void>;

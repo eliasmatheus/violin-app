@@ -361,7 +361,7 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     /** Mostra dialog de seleção de pasta. */
     chooseDir: () => ipcRenderer.invoke("storage:chooseDir"),
     /** Mostra dialog de seleção de arquivo único. Retorna o caminho completo ou null. */
-    chooseFile: () => ipcRenderer.invoke("storage:chooseFile"),
+    chooseFile: (kind) => ipcRenderer.invoke("storage:chooseFile", kind),
     /** Mostra dialog de seleção de imagem com filtro de tipos. Retorna o caminho completo ou null. */
     chooseImage: () => ipcRenderer.invoke("storage:chooseImage"),
     /** Define nova pasta de mídia (com opção de mover conteúdo). */
