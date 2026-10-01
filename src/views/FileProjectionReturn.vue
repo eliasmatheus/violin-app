@@ -403,9 +403,15 @@ function _captureVideoDiagnostics(el: HTMLVideoElement): () => Record<string, un
   };
 }
 
+// Mesmo motivo de FileProjection.vue: ativação e watch chegam pela mesma mudança.
+const preparedVideos = new WeakMap<HTMLVideoElement, string>();
+
 function _prepareVideo(): void {
   const el = videoRef.value;
   if (!el || !fileProjection.active || fileProjection.type !== "video") return;
+  const prepared = `${fileProjection.playback_id ?? ""}|${fileProjection.url}`;
+  if (preparedVideos.get(el) === prepared) return;
+  preparedVideos.set(el, prepared);
   videoFailed.value = false;
   el.muted = true;
   el.playsInline = true;

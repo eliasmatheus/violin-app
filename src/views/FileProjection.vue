@@ -392,9 +392,16 @@ function _captureVideoDiagnostics(el: HTMLVideoElement): () => Record<string, un
   };
 }
 
+// A ativação e o watch do estado chegam aqui pela mesma mudança. Um segundo
+// load() abortaria o play() do primeiro e recomeçaria a carga do arquivo.
+const preparedVideos = new WeakMap<HTMLVideoElement, string>();
+
 function _prepareVideo(): void {
   const el = videoRef.value;
   if (!el || !fileProjection.active || fileProjection.type !== "video") return;
+  const prepared = `${fileProjection.playback_id ?? ""}|${fileProjection.url}`;
+  if (preparedVideos.get(el) === prepared) return;
+  preparedVideos.set(el, prepared);
   videoFailed.value = false;
   el.muted = true;
   el.playsInline = true;
