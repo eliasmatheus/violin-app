@@ -21,13 +21,13 @@
           <LjIcon size="13" :icon="ICONS.TIMER.TIMER_OUTLINE" />
           {{ formatTime(slideTime(activeSlide)) }}
         </span>
-        <span v-if="trackName || showTrack" class="se-status-cell" :title="trackName">
+        <span class="se-status-cell" :title="trackName">
           <LjIcon
             size="13"
             :color="audioPlaying ? 'success' : undefined"
             :icon="audioPlaying ? ICONS.MUSIC.NOTE_EIGHTH : ICONS.MUSIC.NOTE"
           />
-          <strong v-if="showTrack" data-testid="se-track">{{ trackLabel }}</strong>
+          <strong data-testid="se-track">{{ trackLabel }}</strong>
           <span v-if="trackName" class="se-audio-time">
             {{ formatTime(audioCurrentTime) }} / {{ formatTime(audioDuration) }}
           </span>
@@ -568,8 +568,6 @@ const trackName = computed(() =>
 const trackLabel = computed(() =>
   tm(playbackTrack.value ? "labels.track_playback" : "labels.track_sung")
 );
-// O nome da faixa só aparece quando há o que distinguir.
-const showTrack = computed(() => playbackTrack.value || !!song.value.playback_token);
 
 /** Início do slide na faixa em edição; o playback segue o cantado enquanto não tem o seu. */
 function slideTime(slide) {
