@@ -83,6 +83,7 @@ export function createFrameDiagnostics() {
   let stopped = false;
   let active = 0;
   let sampling = false;
+  let scrolling = false;
   let runStart = 0;
   let last = 0;
   let deltas: number[] = [];
@@ -110,6 +111,7 @@ export function createFrameDiagnostics() {
 
   const finish = () => {
     sampling = false;
+    scrolling = false;
     active = 0;
     let dropped = 0;
     let worst = 0;
@@ -140,6 +142,7 @@ export function createFrameDiagnostics() {
       labels.clear();
       deltas = [];
       sampling = false;
+      scrolling = false;
       active = 0;
       return;
     }
@@ -174,6 +177,25 @@ export function createFrameDiagnostics() {
     if (active > 0) active--;
   };
 
+  // A rolagem acontece fora da thread principal, mas o ritmo dos quadros dela
+  // acompanha o do compositor: placa sobrecarregada aparece como intervalo longo.
+  const onScroll = (event: Event) => {
+    if (scrolling || !visible()) return;
+    scrolling = true;
+    const scroller = event.target instanceof Document ? document.scrollingElement : event.target;
+    if (labels.size < 4) labels.add(`scroll:${elementLabel(scroller)}`);
+    active++;
+    if (sampling) return;
+    sampling = true;
+    runStart = last = performance.now();
+    requestAnimationFrame(tick);
+  };
+  const onScrollEnd = () => {
+    if (!scrolling) return;
+    scrolling = false;
+    onEnd();
+  };
+
   const onClick = (event: Event) => {
     const target = event.target;
     if (target instanceof HTMLInputElement && target.type === "file") {
@@ -192,6 +214,8 @@ export function createFrameDiagnostics() {
   const options = { capture: true, passive: true } as const;
   for (const name of startEvents) document.addEventListener(name, onStart, options);
   for (const name of endEvents) document.addEventListener(name, onEnd, options);
+  document.addEventListener("scroll", onScroll, options);
+  document.addEventListener("scrollend", onScrollEnd, options);
   document.addEventListener("click", onClick, options);
   document.addEventListener("change", onPickerClosed, options);
   document.addEventListener("cancel", onPickerClosed, options);
@@ -279,6 +303,8 @@ export function createFrameDiagnostics() {
       stopped = true;
       for (const name of startEvents) document.removeEventListener(name, onStart, options);
       for (const name of endEvents) document.removeEventListener(name, onEnd, options);
+      document.removeEventListener("scroll", onScroll, options);
+      document.removeEventListener("scrollend", onScrollEnd, options);
       document.removeEventListener("click", onClick, options);
       document.removeEventListener("change", onPickerClosed, options);
       document.removeEventListener("cancel", onPickerClosed, options);
