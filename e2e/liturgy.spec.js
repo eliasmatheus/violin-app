@@ -45,6 +45,108 @@ test("adicionar item à liturgia", async ({ page }) => {
   await expect(page.locator(".liturgy-body")).toContainText("Item de Teste E2E", { timeout: 3000 });
 });
 
+test("só marca o item ao acessar quando a opção está ligada e preserva a escolha", async ({
+  page,
+}) => {
+  await openLiturgy(page);
+
+  const markOnAccess = page.getByTestId("ribbon-btn-mark_done").getByRole("switch");
+  await expect(markOnAccess).not.toBeChecked();
+
+  await page.getByTestId("liturgy-add-item").last().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByTestId("item-name").fill("Anotação para marcar");
+  await dialog.getByTestId("item-save").click();
+
+  const card = page.locator("[data-item-id]").filter({ hasText: "Anotação para marcar" });
+  const itemCheckbox = card.locator(".lit-card-check").getByRole("checkbox");
+  const itemTitle = card.getByRole("button", { name: "Anotação para marcar" });
+  await expect(card).toBeVisible();
+  await expect(itemCheckbox).not.toBeChecked();
+
+  await itemTitle.click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await expect(itemCheckbox).not.toBeChecked();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Fechar" }).click();
+
+  const manualCheckbox = card.locator(".lit-card-check label");
+  await manualCheckbox.click();
+  await expect(itemCheckbox).toBeChecked();
+  await manualCheckbox.click();
+  await expect(itemCheckbox).not.toBeChecked();
+
+  await page.getByTestId("ribbon-btn-mark_done").locator("label").click();
+  await expect(markOnAccess).toBeChecked();
+  await itemTitle.click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await expect(itemCheckbox).toBeChecked();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Fechar" }).click();
+
+  const savedPreference = () =>
+    page.evaluate(
+      () => JSON.parse(localStorage.getItem("user_data") || "{}")?.modules?.liturgy?.mark_on_access
+    );
+  await expect.poll(savedPreference).toBe(true);
+  await page.reload();
+  await page.locator('[data-testid="modules-ready"]').waitFor({ state: "attached" });
+  await page.getByRole("button", { name: "Editar liturgia" }).click();
+
+  await expect(page.getByTestId("ribbon-btn-mark_done").getByRole("switch")).toBeChecked();
+  await expect(
+    page
+      .locator("[data-item-id]")
+      .filter({ hasText: "Anotação para marcar" })
+      .locator(".lit-card-check")
+      .getByRole("checkbox")
+  ).toBeChecked();
+});
+
+test("ao tocar uma música, marca somente com a opção ligada e não desmarca no segundo toque", async ({
+  page,
+}) => {
+  await openLiturgy(page);
+
+  await page.evaluate(async () => {
+    const { default: Liturgy } = await import("/src/helpers/Liturgy.ts");
+    Liturgy.add({
+      tipo: "musica",
+      item: "Música para marcar",
+      id_music: 42,
+      musica: 42,
+      subtipo: "sung",
+      escolha: false,
+    });
+  });
+
+  const card = page.locator("[data-item-id]").filter({ hasText: "Música para marcar" });
+  const checkbox = card.locator(".lit-card-check").getByRole("checkbox");
+  const title = card.locator(".lit-card-text");
+  const markOnAccess = page.getByTestId("ribbon-btn-mark_done").getByRole("switch");
+  const mediaWindow = page.locator(".lj-window").filter({ has: page.locator(".media-body") });
+  const closeMedia = async () => {
+    await expect(mediaWindow).toBeVisible();
+    await mediaWindow.locator(".lj-window-btn--close").click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Sim" }).click();
+    await expect(mediaWindow).not.toBeVisible();
+  };
+  await expect(card).toBeVisible();
+  await expect(markOnAccess).not.toBeChecked();
+
+  await title.click();
+  await closeMedia();
+  await expect(checkbox).not.toBeChecked();
+
+  await page.getByTestId("ribbon-btn-mark_done").locator("label").click();
+  await expect(markOnAccess).toBeChecked();
+  await title.click();
+  await closeMedia();
+  await expect(checkbox).toBeChecked();
+
+  await title.click();
+  await closeMedia();
+  await expect(checkbox).toBeChecked();
+});
+
 test("não oferece vínculo de sobreposição quando não há slots", async ({ page }) => {
   await openLiturgy(page);
   await page.evaluate(async () => {

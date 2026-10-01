@@ -15,8 +15,8 @@ export function useLiturgyPersistence() {
 
   const locked: Ref<boolean> = ref($userdata.get(KEYS.MODULES.LITURGY.LOCKED, false) as boolean);
   const showNotes: Ref<boolean> = ref($userdata.get(KEYS.MODULES.LITURGY.SHOW_NOTES, true) as boolean);
-  const markOnAccess: Ref<boolean> = ref(
-    $userdata.get(KEYS.MODULES.LITURGY.MARK_ON_ACCESS, true) as boolean
+  const markOnAccess: ComputedRef<boolean> = computed(
+    () => $userdata.get<boolean>(KEYS.MODULES.LITURGY.MARK_ON_ACCESS, false) === true
   );
   const schedulesDialog: Ref<boolean> = ref(false);
   const activeCatId: Ref<string | number | null> = ref(null);
@@ -105,11 +105,6 @@ export function useLiturgyPersistence() {
     $userdata.set(KEYS.MODULES.LITURGY.SHOW_NOTES, showNotes.value);
   }
 
-  function toggleMarkOnAccess(): void {
-    markOnAccess.value = !markOnAccess.value;
-    $userdata.set(KEYS.MODULES.LITURGY.MARK_ON_ACCESS, markOnAccess.value);
-  }
-
   function saveCategoryName(id: string | number, name?: string): void {
     const trimmed = (name ?? editingCatName.value).trim();
     if (trimmed) {
@@ -164,7 +159,6 @@ export function useLiturgyPersistence() {
     locked,
     showNotes,
     markOnAccess,
-    toggleMarkOnAccess,
     schedulesDialog,
     activeCatId,
     editingCatId,

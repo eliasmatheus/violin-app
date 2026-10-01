@@ -64,10 +64,9 @@ export const contextualPages: RibbonPage[] = [
       {
         id: `${moduleCtxId}_options`,
         title: "ribbon.groups.options",
+        compactRows: 2,
         buttons: [
-          { id: "mark_done", icon: ICONS.UI.CHECK_CIRCLE, label: "ribbon.btn.mark_done", action: "lit_mark_done", size: "small" },
           { id: "show_notes", icon: ICONS.UI.NOTE_TEXT, label: "ribbon.btn.show_notes", action: "lit_show_notes", size: "small" },
-          { id: "show_liturgy_sidebar", type: "switch", label: `${modulePath}.ribbon.show_sidebar`, optionKey: KEYS.SHELL.LITURGY_VISIBLE, defaultValue: true },
           { id: "lock_items", label: "ribbon.btn.lock_liturgy", action: "lit_lock", size: "small", stateBinding: {
             watchPath: KEYS.MODULES.LITURGY.LOCKED,
             iconOn: ICONS.ACTIONS.LOCK,
@@ -76,6 +75,8 @@ export const contextualPages: RibbonPage[] = [
             labelOn: "ribbon.btn.unlock_liturgy",
             labelOff: "ribbon.btn.lock_liturgy",
           } },
+          { id: "show_liturgy_sidebar", type: "switch", label: `${modulePath}.ribbon.show_sidebar`, optionKey: KEYS.SHELL.LITURGY_VISIBLE, defaultValue: true },
+          { id: "mark_done", type: "switch", label: `${modulePath}.ribbon.mark_on_access`, optionKey: KEYS.MODULES.LITURGY.MARK_ON_ACCESS, defaultValue: false },
         ],
       },
       {

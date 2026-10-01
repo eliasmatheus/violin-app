@@ -605,7 +605,13 @@ $storage.hydrate().then(async () => {
                 console.warn("[http] liturgy-execute: item não encontrado", data.id);
                 break;
               }
-              Liturgy.toggleChecked(litItem.id);
+              if (
+                litItem.tipo !== "bloco" &&
+                UserData.get(KEYS.MODULES.LITURGY.MARK_ON_ACCESS, false) === true &&
+                !Liturgy.isCheckedToday(litItem)
+              ) {
+                Liturgy.toggleChecked(litItem.id);
+              }
 
               /** Resolve um path de arquivo para URL reproduzível. */
               function resolveFileUrl(p) {
@@ -1124,9 +1130,15 @@ $storage.hydrate().then(async () => {
           console.log("[http:open-song] Abrindo música:", data);
           await openSongByMode(data.id_music, data.mode);
 
-          // Se veio de um item da liturgia (Choose Later), marca ele como checked
-          if (data.id) {
-            Liturgy.toggleChecked(data.id);
+          // Música escolhida na hora: só marca o item depois da escolha.
+          const litItem = data.id ? Liturgy.get(data.id) : null;
+          if (
+            litItem &&
+            litItem.tipo !== "bloco" &&
+            UserData.get(KEYS.MODULES.LITURGY.MARK_ON_ACCESS, false) === true &&
+            !Liturgy.isCheckedToday(litItem)
+          ) {
+            Liturgy.toggleChecked(litItem.id);
           }
           break;
         }

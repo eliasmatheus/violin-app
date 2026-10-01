@@ -114,6 +114,11 @@
             v-if="compactButtons(group).length"
             class="ribbon-group-track"
             :class="getCompactTrackClass()"
+            :style="
+              group.compactRows
+                ? { gridTemplateRows: `repeat(${group.compactRows}, max-content)` }
+                : undefined
+            "
           >
             <template
               v-for="btn in compactButtons(group)"
@@ -600,7 +605,6 @@ const LITURGY_ACTIONS: LiturgyActionMap = {
   lit_delete: "delete_selected",
   lit_copy: "copy",
   lit_clear: "clear_day",
-  lit_mark_done: "toggle_mark_on_access",
   lit_show_notes: "toggle_show_notes",
   lit_lock: "toggle_lock",
   lit_save: "save",

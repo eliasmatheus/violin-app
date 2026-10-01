@@ -13,6 +13,8 @@ export interface RibbonGroup {
   id: string;
   title: string;
   buttons?: RibbonButton[];
+  /** Linhas do grid de controles compactos (padrão: 3). */
+  compactRows?: 1 | 2 | 3;
   customCategory?: Component
   modules?: string[];
 }
