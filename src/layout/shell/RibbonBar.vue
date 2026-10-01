@@ -116,6 +116,11 @@
             v-if="compactButtons(group).length"
             class="ribbon-group-track"
             :class="getCompactTrackClass()"
+            :style="
+              group.compactRows
+                ? { gridTemplateRows: `repeat(${group.compactRows}, max-content)` }
+                : undefined
+            "
           >
             <template
               v-for="btn in compactButtons(group)"
@@ -413,7 +418,7 @@ function setSelectValue(btn: RibbonButton, val: string | number): void {
 
 function getCheckValue(btn: RibbonButton): boolean {
   if (!btn.optionKey) return false;
-  // Fallback para o defaultValue declarado (ex: clock show_date default true)
+  // Usa o defaultValue declarado quando a preferência não foi salva.
   const v = $userdata.get<boolean | null>(btn.optionKey, null);
   if (v === null) return btn.defaultValue === true;
   return v;
@@ -618,7 +623,6 @@ const LITURGY_ACTIONS: LiturgyActionMap = {
   lit_delete: "delete_selected",
   lit_copy: "copy",
   lit_clear: "clear_day",
-  lit_mark_done: "toggle_mark_on_access",
   lit_show_notes: "toggle_show_notes",
   lit_lock: "toggle_lock",
   lit_save: "save",
@@ -655,6 +659,7 @@ const EDITOR_ACTIONS = new Set<string>([
   "editor_prev",
   "editor_next",
   "editor_last",
+  "editor_audio_track",
   "editor_audio_attach",
   "editor_audio_remove",
   "editor_play_pause",

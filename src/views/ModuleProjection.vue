@@ -41,6 +41,7 @@
       >
         <span
           v-if="text"
+          v-fit-clock-line="moduleId === ModuleEnum.CLOCK ? font_size_px : null"
           :class="['module-projection__text', `module-projection__text--${moduleId}`]"
           :style="{
             color: color || font_color || '#FFFFFF',
@@ -55,7 +56,11 @@
 
         <span
           v-if="extra"
-          class="module-projection__extra"
+          v-fit-clock-line="moduleId === ModuleEnum.CLOCK ? ref_font_size_px : null"
+          :class="[
+            'module-projection__extra',
+            { 'module-projection__extra--clock': moduleId === ModuleEnum.CLOCK },
+          ]"
           :style="{
             color: reference_font_color || font_color || '#FB8C00',
             fontSize: ref_font_size_px + 'px',
@@ -87,6 +92,7 @@ import DrawProjection from "@/modules/draw/components/DrawProjection.vue";
 import NameDrawProjection from "@/modules/name_draw/components/NameDrawProjection.vue";
 import { useContainerSize } from "@/composables/useContainerSize";
 import { horizontalTextAlign, moduleCustomizationDefault } from "@/helpers/ModuleFormatting";
+import { vFitClockLine } from "@/modules/clock/vFitClockLine";
 
 const route = useRoute();
 
@@ -319,6 +325,8 @@ onBeforeUnmount(() => {
   font-weight: 300;
   letter-spacing: 0.1em;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
 }
 .module-projection__text--counter {
   font-weight: 200;
@@ -336,6 +344,12 @@ onBeforeUnmount(() => {
 .module-projection__extra {
   margin-top: 0.4em;
   letter-spacing: 0.02em;
+}
+
+.module-projection__extra--clock {
+  margin-top: 0.15em;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .module-projection__empty {

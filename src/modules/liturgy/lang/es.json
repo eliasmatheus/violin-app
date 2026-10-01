@@ -12,7 +12,7 @@
     "unmark_all": "Desmarcar Todos",
     "invert_selection": "Invertir Selección",
     "delete_selected": "Borrar Seleccionados",
-    "mark_on_access": "Marcar como \"Concluido\" tras acceder al ítem",
+    "mark_on_access": "Marcar como concluido al ejecutar el ítem",
     "show_notes": "Mostrar Panel de Anotaciones",
     "show_sidebar": "Mostrar liturgia en el lateral",
     "lock_items": "Bloquear Ítems",

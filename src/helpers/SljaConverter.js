@@ -278,6 +278,30 @@ function resolveSongName(data = {}, fileName = "") {
     .replace(/\.(slja|lja)$/i, "");
 }
 
+/**
+ * Sufixo do nome do arquivo de playback. Um .slja comporta uma faixa só, então
+ * o LouvorJA clássico (26.11+) pareia `Música.slja` com `Música -PB.slja` na
+ * pasta da coletânea personalizada.
+ */
+const PLAYBACK_SUFFIX = " -PB";
+
+/**
+ * Nome da música a que um playback pertence, ou `null` quando o nome não é de
+ * playback. Mesma regra do `ehNomePlayback` do clássico: o sufixo é digitado à
+ * mão, então vale "-PB", " -PB", "- PB" e " - PB", em qualquer caixa.
+ *
+ * @param {string} name  Nome do arquivo sem a extensão.
+ * @returns {string | null}
+ */
+function playbackBaseName(name) {
+  let s = String(name ?? "").trimEnd();
+  if (s.length < 3 || s.slice(-2).toUpperCase() !== "PB") return null;
+  s = s.slice(0, -2).trimEnd();
+  if (!s.endsWith("-")) return null;
+  // Sem nada antes do traço não há música a que o playback pertença.
+  return s.slice(0, -1).trim() || null;
+}
+
 function buildIniFromSlides({
   meta = {},
   slides = [],
@@ -327,21 +351,43 @@ function buildIniFromSlides({
   return stringifyIni(sections, order);
 }
 
+function decodeIni(iniBytes) {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(iniBytes);
+  } catch {
+    return new TextDecoder("windows-1252").decode(iniBytes);
+  }
+}
+
+async function isZip(blob) {
+  const head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
+  return head[0] === 0x50 && head[1] === 0x4b;
+}
+
+/**
+ * Lê um .slja (zip) ou um .lja solto do LouvorJA clássico.
+ *
+ * O .lja é só o INI: áudio e imagens ficam em arquivos ao lado, fora do
+ * alcance do seletor de arquivo. Nesse caso o resultado vem com `loose: true`,
+ * sem mídia, e os tempos em bytes são convertidos pelo formato padrão do acervo.
+ */
 async function loadSlja(file) {
+  const blob = file instanceof Blob ? file : new Blob([file]);
+
+  if (!(await isZip(blob))) {
+    const parsed = parseSlja(decodeIni(new Uint8Array(await blob.arrayBuffer())));
+    if (!parsed.slides.length) throw new Error("o arquivo não é uma apresentação .slja nem .lja");
+    return { ...parsed, audio: null, audioName: null, images: new Map(), loose: true };
+  }
+
   const jszipMod = await import("jszip");
   const JSZip = jszipMod.default?.default ?? jszipMod.default ?? jszipMod;
-  const zip = await JSZip.loadAsync(file);
+  const zip = await JSZip.loadAsync(blob);
 
   const ljaFile = zip.file("slides.lja");
   if (!ljaFile) throw new Error("slides.lja não encontrado no arquivo .slja");
 
-  const iniBytes = await ljaFile.async("uint8array");
-  let iniText;
-  try {
-    iniText = new TextDecoder("utf-8", { fatal: true }).decode(iniBytes);
-  } catch {
-    iniText = new TextDecoder("windows-1252").decode(iniBytes);
-  }
+  const iniText = decodeIni(await ljaFile.async("uint8array"));
 
   // Varredura da raiz com normalização de separador — zips gerados pelo
   // Delphi gravam entradas como "imagens\foto.png" (barra invertida), que
@@ -376,7 +422,7 @@ async function loadSlja(file) {
 
   const parsed = parseSlja(iniText, await audioBytesPerSecond(audio));
 
-  return { ...parsed, audio, audioName, images };
+  return { ...parsed, audio, audioName, images, loose: false };
 }
 
 /**
@@ -450,4 +496,6 @@ export default {
   encodeLetra,
   resolveSongName,
   fillMissingImages,
+  PLAYBACK_SUFFIX,
+  playbackBaseName,
 };

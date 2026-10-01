@@ -259,9 +259,7 @@ export const BROADCAST_TYPE = Object.freeze({
   /** Abre diálogo de nova anotação na liturgia. Emitido por Ctrl+Shift+N. */
   LITURGY_NEW_ANNOTATION: "liturgy:new_annotation",
 
-  /** Ação contextual disparada pelo Ribbon global enquanto o módulo Liturgia está ativo.
-   *  payload.action ∈ "add" | "check_all" | "uncheck_all" | "invert" | "delete_done"
-   *  | "toggle_mark_on_access" | "toggle_show_notes" | "toggle_lock". */
+  /** Ação contextual do Ribbon da Liturgia para itens, notas, bloqueio e biblioteca. */
   LITURGY_RIBBON_ACTION: "liturgy:ribbon_action",
 
   // ─── Sync de userdata cross-window ───────────────────────────────────────

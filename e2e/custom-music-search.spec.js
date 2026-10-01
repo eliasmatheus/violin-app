@@ -39,7 +39,11 @@ const surfaces = [
       page.evaluate(() => window.dispatchEvent(new CustomEvent("louvorja:open-music-search"))),
     input: ".music-search__bar input",
     rows: ".music-search__table tbody tr",
-    execute: (_page, row) => row.getByRole("button", { name: "Executar", exact: true }).click(),
+    // Os botões da linha só são montados quando ela é explorada, como nas do acervo.
+    execute: async (_page, row) => {
+      await row.hover();
+      await row.getByTestId("mmt-btn-sing").click();
+    },
   },
   {
     name: "Ctrl+K",
@@ -110,3 +114,29 @@ for (const surface of surfaces) {
     await expect(rows).toHaveCount(1);
   });
 }
+
+test("tela Músicas: título, coletânea e execução do acervo pessoal", async ({ page, context }) => {
+  await start(page, context);
+  await page.evaluate(async () => {
+    const { default: modules } = await import("/src/helpers/Modules.js");
+    modules.open("musics");
+  });
+  const input = page.locator(".musics-searchbar").getByRole("textbox");
+  const rows = page.locator('[data-testid^="music-row-"]');
+  await input.fill("Esperança viva");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Juventude sábado");
+  await expect(rows.first()).toContainText("Equipe do culto");
+  await input.fill("Juventude");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Esperança viva");
+
+  const projection = await context.newPage();
+  await projection.goto("/projection");
+  await expect(projection.locator(".projection-stage")).toBeVisible();
+  await page.bringToFront();
+  await rows.first().hover();
+  await rows.first().getByTestId("mmt-btn-sing").click();
+  await expect(projection.locator('[data-testid="slide-content"]')).toBeVisible();
+  await projection.close();
+});

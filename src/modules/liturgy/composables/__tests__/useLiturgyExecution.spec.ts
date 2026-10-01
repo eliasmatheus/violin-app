@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   projectFile: vi.fn(),
   openMusic: vi.fn(),
   openCustomSong: vi.fn(),
+  openCustomAudio: vi.fn(),
   openYouTube: vi.fn(),
   readAllOverlaySlots: vi.fn(),
   writeOverlaySlot: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock("@/composables/useMedia", () => ({
     stop: vi.fn(),
     open: mocks.openMusic,
     openCustomSong: mocks.openCustomSong,
+    openCustomAudio: mocks.openCustomAudio,
     openYouTube: mocks.openYouTube,
     openAudio: mocks.openAudio,
     projectFile: mocks.projectFile,
@@ -66,7 +68,10 @@ vi.mock("@/helpers/Overlay", () => ({
   readAllSlots: mocks.readAllOverlaySlots,
   writeSlot: mocks.writeOverlaySlot,
 }));
-vi.mock("@/helpers/CustomSongs", () => ({ getSong: mocks.getCustomSong }));
+vi.mock("@/helpers/CustomSongs", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/helpers/CustomSongs")>()),
+  getSong: mocks.getCustomSong,
+}));
 vi.mock("@/helpers/AudioLibrary", () => ({ resolveAudio: mocks.resolveAudio }));
 vi.mock("@/helpers/Http", () => ({ fetchWithTimeout: vi.fn(), NET_TIMEOUT: { MEDIA: 1 } }));
 vi.mock("@/helpers/Telemetry", () => ({
@@ -107,6 +112,7 @@ beforeEach(() => {
   mocks.projectFile.mockResolvedValue(true);
   mocks.openMusic.mockResolvedValue(true);
   mocks.openCustomSong.mockResolvedValue(true);
+  mocks.openCustomAudio.mockResolvedValue(true);
   mocks.openYouTube.mockResolvedValue(true);
   mocks.readAllOverlaySlots.mockResolvedValue([{ id: "slot-1", enabled: false }]);
   mocks.writeOverlaySlot.mockResolvedValue(undefined);
@@ -282,31 +288,48 @@ describe("liturgia — vínculo de sobreposição", () => {
     expect(mocks.userdataSet).not.toHaveBeenCalled();
   });
 
-  it("música personalizada só em áudio não abre slides nem liga o slot", async () => {
-    mocks.getCustomSong.mockResolvedValue({
-      id: "custom-1",
-      nome: "Canção personalizada",
-      audio_token: "audio:custom-1",
-    });
-    mocks.resolveAudio.mockResolvedValue("blob:audio-customizado");
-    const customMusic = linked({
+  const customSong = {
+    id: "custom-1",
+    nome: "Canção personalizada",
+    audio_token: "audio:custom-1",
+    playback_token: "audio:custom-1-pb",
+  };
+  const customMusic = (subtipo: string) =>
+    linked({
       id: "music-custom",
       tipo: LiturgyItemTypeEnum.MUSICA,
       item: "Canção personalizada",
-      id_music: -1,
+      id_music: -2,
       ref_id: "custom-1",
-      subtipo: "audio",
+      subtipo,
       escolha: false,
     } as LiturgyItem);
+
+  it("música personalizada só em áudio não abre slides nem liga o slot", async () => {
+    mocks.getCustomSong.mockResolvedValue(customSong);
     const { playMusic } = useLiturgyExecution();
 
-    expect(await playMusic(customMusic, "audio")).toBe(false);
-    expect(mocks.openAudio).toHaveBeenCalledWith({
-      url: "blob:audio-customizado",
-      title: "Canção personalizada",
-      mediaType: "audio",
-    });
+    expect(await playMusic(customMusic("audio"), "audio")).toBe(false);
+    expect(mocks.openCustomAudio).toHaveBeenCalledWith(customSong, "audio");
     expect(mocks.openCustomSong).not.toHaveBeenCalled();
     expect(mocks.writeOverlaySlot).not.toHaveBeenCalled();
+
+    expect(await playMusic(customMusic("audio_pb"), "audio_pb")).toBe(false);
+    expect(mocks.openCustomAudio).toHaveBeenLastCalledWith(customSong, "instrumental");
+  });
+
+  it.each([
+    ["sung", "audio"],
+    ["pb", "instrumental"],
+    ["lyric", "no_audio"],
+    ["no_audio", "no_audio"],
+  ])("música personalizada na versão %s abre os slides no modo %s", async (version, mode) => {
+    mocks.getCustomSong.mockResolvedValue(customSong);
+    const { playMusic } = useLiturgyExecution();
+
+    expect(await playMusic(customMusic(version), version)).toBe(true);
+    expect(mocks.openCustomSong).toHaveBeenCalledWith(customSong, mode);
+    expect(mocks.openMusic).not.toHaveBeenCalled();
+    expect(mocks.openCustomAudio).not.toHaveBeenCalled();
   });
 });

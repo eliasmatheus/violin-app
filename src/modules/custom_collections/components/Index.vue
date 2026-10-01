@@ -74,7 +74,7 @@
             <span class="cc-song__name">{{ s.nome }}</span>
             <span class="cc-song__meta">
               {{ s.slides.length }} {{ tm("labels.slides") }}
-              <template v-if="s.audio_token">· {{ tm("labels.audio") }}</template>
+              <template v-if="tracksLabel(s)">· {{ tracksLabel(s) }}</template>
             </span>
           </div>
         </LjCard>
@@ -169,6 +169,15 @@
                     {{ element.slides.length }} {{ tm("labels.slides") }}
                   </span>
                 </span>
+                <MusicMenuTable
+                  :id_music="0"
+                  :name="element.nome"
+                  :custom-song-id="element.id"
+                  :has-audio="hasSung(element)"
+                  :has_instrumental_music="hasPlayback(element)"
+                  :align-with-catalog="false"
+                  :defer-quick-actions="false"
+                />
                 <LjButton
                   size="sm"
                   variant="ghost"
@@ -206,17 +215,20 @@
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import draggable from "vuedraggable";
 import { module as manifest } from "../manifest";
 import ModuleContainer from "@/components/ModuleContainer.vue";
+import MusicMenuTable from "@/components/MusicMenuTable.vue";
 import { LjButton, LjCard, LjEmpty, LjIcon, LjMenu, LjTabs, LjToast } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
+import { MUSIC_EXECUTIONS, canExecute } from "@/config/MusicAction";
 import Modules from "@/helpers/Modules";
-import CustomSongs from "@/helpers/CustomSongs";
-import SljaConverter from "@/helpers/SljaConverter";
+import CustomSongs, { hasPlayback, hasSung } from "@/helpers/CustomSongs";
+import { playCustomSong } from "@/helpers/CustomMusicCatalog";
+import { downloadSongPackages, importSongFiles } from "@/helpers/CustomSongPackage";
 import AudioLibrary from "@/helpers/AudioLibrary";
 import $alert from "@/helpers/Alert";
-import Media from "@/composables/useMedia";
 import { useViewport } from "@/composables/useViewport";
 import Platform from "@/helpers/Platform";
 
@@ -272,6 +284,14 @@ async function resolvePreviewImages(list) {
 }
 
 const tm = (key, named) => moduleContainer.value?.tm(key, named) || key;
+const { t } = useI18n();
+
+/** O que a música tem para tocar, para o cartão dizer antes de alguém abrir o menu. */
+function tracksLabel(s) {
+  if (hasSung(s) && hasPlayback(s)) return tm("labels.audio_playback");
+  if (hasPlayback(s)) return tm("labels.playback_only");
+  return hasSung(s) ? tm("labels.audio") : "";
+}
 
 const tabItems = computed(() => [
   { value: "songs", label: tm("tabs.songs") },
@@ -305,7 +325,18 @@ const songsNotInSelected = computed(() => {
 // ===== Menus =====
 
 function songMenuItems(s) {
+  const tracks = { sung: hasSung(s), playback: hasPlayback(s) };
+  const execution = (item) => ({
+    label: t(item.menuLabel || item.label),
+    icon: item.icon,
+    disabled: !canExecute(item, tracks),
+    action: () => executeSong(s, item.action),
+  });
   return [
+    ...MUSIC_EXECUTIONS.filter((item) => !item.audioOnly).map(execution),
+    { separator: true },
+    ...MUSIC_EXECUTIONS.filter((item) => item.audioOnly).map(execution),
+    { separator: true },
     { label: tm("actions.export"), icon: ICONS.ACTIONS.DOWNLOAD, action: () => exportSong(s) },
     { label: tm("actions.rename"), icon: ICONS.ACTIONS.RENAME, action: () => renameSong(s) },
   ];
@@ -373,10 +404,10 @@ function openInEditor(s) {
   Modules.open("slide_editor");
 }
 
-// Executa (projeta) a música personalizada com áudio e sincronia via Media.
-async function executeSong(s) {
+// Executa a música no modo pedido; sem modo, o cantado (ou o playback, se só ele existe).
+async function executeSong(s, action) {
   try {
-    await Media.openCustomSong(s);
+    await playCustomSong(s, action);
   } catch (err) {
     console.warn("[custom_collections] executeSong falhou:", err);
   }
@@ -400,48 +431,14 @@ async function renameSong(s) {
 }
 
 async function confirmDeleteSong(s) {
-  if (!confirm(tm("data.confirm_delete_song"))) return;
+  if (!(await $alert.confirm(tm("data.confirm_delete_song")))) return;
   await CustomSongs.deleteSong(s.id);
   await loadAll();
 }
 
+// Com cantado e playback saem dois arquivos, `Música.slja` e `Música -PB.slja`.
 async function exportSong(s) {
-  const slidesForExport = [];
-  const imagesMap = new Map();
-  for (const slide of s.slides) {
-    const exp = { ...slide };
-    if (slide.imagem) {
-      const blob = await AudioLibrary.getImageBlob(slide.imagem);
-      if (blob) {
-        const ext = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg");
-        const baseName = `${slide.id}.${ext}`;
-        const path = `imagens/${baseName}`;
-        if (!imagesMap.has(path)) imagesMap.set(path, blob);
-        exp.imagem = path;
-      } else {
-        exp.imagem = "";
-        console.warn(
-          `[custom_collections] export: blob da imagem não encontrado (${slide.imagem}) — slide sairá sem fundo`
-        );
-      }
-    }
-    slidesForExport.push(exp);
-  }
-  let audioBlob = null;
-  if (s.audio_token) audioBlob = await AudioLibrary.getAudioBlob(s.audio_token);
-  const blob = await SljaConverter.writeSlja({
-    slides: slidesForExport,
-    audio: audioBlob,
-    audioName: s.audio_name || "audio.mp3",
-    images: imagesMap,
-    nome: s.nome || "",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${s.nome.replace(/[\\/:*?"<>|]/g, "_")}.slja`;
-  a.click();
-  URL.revokeObjectURL(url);
+  await downloadSongPackages(s);
 }
 
 function actImport() {
@@ -454,88 +451,33 @@ function showStatus(text, variant = "info") {
   importStatus.value = { show: true, text, variant };
 }
 
-async function importSljaFile(file) {
-  const data = await SljaConverter.loadSlja(file);
-
-  // Capa/abertura sem fundo herda a imagem do próximo slide que a tenha.
-  SljaConverter.fillMissingImages(data.slides);
-
-  let audioToken = "";
-  let audioName = "";
-  if (data.audio) {
-    audioName = (data.audioName || "audio.mp3").replace(/^audio\//, "");
-    audioToken = await AudioLibrary.importAudio(data.audio, audioName);
-  }
-  const imgTokenByName = new Map();
-  for (const [path, blob] of (data.images || new Map()).entries()) {
-    const name = path.replace(/^(imagens|images)\//, "");
-    const tok = await AudioLibrary.importImage(blob, name);
-    imgTokenByName.set(name, tok);
-    imgTokenByName.set(path, tok);
-  }
-  const newSong = {
-    id: crypto.randomUUID(),
-    // Nome: [Geral].nome → letra do 1º slide (capa) → nome do arquivo.
-    nome: SljaConverter.resolveSongName(data, file.name),
-    audio_token: audioToken,
-    audio_name: audioName,
-    slides: data.slides.map((s) => {
-      const imgName = s.imagem ? s.imagem.split(/[\\/]/).pop() : "";
-      const imgTok = imgName
-        ? imgTokenByName.get(s.imagem) || imgTokenByName.get(imgName) || ""
-        : "";
-      if (s.imagem && !imgTok) {
-        console.warn(
-          `[custom_collections] import: imagem "${s.imagem}" referenciada mas ausente no pacote .slja`
-        );
-      }
-      return {
-        id: crypto.randomUUID(),
-        tipo: s.tipo,
-        letra: s.letra,
-        letra_aux: s.letra_aux,
-        tamanho_letra: s.tamanho_letra,
-        tamanho_letra_aux: s.tamanho_letra_aux,
-        cor_letra: s.cor_letra,
-        cor_letra_aux: s.cor_letra_aux,
-        cor_fundo: s.cor_fundo,
-        imagem: imgTok,
-        imagem_posicao: s.imagem_posicao,
-        fundo_letra: s.fundo_letra,
-        tempo_seconds: s.tempo_seconds,
-        text_align: "center",
-      };
-    }),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  if (!newSong.slides.some((sl) => sl.tempo_seconds > 0)) {
-    console.warn(
-      "[custom_collections] import: arquivo .slja sem tempos de sincronia (todos tempo_seconds=0)"
-    );
-  }
-  await CustomSongs.saveSong(newSong);
-  return newSong;
-}
-
 async function onImportSlja(e) {
   const files = Array.from(e.target.files || []);
   e.target.value = "";
   if (!files.length) return;
 
+  const result = await importSongFiles(files);
   let ok = 0;
-  let fail = 0;
-  for (const f of files) {
+  let paired = 0;
+  let fail = result.failed;
+  for (const song of result.songs) {
     try {
-      await importSljaFile(f);
+      await CustomSongs.saveSong(song);
       ok++;
+      if (hasSung(song) && hasPlayback(song)) paired++;
     } catch {
       fail++;
     }
   }
   await loadAll();
-  const text = tm("data.import_result", { ok }) + (fail ? tm("data.import_failed", { fail }) : "");
-  showStatus(text, fail ? "warning" : "success");
+  const { loose, unmatched } = result;
+  const text =
+    tm("data.import_result", { ok }) +
+    (paired ? tm("data.import_paired", { paired }) : "") +
+    (fail ? tm("data.import_failed", { fail }) : "") +
+    (loose ? tm("data.import_without_media", { loose }) : "") +
+    (unmatched ? tm("data.import_unmatched_playback", { unmatched }) : "");
+  showStatus(text, fail || loose || unmatched ? "warning" : "success");
 }
 
 // ===== Collections =====
@@ -559,7 +501,7 @@ async function renameCollection(c) {
 }
 
 async function confirmDeleteCollection(c) {
-  if (!confirm(tm("data.confirm_delete_collection"))) return;
+  if (!(await $alert.confirm(tm("data.confirm_delete_collection")))) return;
   await CustomSongs.deleteCollection(c.id);
   if (selectedCollectionId.value === c.id) selectedCollectionId.value = null;
   await loadAll();

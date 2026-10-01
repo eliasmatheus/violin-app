@@ -48,8 +48,8 @@ import { AUDIO_EXT } from "@/constants/FileTypes";
 import { openSlja, SLJA_EXT } from "@/helpers/SljaPlayer";
 import { heicToJpeg, isHeic } from "@/helpers/ImageConvert";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
-import AudioLibrary from "@/helpers/AudioLibrary";
-import { getSong as getCustomSong } from "@/helpers/CustomSongs";
+import { openCustomMusic } from "@/helpers/CustomMusicCatalog";
+import { LITURGY_VERSION_ACTION } from "@/config/MusicAction";
 import { DB_TABLE } from "@/constants/DbTables";
 import $idb from "@/helpers/IndexedDB";
 import $docs from "@/helpers/DocStore";
@@ -606,7 +606,13 @@ $storage.hydrate().then(async () => {
                 console.warn("[http] liturgy-execute: item não encontrado", data.id);
                 break;
               }
-              Liturgy.toggleChecked(litItem.id);
+              if (
+                litItem.tipo !== "bloco" &&
+                UserData.get(KEYS.MODULES.LITURGY.MARK_ON_ACCESS, false) === true &&
+                !Liturgy.isCheckedToday(litItem)
+              ) {
+                Liturgy.toggleChecked(litItem.id);
+              }
 
               /** Resolve um path de arquivo para URL reproduzível. */
               function resolveFileUrl(p) {
@@ -707,32 +713,20 @@ $storage.hydrate().then(async () => {
                     // item é que decide se há slides ou somente áudio.
                     const mode = litItem.subtipo || "sung";
                     overlayItem = { ...litItem, subtipo: mode };
-                    if (mode === "audio" || mode === "audio_pb") {
+                    if (litItem.ref_id && litItem.id_music < 0) {
+                      projected = await openCustomMusic(
+                        litItem.ref_id,
+                        LITURGY_VERSION_ACTION[mode] ?? MusicActionEnum.AUDIO
+                      );
+                    } else if (mode === "audio" || mode === "audio_pb") {
                       Media.stop();
-                      if (litItem.ref_id && litItem.id_music < 0) {
-                        const song = await getCustomSong(litItem.ref_id);
-                        const audioUrl = song?.audio_token
-                          ? await AudioLibrary.resolveAudio(song.audio_token)
-                          : null;
-                        if (audioUrl) {
-                          await Media.openAudio({
-                            url: audioUrl,
-                            title: song.nome,
-                            mediaType: "audio",
-                          });
-                        }
-                      } else {
-                        await Media.openAudio({
-                          id_music: litItem.id_music,
-                          mode:
-                            mode === "audio_pb"
-                              ? MusicActionEnum.INSTRUMENTAL
-                              : MusicActionEnum.AUDIO,
-                        });
-                      }
-                    } else if (litItem.ref_id && litItem.id_music < 0) {
-                      const song = await getCustomSong(litItem.ref_id);
-                      if (song) projected = await Media.openCustomSong(song);
+                      await Media.openAudio({
+                        id_music: litItem.id_music,
+                        mode:
+                          mode === "audio_pb"
+                            ? MusicActionEnum.INSTRUMENTAL
+                            : MusicActionEnum.AUDIO,
+                      });
                     } else {
                       const playbackMode =
                         mode === "pb"
@@ -1125,9 +1119,15 @@ $storage.hydrate().then(async () => {
           console.log("[http:open-song] Abrindo música:", data);
           await openSongByMode(data.id_music, data.mode);
 
-          // Se veio de um item da liturgia (Choose Later), marca ele como checked
-          if (data.id) {
-            Liturgy.toggleChecked(data.id);
+          // Música escolhida na hora: só marca o item depois da escolha.
+          const litItem = data.id ? Liturgy.get(data.id) : null;
+          if (
+            litItem &&
+            litItem.tipo !== "bloco" &&
+            UserData.get(KEYS.MODULES.LITURGY.MARK_ON_ACCESS, false) === true &&
+            !Liturgy.isCheckedToday(litItem)
+          ) {
+            Liturgy.toggleChecked(litItem.id);
           }
           break;
         }

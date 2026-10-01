@@ -36,6 +36,7 @@ import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { MediaOpenParams } from "@/types/Media";
 import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import AudioLibrary from "@/helpers/AudioLibrary";
+import { slideTimes } from "@/helpers/CustomSongs";
 import Telemetry from "@/helpers/Telemetry";
 import Platform from "@/helpers/Platform";
 import * as OnlineVideo from "@/helpers/OnlineVideo";
@@ -63,6 +64,37 @@ let _audioXhr: XMLHttpRequest | null = null;
 // Troca de modo em andamento: a faixa antiga segue tocando até a nova assumir,
 // e chegar ao fim dela não é motivo para encerrar a música.
 let _switchingMode = false;
+
+/** Música personalizada como o player a recebe: os slides do cantado e até duas faixas. */
+export interface CustomSongSource {
+  id?: string;
+  nome?: string;
+  audio_token?: string;
+  audio_name?: string;
+  playback_token?: string;
+  playback_name?: string;
+  slides?: Array<{
+    tipo?: string;
+    letra?: string;
+    letra_aux?: string;
+    cor_letra?: string;
+    cor_letra_aux?: string;
+    imagem?: string;
+    imagem_posicao?: number | string;
+    tamanho_letra?: number;
+    tamanho_letra_aux?: number;
+    tempo_seconds?: number;
+    tempo_seconds_pb?: number;
+  }>;
+}
+
+// Música personalizada no ar. As faixas e os tempos dela não vêm do acervo, e é
+// daqui que a troca de modo os tira para não ter de reabrir a música.
+let _customPlayback: {
+  song: CustomSongSource;
+  urls: Partial<Record<string, string>>;
+  times: Record<string, number[]>;
+} | null = null;
 let _activePlayback: AudioTelemetryContext | null = null;
 let _mediaActivitySent = false;
 const _videoStateRevisions = new VideoStateRevisionCounter();
@@ -107,6 +139,14 @@ function _sourceType(url: string): string {
   if (url.startsWith("data:")) return "data";
   if (/^https?:/i.test(url)) return "http";
   return "local_or_unknown";
+}
+
+/** Aviso sem modal: no meio do culto o operador não pode ter de fechar um diálogo. */
+function _warnNoTrack(playback: boolean): void {
+  const t = i18nAtual()?.global?.t;
+  const key = playback ? "modules.media.alerts.no_playback" : "modules.media.alerts.no_audio";
+  const fallback = playback ? "Esta música não tem playback." : "Esta música não tem áudio.";
+  $snackbar.warning(t ? t(key) : fallback, { key: "media-no-track", timeout: 6000 });
 }
 
 function _setPlaybackContext(context: AudioTelemetryContext | null): void {
@@ -1383,7 +1423,12 @@ const _self = {
    */
   switchMode(mode: MusicActionEnum): void {
     const idMusic = $appdata.get(KEYS.MODULES.MEDIA.ID_MUSIC) as string | number | null;
-    if (idMusic == null) return;
+    const custom = _customPlayback;
+    if (idMusic == null && !custom) return;
+    const reopen = (): void => {
+      if (custom) void _self.openCustomSong(custom.song, mode);
+      else _self.open({ id_music: idMusic ?? undefined, mode, minimized: _self.isMinimized() });
+    };
     const previousPlaybackId = _activePlayback?.playback_id;
     Telemetry.track("music_mode_switch_requested", {
       playback_id: previousPlaybackId,
@@ -1397,7 +1442,7 @@ const _self = {
       !$appdata.get(KEYS.MODULES.MEDIA.CONFIG.AUDIO_ONLY) &&
       _slides.totalSlides.value > 0;
     if (!keepsPosition) {
-      this.open({ id_music: idMusic, mode, minimized: this.isMinimized() });
+      reopen();
       return;
     }
 
@@ -1464,7 +1509,8 @@ const _self = {
 
     let audioUrl: string;
     try {
-      audioUrl = $path.file(file as string);
+      // A faixa da música personalizada já chega resolvida; a do acervo é um caminho.
+      audioUrl = custom ? (file as string) : $path.file(file as string);
     } catch (error) {
       Telemetry.captureException(
         error,
@@ -1510,14 +1556,18 @@ const _self = {
     _loadAudioSrc(
       audioUrl,
       idMusic,
-      (id) => _self.open(id),
+      custom ? reopen : (id) => _self.open(id),
       (src, lazy, sourceDetails) => {
         _audio
           .prepare(src, lazy, _audio.currentTime.value, { ...switchContext, original_source: sourceDetails })
           .then((faixa) => {
             // Outra música entrou no ar durante o carregamento: esta não serve
-            // mais, e o blob dela só sai da memória se alguém soltar.
-            if (_loadingId !== idMusic) {
+            // mais, e o blob dela só sai da memória se alguém soltar. A música
+            // personalizada não tem id de acervo, então é o playback que a distingue.
+            if (
+              _loadingId !== idMusic ||
+              (custom && _activePlayback?.playback_id !== switchPlaybackId)
+            ) {
               _audio.release(faixa);
               return;
             }
@@ -1532,7 +1582,9 @@ const _self = {
             // Com o watcher ligado, o tempo da faixa nova ainda em zero jogaria a
             // projeção na capa e de volta, à vista da igreja.
             _slides.unbindAudio();
-            _slides.setTimes(_timesFor(_slides.slides.value, mode));
+            _slides.setTimes(
+              custom ? custom.times[mode] || [] : _timesFor(_slides.slides.value, mode)
+            );
 
             return _audio
               .takeOver(faixa, (d) => _slides.timeForPosition(slideIndex, fraction, d), playing)
@@ -1565,7 +1617,7 @@ const _self = {
                 reason: error?.name || "prepare_failed",
               })
             );
-            _self.open({ id_music: idMusic, mode, minimized: _self.isMinimized() });
+            reopen();
           });
       },
       true
@@ -1575,27 +1627,23 @@ const _self = {
   /**
    * Executa uma música personalizada (Coletâneas Pessoais / Editor de Músicas).
    *
-   * Monta os slides no useSlides, toca o áudio (se houver audio_token) com
-   * sincronia, marca a mídia como ativa (para o ESC global oferecer
-   * confirmação de encerramento) e abre as janelas de projeção.
+   * Monta os slides no useSlides, toca a faixa do modo pedido com sincronia,
+   * marca a mídia como ativa (para o ESC global oferecer confirmação de
+   * encerramento) e abre as janelas de projeção.
+   *
+   * Sem faixa cantada a música entra só com os slides, que é o caso da música
+   * feita sem áudio. Pedir playback de quem não tem é recusado: tocar a cantada
+   * no lugar poria uma voz por cima de quem está cantando.
    */
-  async openCustomSong(song: {
-    nome?: string;
-    audio_token?: string;
-    audio_name?: string;
-    slides?: Array<{
-      tipo?: string;
-      letra?: string;
-      letra_aux?: string;
-      cor_letra?: string;
-      cor_letra_aux?: string;
-      imagem?: string;
-      imagem_posicao?: number | string;
-      tamanho_letra?: number;
-      tamanho_letra_aux?: number;
-      tempo_seconds?: number;
-    }>;
-  }): Promise<boolean> {
+  async openCustomSong(
+    song: CustomSongSource,
+    mode: MusicActionEnum | string = MusicActionEnum.AUDIO
+  ): Promise<boolean> {
+    if (mode === MusicActionEnum.INSTRUMENTAL && !song?.playback_token) {
+      Telemetry.track("custom_music_open_failed", { name: song?.nome, mode, reason: "no_playback" });
+      _warnNoTrack(true);
+      return false;
+    }
     _closeAlbumForPresentation();
     const stageEpoch = ++_stageEpoch;
     _dropPendingDownload();
@@ -1606,14 +1654,16 @@ const _self = {
     const playback_id = _newPlaybackId();
     const playbackContext: AudioTelemetryContext = {
       playback_id,
-      mode: "audio",
+      mode,
       title: song?.nome,
     };
     Telemetry.track("custom_music_opened", {
       playback_id,
       name: song?.nome,
+      mode,
       slides_count: Array.isArray(song?.slides) ? song.slides.length : 0,
       has_audio: !!song?.audio_token,
+      has_playback: !!song?.playback_token,
     });
 
     _audio.stop();
@@ -1621,19 +1671,21 @@ const _self = {
     _audio.setElementKind("audio");
     _setPlaybackContext(playbackContext);
 
+    const superseded = (): boolean => {
+      if (_activePlayback?.playback_id === playback_id) return false;
+      Telemetry.track(
+        "custom_music_open_failed",
+        _telemetryFor(playbackContext, { reason: "superseded" })
+      );
+      return true;
+    };
+
     const slidesArray: Slide[] = [];
-    const timesArray: number[] = [];
     for (const s of song.slides || []) {
       let urlImage: string | undefined;
       if (s.imagem) {
         urlImage = (await AudioLibrary.resolveImage(s.imagem)) || undefined;
-        if (_activePlayback?.playback_id !== playback_id) {
-          Telemetry.track(
-            "custom_music_open_failed",
-            _telemetryFor(playbackContext, { reason: "superseded" })
-          );
-          return false;
-        }
+        if (superseded()) return false;
       }
       slidesArray.push({
         lyric: s.letra || "",
@@ -1648,49 +1700,102 @@ const _self = {
         font_size_aux_pct: s.tamanho_letra_aux,
         name: song.nome || "",
       });
-      // tempo_seconds é o instante de INÍCIO do slide (mesma convenção do
-      // Media.open com os campos time do banco) — usar direto, sem acumular.
-      timesArray.push(Number(s.tempo_seconds) || 0);
     }
     if (!slidesArray.length) {
       this.close(true);
       return false;
     }
 
-    const audioUrl = song.audio_token
-      ? (await AudioLibrary.resolveAudio(song.audio_token)) || null
-      : null;
-    if (_activePlayback?.playback_id !== playback_id) {
-      Telemetry.track(
-        "custom_music_open_failed",
-        _telemetryFor(playbackContext, { reason: "superseded" })
-      );
+    // As duas faixas são resolvidas já na abertura: é só a referência do arquivo
+    // na biblioteca, e é ela que deixa trocar de modo no ar sem reabrir a música.
+    const urls: Partial<Record<string, string>> = {};
+    for (const [track, token] of [
+      [MusicActionEnum.AUDIO, song.audio_token],
+      [MusicActionEnum.INSTRUMENTAL, song.playback_token],
+    ] as const) {
+      if (!token) continue;
+      const url = await AudioLibrary.resolveAudio(token);
+      if (superseded()) return false;
+      if (url) {
+        urls[track] = url;
+      } else {
+        Telemetry.track(
+          "music_playback_failed",
+          _telemetryFor(playbackContext, {
+            stage: "source_resolution",
+            reason: "custom_audio_not_found",
+            track,
+          })
+        );
+      }
+    }
+    if (mode === MusicActionEnum.INSTRUMENTAL && !urls[mode]) {
+      _warnNoTrack(true);
+      this.close(true);
       return false;
     }
 
-    if (song.audio_token && !audioUrl) {
-      Telemetry.track(
-        "music_playback_failed",
-        _telemetryFor(playbackContext, {
-          stage: "source_resolution",
-          reason: "custom_audio_not_found",
-        })
-      );
-    }
+    // tempo_seconds é o instante de INÍCIO do slide (mesma convenção do
+    // Media.open com os campos time do banco) — usar direto, sem acumular.
+    const times: Record<string, number[]> = {
+      [MusicActionEnum.AUDIO]: slideTimes(song.slides || []),
+      [MusicActionEnum.INSTRUMENTAL]: slideTimes(song.slides || [], true),
+    };
+    const audioUrl = urls[mode] || null;
+    _customPlayback = { song, urls, times };
+    $appdata.set(KEYS.MODULES.MEDIA.DATA, {
+      name: song.nome || "",
+      custom: true,
+      url_music: urls[MusicActionEnum.AUDIO] || "",
+      url_instrumental_music: urls[MusicActionEnum.INSTRUMENTAL] || "",
+    });
 
     _loadingId = null;
     const minimizeOnStart = $userdata.get(KEYS.OPTIONS.MINIMIZE_ON_START, false);
 
     this._launchProjection({
       slides: slidesArray,
-      times: timesArray,
+      times: audioUrl ? times[mode] : [],
       title: song.nome || "",
       audioUrl,
       idCheck: null,
       retryFn: () => {},
       minimized: !!minimizeOnStart,
-      mode: "audio",
+      mode: audioUrl ? mode : MusicActionEnum.NO_AUDIO,
       playbackId: playback_id,
+    });
+    return true;
+  },
+
+  /**
+   * Só o áudio de uma música personalizada, sem slides — o "Tocar Áudio" e o
+   * "Tocar Playback" do acervo.
+   *
+   * @returns `true` quando a faixa foi entregue ao player.
+   */
+  async openCustomAudio(
+    song: CustomSongSource,
+    mode: MusicActionEnum | string = MusicActionEnum.AUDIO
+  ): Promise<boolean> {
+    const playback = mode === MusicActionEnum.INSTRUMENTAL;
+    const token = playback ? song?.playback_token : song?.audio_token;
+    const url = token ? await AudioLibrary.resolveAudio(token) : null;
+    if (!url) {
+      Telemetry.track("custom_music_open_failed", {
+        name: song?.nome,
+        mode,
+        audio_only: true,
+        reason: token ? "custom_audio_not_found" : playback ? "no_playback" : "no_audio",
+      });
+      _warnNoTrack(playback);
+      return false;
+    }
+    this.stop();
+    await this.openAudio({
+      url,
+      title: song?.nome,
+      mediaType: "audio",
+      mode: playback ? MusicActionEnum.INSTRUMENTAL : MusicActionEnum.AUDIO,
     });
     return true;
   },
@@ -2401,6 +2506,7 @@ const _self = {
 
   clearVariables(): void {
     _switchingMode = false;
+    _customPlayback = null;
     if (_ytWatchdog) clearTimeout(_ytWatchdog);
     _ytWatchdog = null;
     _ytLastState = null;

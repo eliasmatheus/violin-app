@@ -1835,19 +1835,16 @@ test.describe("Meus vídeos online: baixar de antemão e gerenciar", () => {
 
   test("excluir o vídeo da lista leva junto o arquivo baixado, e avisa disso", async () => {
     expect(await onDisk(SHORT)).toBeTruthy();
-    await main.evaluate(() => {
-      window.__confirmMessages = [];
-      window.confirm = (message) => (window.__confirmMessages.push(message), true);
-    });
     await action(NAME_SHORT, "Excluir").click();
+    await expect(main.locator(".alert-text")).toHaveText(
+      "Excluir este vídeo? O arquivo baixado no computador também será apagado."
+    );
+    await confirmYes();
     await until(async () => !(await onDisk(SHORT)), {
       timeout: 10_000,
       label: "o arquivo sair do disco",
     });
     await expect(card(NAME_SHORT)).toHaveCount(0);
-    expect(await main.evaluate(() => window.__confirmMessages)).toEqual([
-      "Excluir este vídeo? O arquivo baixado no computador também será apagado.",
-    ]);
   });
 
   // Por último: cria um cartão a mais na lista.

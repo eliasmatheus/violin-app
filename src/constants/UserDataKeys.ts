@@ -227,6 +227,8 @@ export const KEYS = {
     },
     SLIDE_EDITOR: {
       PROJECTING: `${MODULES}.${ModuleEnum.SLIDE_EDITOR}.projecting`,
+      /** Faixa em edição no editor: `true` = playback. Só alimenta o botão da ribbon. */
+      PLAYBACK_TRACK: `${MODULES}.${ModuleEnum.SLIDE_EDITOR}.playback_track`,
     },
     TIMER: {
       RUNNING: `${MODULES_TIMER}.running`,

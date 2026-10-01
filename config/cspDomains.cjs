@@ -56,6 +56,16 @@ const DOMAINS = {
     "https://fonts.gstatic.com",
     "https://www.gstatic.com",
   ],
+  // Fotos da tela Sobre. O endpoint de favicons do Google redireciona para
+  // diferentes hosts t0–t3.gstatic.com conforme o site consultado.
+  CONTRIBUTOR_IMAGES: [
+    "https://avatars.githubusercontent.com",
+    "https://www.google.com",
+    "https://t0.gstatic.com",
+    "https://t1.gstatic.com",
+    "https://t2.gstatic.com",
+    "https://t3.gstatic.com",
+  ],
   VLIBRAS: [
     DOMAINS_SCR.VLIBRAS.URL,
     DOMAINS_SCR.VLIBRAS.DICT,
@@ -71,6 +81,7 @@ const youtube = DOMAINS.YOUTUBE.join(" ");
 const vlibras = DOMAINS.VLIBRAS.join(" ");
 const fonts = DOMAINS.FONTS.join(" ");
 const posthog = DOMAINS.POSTHOG.join(" ");
+const contributorImages = DOMAINS.CONTRIBUTOR_IMAGES.join(" ");
 const thirdParty = `${youtube} ${google} ${vlibras} ${cdn} ${posthog}`;
 
 const DOMAINS_CSP = {
@@ -82,7 +93,7 @@ const DOMAINS_CSP = {
   // navegador barrava a capa e o áudio enquanto o `fetch` da mesma origem
   // passava — o operador via "Ocorreu um erro ao carregar este áudio". Só o
   // desktop escapava, porque lá o CSP libera `https:` inteiro.
-  IMG: `${api} ${youtube}`,
+  IMG: `${api} ${youtube} ${contributorImages}`,
   MEDIA: `${api} ${youtube}`,
   CONNECT: `${api} ${thirdParty}`,
   WORKER: `data:`,

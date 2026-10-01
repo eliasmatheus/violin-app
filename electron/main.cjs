@@ -1197,6 +1197,35 @@ ipcMain.on("telemetry:heartbeat", (event, payload) => {
 });
 
 ipcMain.handle("telemetry:pending-main-errors", () => _readPendingMainErrors());
+// Qual placa o Chromium escolheu e a taxa de cada monitor: "aceleração ligada"
+// não distingue a placa dedicada da integrada num computador com as duas.
+ipcMain.handle("telemetry:graphics", async () => {
+  const info = { gpu_feature_status: {}, gpu_devices: [], displays: [], cpu_model: "", cpu_cores: 0, memory_gb: 0 };
+  try {
+    const cpus = require("node:os").cpus();
+    info.cpu_model = String(cpus[0]?.model || "").trim().slice(0, 80);
+    info.cpu_cores = cpus.length;
+    info.memory_gb = Math.round(require("node:os").totalmem() / 1024 ** 3);
+  } catch (_) { /* noop */ }
+  try { info.gpu_feature_status = app.getGPUFeatureStatus(); } catch (_) { /* noop */ }
+  try {
+    const gpu = await app.getGPUInfo("basic");
+    info.gpu_devices = (Array.isArray(gpu?.gpuDevice) ? gpu.gpuDevice : []).slice(0, 4).map((d) => ({
+      active: d.active === true,
+      vendor_id: Number(d.vendorId) || 0,
+      device_id: Number(d.deviceId) || 0,
+    }));
+  } catch (_) { /* noop */ }
+  try {
+    info.displays = screen.getAllDisplays().slice(0, 6).map((d) => ({
+      width: d.size.width,
+      height: d.size.height,
+      scale: d.scaleFactor,
+      hz: Math.round(d.displayFrequency || 0),
+    }));
+  } catch (_) { /* noop */ }
+  return info;
+});
 ipcMain.handle("telemetry:ack-main-error", (_event, id) => ({
   ok: _ackMainError(typeof id === "string" ? id : ""),
 }));
@@ -2104,11 +2133,24 @@ ipcMain.handle("storage:chooseDir", async (event) => {
 });
 
 /** Abre diálogo para selecionar um único arquivo (liturgia). */
-ipcMain.handle("storage:chooseFile", async (event) => {
+ipcMain.handle("storage:chooseFile", async (event, kind) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const result = await dialog.showOpenDialog(win, {
     properties: ["openFile"],
     title: "Selecionar arquivo",
+    // A Biblioteca de Mídia só guarda estes tipos; sem o filtro o operador
+    // escolhia um áudio e o arquivo era descartado.
+    ...(kind === "media"
+      ? {
+          filters: [
+            {
+              name: "Imagens, vídeos e PDF",
+              extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "heic", "heif", "mp4", "webm", "mkv", "mov", "avi", "m4v", "pdf"],
+            },
+            { name: "Todos os arquivos", extensions: ["*"] },
+          ],
+        }
+      : {}),
   });
   if (result.canceled || !result.filePaths?.length) return null;
   return result.filePaths[0];

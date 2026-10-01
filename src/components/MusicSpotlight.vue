@@ -103,22 +103,14 @@
                       @click.stop="handleMusicAction(item, MusicActionEnum.PLAYBACK_ONLY)"
                     />
                   </template>
-                  <LjButton
-                    v-else-if="item.custom_song_id && mode !== 'pick'"
-                    size="sm"
-                    variant="ghost"
-                    icon-only
-                    :icon="ICONS.PLAYER.PLAY_OUTLINE"
-                    :title="i18nT('components.music_menu.execute')"
-                    :aria-label="i18nT('components.music_menu.execute')"
-                    @click.stop="executeCustomMusic(item)"
-                  />
                   <l-music-menu-table
-                    v-else-if="!Platform.isRemote && !item.custom_song_id"
+                    v-else-if="!Platform.isRemote"
                     :id_music="Number(item.id_music)"
                     :music-subtitle="musicTitle(item, 'Música')"
                     :name="item.name"
                     :has_instrumental_music="item.has_instrumental_music ?? false"
+                    :custom-song-id="item.custom_song_id"
+                    :has-audio="item.has_audio !== false"
                   />
                   <LjButton
                     v-else-if="Platform.isRemote"
@@ -152,8 +144,6 @@ import LMusicMenuTable from "@/components/MusicMenuTable.vue";
 import { LjButton, LjDialog, LjEmpty, LjInput, LjSpinner } from "@/components/ui";
 import Database from "@/helpers/Database";
 import { loadCustomMusicCatalog } from "@/helpers/CustomMusicCatalog";
-import { getSong } from "@/helpers/CustomSongs";
-import Media from "@/composables/useMedia";
 import Strings from "@/helpers/Strings";
 import { isHymnalTrack } from "@/helpers/Hymnal";
 import { useMusicCatalog } from "@/composables/useMusicCatalog";
@@ -290,17 +280,6 @@ async function loadMusics(): Promise<void> {
     ]);
   } finally {
     if (revision === loadRevision) loading.value = false;
-  }
-}
-
-async function executeCustomMusic(music: SearchMusicItem): Promise<void> {
-  if (!music.custom_song_id) return;
-  open.value = false;
-  try {
-    const song = await getSong(music.custom_song_id);
-    if (song) await Media.openCustomSong(song);
-  } catch (error) {
-    console.error("[MusicSpotlight] Falha ao executar música personalizada:", error);
   }
 }
 

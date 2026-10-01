@@ -677,6 +677,17 @@ function onDragLeave(): void {
   }
 }
 
+// Um aviso por lote: escolher dez áudios não deve empilhar dez alertas.
+let unsupportedPending = false;
+function noteUnsupported(): void {
+  if (unsupportedPending) return;
+  unsupportedPending = true;
+  setTimeout(() => {
+    unsupportedPending = false;
+    $alert.error({ text: tm("unsupported_file_type"), translate: false });
+  }, 0);
+}
+
 async function onDrop(e: DragEvent): Promise<void> {
   isDragOver.value = false;
   dragCounter = 0;
@@ -689,12 +700,8 @@ async function onDrop(e: DragEvent): Promise<void> {
     const isMedia = IMAGE_EXT.includes(ext) || VIDEO_EXT.includes(ext) || ext === "pdf";
     if (isMedia) valid.push(f);
   }
-  if (!valid.length) {
-    $alert.error({
-      text: "Tipo de arquivo não suportado. Use imagens, vídeos ou PDF.",
-    });
-    return;
-  }
+  if (valid.length < droppedFiles.length) noteUnsupported();
+  if (!valid.length) return;
 
   // Seleção de categoria (Sem categoria sempre disponível), depois importa.
   pendingDropEntries.value = valid;
@@ -849,7 +856,7 @@ function beginAddWithCategory(catId: string): void {
 async function doAddFiles(categoryId: string): Promise<void> {
   const api = Platform.api as LouvorjaApi | null;
   if (Platform.isDesktop && api?.storage?.chooseFile) {
-    const result = await api.storage.chooseFile();
+    const result = await api.storage.chooseFile("media");
     if (!result) return;
     const paths = Array.isArray(result) ? result : [result];
     for (const rawPath of paths) {
@@ -858,7 +865,10 @@ async function doAddFiles(categoryId: string): Promise<void> {
       const isImage = IMAGE_EXT.includes(ext);
       const isVideo = VIDEO_EXT.includes(ext);
       const isPdf = ext === "pdf";
-      if (!isImage && !isVideo && !isPdf) continue;
+      if (!isImage && !isVideo && !isPdf) {
+        noteUnsupported();
+        continue;
+      }
       const fileType = isPdf ? ("pdf" as const) : isImage ? ("image" as const) : ("video" as const);
       const file: MediaFile = {
         id: "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
@@ -907,7 +917,10 @@ async function onFilesSelected(e: Event): Promise<void> {
       const isImage = IMAGE_EXT.includes(ext);
       const isVideo = VIDEO_EXT.includes(ext);
       const isPdf = ext === "pdf";
-      if (!isImage && !isVideo && !isPdf) continue;
+      if (!isImage && !isVideo && !isPdf) {
+        noteUnsupported();
+        continue;
+      }
       const fileType = isPdf ? ("pdf" as const) : isImage ? ("image" as const) : ("video" as const);
       const file: MediaFile = {
         id: "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
@@ -930,7 +943,10 @@ async function onFilesSelected(e: Event): Promise<void> {
         blob.type.startsWith("image/");
       const isVideo = VIDEO_EXT.includes(f.name.split(".").pop()?.toLowerCase() || "");
       const isPdf = f.type === "application/pdf" || f.name?.toLowerCase().endsWith(".pdf");
-      if (!isImage && !isVideo && !isPdf) continue;
+      if (!isImage && !isVideo && !isPdf) {
+        noteUnsupported();
+        continue;
+      }
       const fileType = isPdf ? ("pdf" as const) : isImage ? ("image" as const) : ("video" as const);
       const fileId = "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
       const path = URL.createObjectURL(blob);

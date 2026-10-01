@@ -591,7 +591,8 @@ async function confirmDelete(v: VideoItem): Promise<void> {
   const ytId = extractYoutubeId(v.url);
   const shared = videos.value.some((x) => x.id !== v.id && extractYoutubeId(x.url) === ytId);
   const takesFile = !!ytId && !shared && downloads.stateOf(ytId) === "downloaded";
-  if (!confirm(tm(takesFile ? "confirm_delete_downloaded" : "confirm_delete"))) return;
+  if (!(await $alert.confirm(tm(takesFile ? "confirm_delete_downloaded" : "confirm_delete"))))
+    return;
   await deleteVideoInternal(v.id);
   videos.value = videos.value.filter((x) => x.id !== v.id);
   await dropDownloadIfUnused(ytId);

@@ -67,11 +67,6 @@
                       class="app-menu-content-placeholder"
                       aria-busy="true"
                     ></div>
-                    <!-- O Sobre abre com hero próprio e mantém o título da página;
-                       nas demais telas ele repetiria o header do painel. -->
-                    <h2 v-else-if="renderedItem.id === 'about'" class="app-menu-content-title">
-                      {{ activeItem?.label ? $t(activeItem.label) : "" }}
-                    </h2>
 
                     <!-- Painéis específicos por item -->
                     <AppMenuOpcoes
@@ -650,14 +645,6 @@ function onOpenOptions(e) {
   padding: var(--lj-space-6) var(--lj-space-8) var(--lj-space-8);
   overflow-y: auto;
   background: var(--lj-surface-bg);
-}
-
-.app-menu-content-title {
-  font-size: var(--lj-text-2xl);
-  font-weight: var(--lj-weight-regular);
-  margin: 0 0 var(--lj-space-6);
-  color: var(--lj-text);
-  letter-spacing: -0.01em;
 }
 
 .app-menu-content-placeholder {

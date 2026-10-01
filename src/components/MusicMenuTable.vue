@@ -2,25 +2,27 @@
   <div ref="root" class="mmt">
     <template v-if="!compact">
       <template v-if="showQuickActions">
-        <LjButton
-          v-for="btn in buttons"
-          :key="btn.testid"
-          size="md"
-          variant="ghost"
-          icon-only
-          :icon="btn.icon"
-          :class="{ 'mmt-btn--star': btn.icon === ICONS.UI.STAR }"
-          :style="colorStyle"
-          :disabled="btn.disabled"
-          :title="btn.title"
-          :data-testid="'mmt-btn-' + btn.testid"
-          @click="btn.click"
-        />
+        <template v-for="btn in buttons" :key="btn.testid">
+          <span v-if="btn.placeholder" class="mmt-slot" aria-hidden="true" />
+          <LjButton
+            v-else
+            size="md"
+            variant="ghost"
+            icon-only
+            :icon="btn.icon"
+            :class="{ 'mmt-btn--star': btn.icon === ICONS.UI.STAR }"
+            :style="colorStyle"
+            :disabled="btn.disabled"
+            :title="btn.title"
+            :data-testid="'mmt-btn-' + btn.testid"
+            @click="btn.click"
+          />
+        </template>
       </template>
-      <span v-else class="mmt-reserve" :style="{ '--mmt-quick-count': QUICK_ACTION_COUNT }" />
+      <span v-else class="mmt-reserve" :style="{ '--mmt-quick-count': quickActionCount }" />
     </template>
 
-    <LjMenu side="left" align="start" lazy-content>
+    <LjMenu v-if="showMenu" side="left" align="start" lazy-content>
       <template #trigger>
         <LjButton
           size="md"
@@ -38,7 +40,7 @@
       <template v-if="compact">
         <div class="mmt-quick">
           <DropdownMenuItem
-            v-for="btn in buttons"
+            v-for="btn in menuButtons"
             :key="btn.testid"
             as-child
             :disabled="btn.disabled"
@@ -116,9 +118,11 @@ import {
 import Favorites from "@/helpers/Favorites";
 import Liturgy from "@/helpers/Liturgy";
 import Media from "@/composables/useMedia";
+import { openCustomMusic } from "@/helpers/CustomMusicCatalog";
 import $snackbar from "@/helpers/Snackbar";
 import { LjButton, LjIcon, LjMenu } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
+import { MUSIC_EXECUTIONS, canExecute, type MusicExecution } from "@/config/MusicAction";
 import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import { usePlaylists } from "@/modules/musics/composables/usePlaylists";
 import type { PlaylistSong } from "@/types/Music";
@@ -129,6 +133,8 @@ interface ButtonItem {
   title: string;
   icon: string;
   click: () => void;
+  /** Só guarda o lugar: ação que esta música não tem. */
+  placeholder?: boolean;
 }
 
 interface MenuItem {
@@ -155,6 +161,12 @@ const props = withDefaults(
     albumId?: number | null;
     musicSubtitle?: string;
     has_instrumental_music: boolean | number;
+    /** UUID da música personalizada: os botões passam a executá-la, sem favorito nem letra. */
+    customSongId?: string;
+    /** A música personalizada pode não ter a faixa cantada; no acervo toda música tem. */
+    hasAudio?: boolean;
+    /** Guarda o lugar das ações que a música personalizada não tem, para a coluna bater com a do acervo. */
+    alignWithCatalog?: boolean;
     color?: string;
     extraMenu?: ExtraMenuItem[];
     showPlaylistMenu?: boolean;
@@ -163,12 +175,22 @@ const props = withDefaults(
     /** Monta ações rápidas apenas quando a linha é explorada, reduzindo o custo da tabela. */
     deferQuickActions?: boolean;
   }>(),
-  { albumId: null, compactBreakpoint: 550, deferQuickActions: true, musicSubtitle: "" }
+  {
+    albumId: null,
+    alignWithCatalog: true,
+    compactBreakpoint: 550,
+    customSongId: "",
+    deferQuickActions: true,
+    hasAudio: true,
+    musicSubtitle: "",
+  }
 );
 
 // Quantos botões rápidos `buttons` devolve; o espaço reservado antes de montá-los
 // depende disso, e o E2E `row-actions` acusa se a tabela deslocar.
 const QUICK_ACTION_COUNT = 7;
+// Favorito e letra não existem para a música personalizada.
+const CATALOG_ONLY_ACTIONS = 2;
 
 const { t } = useI18n();
 const menuTitle = computed(() =>
@@ -183,6 +205,11 @@ const closeSpotlight = inject<() => void>("close-spotlight", () => {});
 const is_favorite = computed(() => Favorites.isFavorite(props.id_music));
 const compact = computed(() => width.value <= props.compactBreakpoint);
 const showQuickActions = computed(() => !props.deferQuickActions || revealed.value);
+const quickActionCount = computed(() =>
+  props.customSongId && !props.alignWithCatalog
+    ? QUICK_ACTION_COUNT - CATALOG_ONLY_ACTIONS
+    : QUICK_ACTION_COUNT
+);
 
 /**
  * Consumidores que usam superfícies próprias podem ajustar a cor do botão.
@@ -198,8 +225,55 @@ function openLyric(): void {
   );
 }
 
+/** Executa a música no modo pedido: a do acervo pelo id, a personalizada pelo UUID. */
+function execute(action: MusicActionEnum): void {
+  if (props.customSongId) {
+    void openCustomMusic(props.customSongId, action);
+    return;
+  }
+  switch (action) {
+    case MusicActionEnum.AUDIO_ONLY:
+      Media.openAudio(props.id_music);
+      break;
+    case MusicActionEnum.PLAYBACK_ONLY:
+      Media.openAudio({ id_music: props.id_music, mode: MusicActionEnum.INSTRUMENTAL });
+      break;
+    case MusicActionEnum.NO_AUDIO:
+      Media.open(props.id_music);
+      break;
+    default:
+      Media.open({ id_music: props.id_music, mode: action });
+  }
+}
+
+function quickExecute(action: MusicActionEnum): void {
+  closeSpotlight();
+  execute(action);
+}
+
+/** Ação só do acervo: na música personalizada some, ou fica só o lugar dela. */
+function catalogOnly(button: ButtonItem): ButtonItem[] {
+  if (!props.customSongId) return [button];
+  return props.alignWithCatalog ? [{ ...button, placeholder: true }] : [];
+}
+
+const tracks = computed(() => ({
+  sung: props.hasAudio,
+  playback: !!props.has_instrumental_music,
+}));
+
+function executionButton(item: MusicExecution): ButtonItem {
+  return {
+    testid: item.id,
+    disabled: !canExecute(item, tracks.value),
+    title: t(item.label),
+    icon: item.icon,
+    click: () => quickExecute(item.action),
+  };
+}
+
 const buttons = computed<ButtonItem[]>(() => [
-  {
+  ...catalogOnly({
     testid: "favorite",
     disabled: false,
     title: is_favorite.value
@@ -207,69 +281,34 @@ const buttons = computed<ButtonItem[]>(() => [
       : t("components.music_menu.add_to_favorites"),
     icon: is_favorite.value ? ICONS.UI.STAR : ICONS.UI.STAR_OUTLINE,
     click: () => Favorites.toggle(props.id_music, props.name, !!props.has_instrumental_music),
-  },
-  {
-    testid: "sing",
-    disabled: false,
-    title: t("ribbon.btn.sing"),
-    icon: ICONS.MUSIC.SING,
-    click: () => {
-      closeSpotlight();
-      Media.open({ id_music: props.id_music, mode: MusicActionEnum.AUDIO });
-    },
-  },
-  {
-    testid: "playback",
-    disabled: !props.has_instrumental_music,
-    title: t("ribbon.btn.playback"),
-    icon: ICONS.MUSIC.PLAYBACK,
-    click: () => {
-      closeSpotlight();
-      Media.open({ id_music: props.id_music, mode: MusicActionEnum.INSTRUMENTAL });
-    },
-  },
-  {
-    testid: "no-audio",
-    disabled: false,
-    title: t("ribbon.btn.no_audio"),
-    icon: ICONS.MUSIC.NO_AUDIO,
-    click: () => {
-      closeSpotlight();
-      Media.open(props.id_music);
-    },
-  },
-  {
+  }),
+  ...MUSIC_EXECUTIONS.filter((item) => !item.audioOnly).map(executionButton),
+  ...catalogOnly({
     testid: "lyric",
     disabled: false,
     title: t("ribbon.btn.lyric"),
     icon: ICONS.MUSIC.LYRIC,
     click: openLyric,
-  },
-  {
-    testid: "audio-only",
-    disabled: false,
-    title: t("ribbon.btn.audio_only"),
-    icon: ICONS.MUSIC.AUDIO,
-    click: () => {
-      closeSpotlight();
-      Media.openAudio(props.id_music);
-    },
-  },
-  {
-    testid: "playback-only",
-    disabled: !props.has_instrumental_music,
-    title: t("ribbon.btn.playback_only"),
-    icon: ICONS.MUSIC.AUDIO_PLAYBACK,
-    click: () => {
-      closeSpotlight();
-      Media.openAudio({ id_music: props.id_music, mode: MusicActionEnum.INSTRUMENTAL });
-    },
-  },
+  }),
+  ...MUSIC_EXECUTIONS.filter((item) => item.audioOnly).map(executionButton),
 ]);
+
+const menuButtons = computed(() => buttons.value.filter((btn) => !btn.placeholder));
+
+// Na música personalizada o menu só tem a execução: com os botões já à vista ele os repetiria.
+const showMenu = computed(
+  () =>
+    !props.customSongId ||
+    props.alignWithCatalog ||
+    props.deferQuickActions ||
+    compact.value ||
+    !!props.extraMenu?.length
+);
 
 const { playlists, addSong, isSongInPlaylist } = usePlaylists();
 
-const menu = computed<MenuItem[]>(() => [
+// Favoritos, liturgia e playlists guardam o id do acervo, que a música personalizada não tem.
+const catalogMenu = computed<MenuItem[]>(() => [
   {
     title: t("components.music_menu.add_to"),
     icon: ICONS.ACTIONS.ADD,
@@ -319,44 +358,29 @@ const menu = computed<MenuItem[]>(() => [
         },
       ]
     : []),
+]);
+
+function executionEntry(item: MusicExecution): MenuSubItem {
+  return {
+    title: t(item.menuLabel || item.label),
+    icon: item.icon,
+    click: () => execute(item.action),
+    disabled: !canExecute(item, tracks.value),
+  };
+}
+
+const menu = computed<MenuItem[]>(() => [
+  ...(props.customSongId ? [] : catalogMenu.value),
   {
     title: t("components.music_menu.execute"),
     icon: ICONS.PLAYER.PLAYER,
     menu: [
-      {
-        title: t("ribbon.btn.sing"),
-        icon: ICONS.MUSIC.SING,
-        click: () => Media.open({ id_music: props.id_music, mode: MusicActionEnum.AUDIO }),
-      },
-      {
-        title: t("ribbon.btn.playback"),
-        icon: ICONS.MUSIC.PLAYBACK,
-        click: () => Media.open({ id_music: props.id_music, mode: MusicActionEnum.INSTRUMENTAL }),
-        disabled: !props.has_instrumental_music,
-      },
-      {
-        title: t("ribbon.btn.no_audio"),
-        icon: ICONS.MUSIC.NO_AUDIO,
-        click: () => Media.open(props.id_music),
-      },
-      {
-        title: t("ribbon.btn.lyric"),
-        icon: ICONS.MUSIC.LYRIC,
-        click: openLyric,
-      },
+      ...MUSIC_EXECUTIONS.filter((item) => !item.audioOnly).map(executionEntry),
+      ...(props.customSongId
+        ? []
+        : [{ title: t("ribbon.btn.lyric"), icon: ICONS.MUSIC.LYRIC, click: openLyric }]),
       { title: "-" },
-      {
-        title: t("components.music_menu.file_sing"),
-        icon: ICONS.MUSIC.AUDIO,
-        click: () => Media.openAudio(props.id_music),
-      },
-      {
-        title: t("components.music_menu.file_playback"),
-        icon: ICONS.MUSIC.AUDIO_PLAYBACK,
-        click: () =>
-          Media.openAudio({ id_music: props.id_music, mode: MusicActionEnum.INSTRUMENTAL }),
-        disabled: !props.has_instrumental_music,
-      },
+      ...MUSIC_EXECUTIONS.filter((item) => item.audioOnly).map(executionEntry),
     ],
   },
   ...(props.extraMenu?.map((item) => ({
@@ -384,6 +408,12 @@ const menu = computed<MenuItem[]>(() => [
   width: calc(
     var(--mmt-quick-count) * var(--lj-ui-h-md) + (var(--mmt-quick-count) - 1) * var(--lj-space-1)
   );
+}
+
+/* Lugar de uma ação que esta música não tem: mantém as demais na coluna de sempre. */
+.mmt-slot {
+  flex: none;
+  width: var(--lj-ui-h-md);
 }
 
 /*

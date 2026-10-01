@@ -820,6 +820,9 @@ O `.icon` só vale no app empacotado, que o compila em `Assets.car`; isso exige
 Xcode 26, e por isso o job macOS do release roda em `macos-26`. No
 `electron:dev` o Dock mostra o `icon-mac.png`, que é estático: só a aparência
 clara.
+Em um Mac sem Xcode 26, `electron:build:mac` usa automaticamente o
+`icon-mac.icns` gerado, com aparência estática. O release continua exigindo
+Xcode 26 e usa o `.icon` em camadas.
 
 ---
 

@@ -6,7 +6,12 @@
           v-if="currentSrc && !showFallbackAvatar"
           class="contributor-card__photo"
           :src="currentSrc"
+          width="68"
+          height="68"
+          decoding="async"
           alt=""
+          :crossorigin="isReadable(currentSrc) ? 'anonymous' : undefined"
+          @load="onAvatarLoad"
           @error="onAvatarError"
         />
         <LjIcon v-else :icon="ICONS.UI.ACCOUNT" :size="36" class="contributor-card__avatar-icon" />
@@ -48,6 +53,22 @@
   </LjCard>
 </template>
 
+<!-- Escopo de módulo: um por app, não um por cartão. -->
+<script lang="ts">
+/**
+ * Foto já resolvida de cada contribuidor, pelo tempo que o app ficar aberto.
+ * A tela Sobre é remontada a cada abertura e cada cartão refazia os pedidos de
+ * rede; `null` guarda que nenhuma fonte serviu, para não tentar todas de novo.
+ */
+const resolvedAvatars = new Map<string, string | null>();
+const GITHUB_AVATARS = "https://avatars.githubusercontent.com/";
+
+/** Só o GitHub libera a leitura dos pixels (CORS), condição para copiar a foto. */
+function isReadable(src: string | null): boolean {
+  return !!src && src.startsWith(GITHUB_AVATARS);
+}
+</script>
+
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { LjCard, LjIcon, LjTooltip } from "@/components/ui";
@@ -64,8 +85,14 @@ const props = defineProps<{
   contributor: Contributors;
 }>();
 
+/** A fonte identifica a foto; dois cartões com o mesmo nome não a compartilham. */
+function avatarKey(): string {
+  const c = props.contributor;
+  return c.image || c.github || c.website || c.name;
+}
+
 const avatarFallbackIndex = ref(0);
-const showFallbackAvatar = ref(false);
+const showFallbackAvatar = ref(resolvedAvatars.get(avatarKey()) === null);
 
 function isRoleContribuitor(d: RoleContribuitor[] | string): d is RoleContribuitor[] {
   return Array.isArray(d) && d.length > 0 && typeof d[0] === "object";
@@ -75,8 +102,11 @@ const avatarSources = computed<string[]>(() => {
   const c = props.contributor;
   const sources: string[] = [];
   if (c.image) sources.push(c.image);
-  if (c.github) sources.push(`https://github.com/${c.github}.png`);
-  if (c.facebook) sources.push(`https://graph.facebook.com/${c.facebook}/picture?type=square`);
+  // 144px cobre o círculo de 68px em tela 2×; o padrão do GitHub é 460px. O
+  // endereço direto das fotos evita o redirecionamento sem cache de github.com.
+  // O Facebook não entra: a Graph API recusa a foto sem token (HTTP 400), e cada
+  // abertura da tela fazia um pedido perdido por contribuidor.
+  if (c.github) sources.push(`${GITHUB_AVATARS}${c.github}?s=144`);
   if (c.website) {
     const domain = c.website.replace(/^https?:\/\//, "").split("/")[0];
     sources.push(`https://www.google.com/s2/favicons?domain=${domain}&sz=128`);
@@ -86,8 +116,29 @@ const avatarSources = computed<string[]>(() => {
 
 const currentSrc = computed<string | null>(() => {
   if (showFallbackAvatar.value) return null;
-  return avatarSources.value[avatarFallbackIndex.value] ?? null;
+  return resolvedAvatars.get(avatarKey()) ?? avatarSources.value[avatarFallbackIndex.value] ?? null;
 });
+
+function onAvatarLoad(event: Event): void {
+  const name = avatarKey();
+  const img = event.target as HTMLImageElement;
+  if (resolvedAvatars.has(name)) return;
+  resolvedAvatars.set(name, img.src);
+  if (!isReadable(img.src)) return;
+  // Cópia em memória: as próximas aberturas não tocam a rede. As demais fontes
+  // não permitem ler os pixels e ficam por conta do cache HTTP (7 dias no Google).
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext("2d")?.drawImage(img, 0, 0);
+    canvas.toBlob((blob) => {
+      if (blob) resolvedAvatars.set(name, URL.createObjectURL(blob));
+    });
+  } catch {
+    // Fica o endereço original, servido pelo cache HTTP.
+  }
+}
 
 function onAvatarError(): void {
   const next = avatarFallbackIndex.value + 1;
@@ -95,6 +146,8 @@ function onAvatarError(): void {
     avatarFallbackIndex.value = next;
   } else {
     showFallbackAvatar.value = true;
+    // Sem rede a falha não diz nada sobre a fonte: tenta de novo na próxima abertura.
+    if (navigator.onLine) resolvedAvatars.set(avatarKey(), null);
   }
 }
 
@@ -143,16 +196,10 @@ const links = computed<ContributorLink[]>(() => {
 </script>
 
 <style scoped>
+/* Sem realce no hover: o cartão não é clicável, e ao rolar a lista cada um que
+   passava sob o cursor repintava borda e sombra. */
 .contributor-card {
   height: 100%;
-  transition:
-    box-shadow var(--lj-transition-normal),
-    border-color var(--lj-transition-normal);
-}
-
-.contributor-card:hover {
-  border-color: var(--lj-ui-accent);
-  box-shadow: var(--lj-shadow-2);
 }
 
 /* O corpo do LjCard vem sem padding (`flush`); aqui ele vira a coluna que

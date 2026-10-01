@@ -187,7 +187,7 @@
       </LjField>
 
       <LjField
-        v-if="!form.escolha && form.musica > 0"
+        v-if="!form.escolha && musicSelected"
         class="lif-field lif-spaced"
         :label="t('inputs.music_version_label')"
       >
@@ -484,10 +484,16 @@ function onLinkOverlayToggle(checked: boolean) {
   props.setFormField("linked_overlay_id", checked ? props.overlaySlots?.[0]?.id || "" : "");
 }
 
+// Música personalizada tem id negativo; 0 é nenhuma e -1 é o "escolher depois".
+const musicSelected = computed(() => {
+  const id = Number(props.form.musica);
+  return id !== 0 && id !== -1 && !Number.isNaN(id);
+});
+
 watch(
   () => props.form.musica,
   (newVal, oldVal) => {
-    if (newVal > 0 && newVal !== oldVal && !props.form.escolha) {
+    if (musicSelected.value && newVal !== oldVal && !props.form.escolha) {
       const sub = props.form.subtipo;
       const hasInstr = hasInstrumental(Number(newVal));
       if (!sub || sub === "ja" || sub === "div") {
@@ -512,8 +518,7 @@ const availableVersions = computed((): VersionOption[] => {
     { value: "audio", label: t("inputs.music_version_audio-only") },
   ];
 
-  const musicId = props.form.musica;
-  if (musicId > 0 && hasInstrumental(Number(musicId))) {
+  if (hasInstrumental(Number(props.form.musica))) {
     base.splice(1, 0, { value: "pb", label: t("inputs.music_version_pb") });
     base.push({ value: "audio_pb", label: t("inputs.music_version_playback-only") });
   }

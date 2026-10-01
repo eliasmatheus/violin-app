@@ -17,6 +17,7 @@ import $media from "@/composables/useMedia";
 import $alert from "@/helpers/Alert";
 import Telemetry from "@/helpers/Telemetry";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
+import { MusicActionEnum } from "@/enums/MusicActionEnum";
 
 export const SLJA_EXT = "slja";
 
@@ -88,10 +89,19 @@ export async function openSlja(
       imageUrls.set(baseName(imagePath), url);
     }
 
+    // `Música -PB.slja` é o playback da música: o player o trata como tal.
+    const playback =
+      !!data.audio &&
+      SljaConverter.playbackBaseName(fileName.replace(/\.(slja|lja)$/i, "")) !== null;
+    const track = {
+      token: data.audio ? urlFor(data.audio) : "",
+      name: data.audioName || "",
+    };
     const song = {
       nome: options.title?.trim() || SljaConverter.resolveSongName(data, fileName),
-      audio_token: data.audio ? urlFor(data.audio) : "",
-      audio_name: data.audioName || "",
+      audio_token: playback ? "" : track.token,
+      audio_name: playback ? "" : track.name,
+      ...(playback ? { playback_token: track.token, playback_name: track.name } : {}),
       slides: data.slides.map((slide: { imagem?: string }) => ({
         ...slide,
         imagem: slide.imagem
@@ -106,7 +116,10 @@ export async function openSlja(
     liveUrls = urls;
     let projected = false;
     try {
-      projected = await $media.openCustomSong(song);
+      projected = await $media.openCustomSong(
+        song,
+        playback ? MusicActionEnum.INSTRUMENTAL : MusicActionEnum.AUDIO
+      );
     } finally {
       if (projected) previous.forEach((url) => URL.revokeObjectURL(url));
       else {

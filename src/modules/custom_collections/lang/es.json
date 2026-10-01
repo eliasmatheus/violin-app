@@ -25,6 +25,8 @@
     "songs_count": "canción(es)",
     "no_audio": "sin audio",
     "audio": "con audio",
+    "audio_playback": "cantado y playback",
+    "playback_only": "solo playback",
     "slides": "diapositiva(s)"
   },
   "data": {
@@ -35,6 +37,9 @@
     "confirm_delete_collection": "¿Eliminar esta colección? Las canciones siguen disponibles en \"Mis Canciones\".",
     "name_placeholder": "Nombre de la colección",
     "import_result": "{ok} importada(s)",
-    "import_failed": ", {fail} fallo(s)"
+    "import_paired": ", {paired} con cantado y playback",
+    "import_failed": ", {fail} fallo(s)",
+    "import_unmatched_playback": ". {unmatched} playback con diapositivas distintas del cantado entró (entraron) como canción aparte",
+    "import_without_media": ". {loose} vino (vinieron) de archivo .lja, sin audio ni imágenes"
   }
 }

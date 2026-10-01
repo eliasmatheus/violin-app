@@ -34,6 +34,7 @@ const LABELS = {
   fill: "components.format_panel.fit_fill",
   none: "components.format_panel.fit_none",
   // Formatos de data (clock)
+  compact: "components.format_panel.date_compact",
   long: "components.format_panel.date_long",
   medium: "components.format_panel.date_medium",
   short: "components.format_panel.date_short",

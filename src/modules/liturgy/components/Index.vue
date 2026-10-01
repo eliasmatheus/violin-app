@@ -210,7 +210,6 @@ const {
   locked,
   showNotes,
   markOnAccess,
-  toggleMarkOnAccess,
   schedulesDialog,
   activeCatId,
   scheduledCategories,
@@ -294,9 +293,12 @@ async function openChooseLaterSearch(item: LiturgyItem, mode = "sung") {
   chooseLaterItem.value = item;
   chooseLaterMode.value = mode;
   chooseMusicSearchOpen.value = true;
-  if (chooseLaterItem.value && !isChecked(chooseLaterItem.value)) {
-    toggleChecked(chooseLaterItem.value);
-  }
+}
+
+function markItemOnAccess(item: LiturgyItem): void {
+  if (!markOnAccess.value || item.tipo === LiturgyItemTypeEnum.BLOCO) return;
+  const current = $liturgy.get(item.id, activeDay.value);
+  if (current && !isChecked(current)) toggleChecked(current);
 }
 
 function onChooseLaterMusicPicked(music: SearchMusicItem) {
@@ -318,9 +320,7 @@ function onChooseLaterMusicPicked(music: SearchMusicItem) {
   chooseLaterItem.value = null;
   const executable = { ...item, ...musica };
   playMusic(executable, chooseLaterMode.value);
-  if (markOnAccess.value && !isChecked(executable)) {
-    toggleChecked(executable);
-  }
+  markItemOnAccess(item);
 }
 
 const executeItemMaybeMark = (item: LiturgyItem) => {
@@ -330,9 +330,7 @@ const executeItemMaybeMark = (item: LiturgyItem) => {
   }
 
   executeItem(item);
-  if (markOnAccess.value && item.tipo !== LiturgyItemTypeEnum.BLOCO && !isChecked(item)) {
-    toggleChecked(item);
-  }
+  markItemOnAccess(item);
 };
 
 const playMusicMaybeChoose = (item: LiturgyItem, mode: string) => {
@@ -341,6 +339,7 @@ const playMusicMaybeChoose = (item: LiturgyItem, mode: string) => {
     return;
   }
   playMusic(item, mode);
+  markItemOnAccess(item);
 };
 
 const openLyricMaybeChoose = (target: LiturgyItem | number) => {
@@ -512,9 +511,6 @@ function handleRibbonAction(action: string) {
       break;
     case "clear_day":
       clearDayDialog();
-      break;
-    case "toggle_mark_on_access":
-      toggleMarkOnAccess();
       break;
     case "toggle_show_notes":
       toggleNotes();

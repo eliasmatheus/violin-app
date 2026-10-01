@@ -23,7 +23,8 @@ import {
 } from "@/helpers/Overlay";
 import type { LiturgyItem } from "@/types/Liturgy";
 import { getSong as getCustomSong } from "@/helpers/CustomSongs";
-import { resolveAudio } from "@/helpers/AudioLibrary";
+import { playCustomSong } from "@/helpers/CustomMusicCatalog";
+import { LITURGY_VERSION_ACTION } from "@/config/MusicAction";
 import { openSlja, SLJA_EXT } from "@/helpers/SljaPlayer";
 import { AUDIO_EXT, IMAGE_EXT, VIDEO_EXT } from "@constants/FileTypes";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
@@ -125,23 +126,15 @@ export function useLiturgyExecution() {
       return false;
     }
 
-    // Música personalizada (custom_collections) → executa via openCustomSong
+    // Música personalizada (custom_collections): cantado, playback, sem áudio ou só o arquivo
     if (item.ref_id && item.id_music < 0) {
       try {
         const song = await getCustomSong(item.ref_id);
         if (song) {
-          if (mode === "audio" || mode === "audio_pb") {
-            const url = song.audio_token ? await resolveAudio(song.audio_token) : null;
-            if (!url) {
-              reportMissingResource("play_custom_music_audio", "audio");
-              $alert.error({ text: t("alerts.media_not_found") });
-              return false;
-            }
-            $media.stop();
-            await $media.openAudio({ url, title: song.nome, mediaType: "audio" });
-            return false;
-          }
-          const projected = await $media.openCustomSong(song);
+          const projected = await playCustomSong(
+            song,
+            LITURGY_VERSION_ACTION[mode] ?? MusicActionEnum.AUDIO
+          );
           if (projected && canLinkOverlay({ ...item, subtipo: mode })) {
             await activateLinkedOverlay(item);
           }

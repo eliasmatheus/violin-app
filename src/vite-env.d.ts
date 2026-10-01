@@ -71,6 +71,14 @@ declare global {
         }>
       >;
       ackMainError?: (id: string) => Promise<{ ok: boolean }>;
+      graphics?: () => Promise<{
+        gpu_feature_status: Record<string, string>;
+        gpu_devices: Array<{ active: boolean; vendor_id: number; device_id: number }>;
+        displays: Array<{ width: number; height: number; scale: number; hz: number }>;
+        cpu_model: string;
+        cpu_cores: number;
+        memory_gb: number;
+      }>;
       onMainError?: (cb: (payload: unknown) => void) => () => void;
       onRuntimeIncident?: (cb: (payload: unknown) => void) => () => void;
     };
@@ -117,7 +125,7 @@ declare global {
       onStatus: (cb: (s: { online: boolean; since: number | null }) => void) => () => void;
     };
     storage: {
-      chooseFile: () => Promise<string | null>;
+      chooseFile: (kind?: "media") => Promise<string | null>;
       chooseImage: () => Promise<string | null>;
       chooseDir: () => Promise<string | null>;
       listDir: (dirPath: string) => Promise<

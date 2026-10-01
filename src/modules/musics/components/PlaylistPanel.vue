@@ -136,6 +136,7 @@
 <script setup lang="ts">
 import { LjIcon, LjInput } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
+import $alert from "@/helpers/Alert";
 import { nextTick, onActivated, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import DateTime from "@/helpers/DateTime";
@@ -223,7 +224,7 @@ function cancelRename(): void {
 }
 
 async function onDelete(playlist: Playlist): Promise<void> {
-  if (!confirm(tm("playlists.delete_confirm", { name: playlist.name }))) return;
+  if (!(await $alert.confirm(tm("playlists.delete_confirm", { name: playlist.name })))) return;
   await deletePlaylist(playlist.id);
 }
 

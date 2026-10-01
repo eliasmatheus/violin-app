@@ -1,5 +1,6 @@
 {
   "title": "Biblioteca de Mídia",
+  "unsupported_file_type": "Tipo de arquivo não suportado. A biblioteca aceita imagens, vídeos e PDF. Para áudio, use o Som de Fundo.",
   "description": "Gerencie e projeta imagens e vídeos em sequência.",
   "library": "Biblioteca",
   "playlist": "Playlist",

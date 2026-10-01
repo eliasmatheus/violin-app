@@ -32,6 +32,7 @@
       "fit_contain": "Ajustar",
       "fit_fill": "Estirar",
       "fit_none": "Original",
+      "date_compact": "mié, 30 de septiembre de 2026",
       "date_long": "Domingo, 06 de Mayo de 2026",
       "date_medium": "06 de Mayo de 2026",
       "date_short": "06/05/2026",
@@ -906,6 +907,8 @@
       "draw_action": "Sortear",
       "draw_reset": "Reiniciar",
       "dynamic_text": "Texto Dinámico",
+      "editor_track_sung": "Pista: Cantado",
+      "editor_track_playback": "Pista: Playback",
       "editor_audio_attach": "Audio",
       "editor_audio_remove": "Quitar Audio",
       "editor_aux_color": "Color del Texto",
@@ -1006,6 +1009,7 @@
     }
   },
   "shell": {
+    "stale_version": "Hay una versión nueva de la aplicación. Haz clic aquí para recargar.",
     "home_title": "Listo para el próximo culto",
     "home_description": "Abre una música, la Biblia, la liturgia o el modo presentación para empezar.",
     "home_music": "Músicas",

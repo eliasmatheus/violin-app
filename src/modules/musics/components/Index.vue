@@ -106,6 +106,7 @@
       :search_min_length="3"
       :searchable_fields="{
         name: search_name,
+        custom_collections: search_name,
         lyric: search_lyric,
         albums_names: search_album,
         track: search_track,
@@ -116,6 +117,7 @@
       :has_scroll="has_scroll"
       sort_by="name"
       :file="`${$i18n.locale}_musics`"
+      :extra_rows="customMusics"
     >
       <thead>
         <tr>
@@ -138,6 +140,15 @@
             {{ item.name }}
             <div v-if="compact" class="musics-albums">
               <LjChip
+                v-for="name in item.custom_collection_names || []"
+                :key="name"
+                :variant="chipVariant"
+                size="sm"
+                class="musics-album-chip"
+              >
+                {{ name }}
+              </LjChip>
+              <LjChip
                 v-for="album in item.albums"
                 :key="album.id_album"
                 :variant="chipVariant"
@@ -151,6 +162,14 @@
           </td>
           <td v-if="!compact">
             <LjChip
+              v-for="name in item.custom_collection_names || []"
+              :key="name"
+              :variant="chipVariant"
+              class="musics-album-chip"
+            >
+              {{ name }}
+            </LjChip>
+            <LjChip
               v-for="album in item.albums"
               :key="album.id_album"
               :variant="chipVariant"
@@ -160,10 +179,11 @@
               {{ albumLabel(album) }}
             </LjChip>
           </td>
-          <td class="lj-u-text-end">{{ shortTime(item.duration) }}</td>
+          <td class="lj-u-text-end">{{ item.custom_song_id ? "" : shortTime(item.duration) }}</td>
           <td v-if="selectedPlaylist" class="lj-u-text-center">
+            <template v-if="item.custom_song_id" />
             <LjButton
-              v-if="!isSongInPlaylist(selectedPlaylist.id, item.id_music)"
+              v-else-if="!isSongInPlaylist(selectedPlaylist.id, item.id_music)"
               variant="ghost"
               size="sm"
               :icon="ICONS.MEDIA.ADD"
@@ -188,6 +208,8 @@
                 :name="item.name"
                 :music-subtitle="musicTitle(item, 'Música')"
                 :has_instrumental_music="item.has_instrumental_music"
+                :custom-song-id="item.custom_song_id"
+                :has-audio="item.has_audio !== false"
                 :show-playlist-menu="true"
                 defer-quick-actions
               />
@@ -224,7 +246,7 @@ import { LjAlert, LjButton, LjCheckbox, LjChip, LjIcon, LjInput, LjSwitch } from
 /* ########################################################### */
 /* ####### INSTALAÇÃO DO MODULO ############################## */
 /* ########################################################### */
-import { computed, nextTick, onMounted, ref, useId, watch } from "vue";
+import { computed, nextTick, onActivated, onMounted, ref, useId, watch } from "vue";
 import { useViewport } from "@/composables/useViewport";
 import Platform from "@/helpers/Platform";
 import Media from "@/composables/useMedia";
@@ -242,6 +264,7 @@ import PlaylistPanel from "./PlaylistPanel.vue";
 import PlaylistSongs from "./PlaylistSongs.vue";
 import { ICONS } from "@/config/Icons";
 import Telemetry from "@/helpers/Telemetry";
+import { loadCustomMusicCatalog } from "@/helpers/CustomMusicCatalog";
 import { albumLabel, musicTitle } from "@root/config/musicCatalog.mjs";
 
 const moduleContainer = ref(null);
@@ -277,7 +300,22 @@ async function hydratePlaylistsAfterPaint() {
   });
 }
 
+// O acervo pessoal entra na mesma tabela. A coletânea é procurada junto com o
+// nome (como na busca rápida) e também pelo filtro de álbum.
+const customMusics = ref([]);
+async function loadCustomMusics() {
+  if (Platform.isRemote) return;
+  const items = await loadCustomMusicCatalog().catch(() => []);
+  customMusics.value = items.map((item) => ({
+    ...item,
+    albums_names: (item.custom_collection_names || []).join(", "),
+    custom_collections: (item.custom_collection_names || []).join(", "),
+  }));
+}
+onActivated(loadCustomMusics);
+
 onMounted(() => {
+  void loadCustomMusics();
   Telemetry.track("music_module_opened", { compact: compact.value });
 
   // A lista de músicas já é utilizável sem ler playlists do IndexedDB. Esperar
