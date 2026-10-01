@@ -1007,10 +1007,11 @@
   },
   "shell": {
     "home_title": "Pronto para o próximo culto",
-    "home_description": "Abra uma música, a Bíblia ou a liturgia para começar.",
+    "home_description": "Abra uma música, a Bíblia, a liturgia ou o modo apresentação para começar.",
     "home_music": "Músicas",
     "home_bible": "Bíblia",
     "home_liturgy": "Liturgia",
+    "home_presentation": "Modo apresentação",
     "search_placeholder": "Buscar hino, música, versículo...",
     "toggle_sidebar": "Mostrar/ocultar menu",
     "toggle_liturgy": "Mostrar/ocultar liturgia",

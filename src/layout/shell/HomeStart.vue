@@ -16,6 +16,10 @@
         <LjIcon :icon="ICONS.MODULES.LITURGY" :size="18" color="currentColor" />
         {{ $t("shell.home_liturgy") }}
       </button>
+      <button type="button" @click="open(ModuleEnum.PRESENTATION_MODE)">
+        <LjIcon :icon="ICONS.MODULES.PRESENTATION_MODE" :size="18" color="currentColor" />
+        {{ $t("shell.home_presentation") }}
+      </button>
     </div>
   </section>
 </template>
