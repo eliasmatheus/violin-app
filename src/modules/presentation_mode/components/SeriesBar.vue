@@ -18,9 +18,9 @@
     </LjButton>
   </div>
   <div
-    v-else-if="doc"
+    v-else-if="doc && progress"
     class="pm-series"
-    :class="{ 'pm-series--done': done }"
+    :class="{ 'pm-series--done': progress.completed }"
     data-testid="pm-series-bar"
   >
     <LjIcon :icon="ICONS.MEDIA.PLAYLIST" :size="15" class="pm-series__icon" />
@@ -28,7 +28,7 @@
     <span class="pm-series__count" data-testid="pm-series-count">
       {{ tm("series.count", { played: progress.played, total: progress.total }) }}
     </span>
-    <template v-if="done">
+    <template v-if="progress.completed">
       <span class="pm-series__done" data-testid="pm-series-done">{{ tm("series.done") }}</span>
       <LjButton
         size="sm"
@@ -81,100 +81,46 @@
     :dir="dir"
     :versions="conflicts"
   />
-
-  <LjDialog
-    v-model="dialogOpen"
-    :title="tm('series.dialog_title')"
-    :icon="ICONS.MEDIA.PLAYLIST"
-    size="sm"
-  >
-    <form class="pm-series-form" data-testid="pm-series-dialog" @submit.prevent="save">
-      <p class="pm-series-form__help">{{ tm("series.dialog_help") }}</p>
-      <LjField :label="tm('series.name')">
-        <LjInput v-model="name" autofocus data-testid="pm-series-name" />
-      </LjField>
-      <LjField :label="tm('series.on_end')">
-        <LjSelect v-model="onEnd" :items="onEndItems" data-testid="pm-series-on-end" />
-      </LjField>
-    </form>
-    <template #footer>
-      <LjButton @click="dialogOpen = false">{{ t("actions.cancel") }}</LjButton>
-      <LjButton
-        variant="primary"
-        :disabled="!name.trim()"
-        data-testid="pm-series-save"
-        @click="save"
-      >
-        {{ t("actions.save") }}
-      </LjButton>
-    </template>
-  </LjDialog>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
-import {
-  LjButton,
-  LjDialog,
-  LjField,
-  LjIcon,
-  LjInput,
-  LjMenu,
-  LjSelect,
-  type LjMenuItem,
-} from "@/components/ui";
+import { computed, ref } from "vue";
+import { LjButton, LjIcon, LjMenu, type LjMenuItem } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import $alert from "@/helpers/Alert";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import type { SeriesDoc } from "@/types/Series";
+import type { SeriesProgress } from "../program/series";
 import { useSeries } from "../composables/useSeries";
 import SeriesConflictDialog from "./SeriesConflictDialog.vue";
-import { progressOf } from "../program/series";
 
 /**
  * A pasta aberta como série: quantos já passaram, qual é o próximo e o botão
- * de mandá-lo ao ar. O histórico fica na própria pasta — numa pasta
- * compartilhada na nuvem, ele vale para todo computador que abrir a mesma pasta.
+ * de mandá-lo ao ar. Recomeçar sozinho no fim é regra do main, aplicada ao
+ * registrar o último vídeo — esta barra só mostra e pede.
  */
 
 const props = defineProps<{
   dir: string;
-  /** Os vídeos da pasta, na ordem da grade. */
-  files: string[];
+  doc: SeriesDoc | null;
+  progress: SeriesProgress | null;
 }>();
 const emit = defineEmits<{ preview: [file: string]; play: [file: string] }>();
 
-const { t, tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
+const { tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 const alertKey = (key: string) => `modules.${ModuleEnum.PRESENTATION_MODE}.${key}`;
 const series = useSeries();
 
-watch(
-  () => props.dir,
-  (dir) => void series.load(dir),
-  { immediate: true }
-);
-
-const doc = computed(() => series.of(props.dir));
 const conflicts = computed(() => series.conflictsOf(props.dir));
 const conflictOpen = ref(false);
-const progress = computed(() =>
-  doc.value
-    ? progressOf(doc.value, props.files)
-    : { next: null, played: 0, total: 0, completed: false }
-);
-const done = computed(() => progress.value.completed && doc.value?.onEnd === "suggest_new");
-
-// Momento Saúde: passou o último, recomeça sozinho.
-watch(
-  () => progress.value.completed && doc.value?.onEnd === "restart",
-  (restart) => {
-    if (restart) void series.restart(props.dir);
-  }
-);
 
 const menu = computed<LjMenuItem[]>(() => [
-  { label: tm("series.edit"), icon: ICONS.ACTIONS.EDIT, action: openDialog },
+  {
+    label: tm("series.edit"),
+    icon: ICONS.ACTIONS.EDIT,
+    action: () => series.openDialog(props.dir),
+  },
   {
     label: tm("series.restart"),
     icon: ICONS.ACTIONS.RESTART,
@@ -193,33 +139,6 @@ const menu = computed<LjMenuItem[]>(() => [
     action: () => void series.disable(props.dir),
   },
 ]);
-
-/* ─── Criar / editar ─── */
-
-const dialogOpen = ref(false);
-const name = ref("");
-const onEnd = ref<SeriesDoc["onEnd"]>("restart");
-const onEndItems = computed(() => [
-  { value: "restart", label: tm("series.on_end_restart") },
-  { value: "suggest_new", label: tm("series.on_end_new") },
-]);
-
-function openDialog(): void {
-  name.value = doc.value?.name ?? props.dir.split(/[\\/]/).pop() ?? "";
-  onEnd.value = doc.value?.onEnd ?? "restart";
-  dialogOpen.value = true;
-}
-
-defineExpose({ openDialog });
-
-async function save(): Promise<void> {
-  if (!name.value.trim()) return;
-  const current = doc.value;
-  const ok = current
-    ? await series.update(props.dir, (d) => ({ ...d, name: name.value.trim(), onEnd: onEnd.value }))
-    : await series.create(props.dir, name.value.trim(), onEnd.value);
-  if (ok) dialogOpen.value = false;
-}
 </script>
 
 <style scoped>
@@ -273,18 +192,6 @@ async function save(): Promise<void> {
 }
 
 .pm-series__done {
-  color: var(--lj-text-muted);
-}
-
-.pm-series-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--lj-space-5);
-}
-
-.pm-series-form__help {
-  margin: 0;
-  font-size: 12px;
   color: var(--lj-text-muted);
 }
 </style>

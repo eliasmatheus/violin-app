@@ -1,7 +1,9 @@
 "use strict";
 
 const fs = require("fs-extra");
+const os = require("os");
 const path = require("path");
+const crypto = require("crypto");
 
 /**
  * Conta do YouTube para o yt-dlp. Quando o YouTube passa a pedir "confirme que
@@ -10,18 +12,22 @@ const path = require("path");
  * verificação do Google —, e os cookies dessa sessão vão para um arquivo que o
  * yt-dlp lê em toda consulta (`--cookies`).
  *
- * O login roda numa sessão própria do Electron, separada do app. O arquivo de
- * cookies fica na pasta local do app, nunca na pasta de dados: ela pode estar
- * numa pasta compartilhada na nuvem, e esses cookies abrem a conta.
+ * O login roda numa sessão própria do Electron, só em memória: o perfil do app
+ * mora na pasta de dados, que pode estar numa pasta compartilhada na nuvem, e
+ * a sessão não pode ir parar lá. A única cópia é o arquivo exportado, na pasta
+ * local do app — e só com os cookies do YouTube, nunca os do google.com, que
+ * abririam a conta Google inteira.
  */
 
-const PARTITION = "persist:youtube-account";
+const PARTITION = "youtube-account";
 const LOGIN_URL =
   "https://accounts.google.com/ServiceLogin?service=youtube&continue=" +
   encodeURIComponent("https://www.youtube.com/");
 /** Cookies que só existem com alguém logado no YouTube. */
 const SESSION_COOKIES = new Set(["SAPISID", "__Secure-3PAPISID", "LOGIN_INFO"]);
-const COOKIE_DOMAIN_RE = /(^|\.)(youtube\.com|google\.com)$/i;
+const COOKIE_DOMAIN_RE = /(^|\.)youtube\.com$/i;
+/** Cada execução do yt-dlp recebe uma cópia: ele regrava o arquivo ao sair, e execuções paralelas se atropelariam. */
+const COPY_TTL_MS = 15 * 60 * 1000;
 
 /**
  * Formato Netscape, o que o `--cookies` do yt-dlp lê.
@@ -54,15 +60,38 @@ function isLoggedIn(cookies) {
   return cookies.some((c) => SESSION_COOKIES.has(c.name) && /youtube\.com$/i.test(String(c.domain || "")));
 }
 
+/** O arquivo Netscape tem sessão de alguém logado? (Lido depois de reiniciar o app.) */
+function fileHasSession(text) {
+  return String(text)
+    .split("\n")
+    .some((line) => {
+      const cols = line.replace(/^#HttpOnly_/, "").split("\t");
+      return cols.length === 7 && /youtube\.com$/i.test(cols[0]) && SESSION_COOKIES.has(cols[5]);
+    });
+}
+
+/**
+ * O Google recusa login em navegador "desconhecido": a janela se apresenta como
+ * o Chrome em que o Electron se baseia, sem o nome do Electron e do app.
+ */
+function chromeUserAgent(fallback) {
+  return String(fallback || "")
+    .split(" ")
+    .filter((token) => !/^(Electron|louvorja[\w-]*)\//i.test(token))
+    .join(" ");
+}
+
 /**
  * @param {object} deps
  * @param {() => import("electron").Session} deps.session  sessão da partição de login
  * @param {string} deps.cookiesFile  onde o yt-dlp lê os cookies
  * @param {(opts: object) => import("electron").BrowserWindow} deps.createWindow
+ * @param {string} [deps.userAgent]  user agent do Electron, de onde sai o do Chrome
  */
 function createYoutubeAccount(deps) {
   const { cookiesFile } = deps;
   let loginWindow = null;
+  const copiesDir = path.join(os.tmpdir(), "louvorja-yt-cookies");
 
   async function exportCookies() {
     const cookies = await deps.session().cookies.get({});
@@ -77,8 +106,11 @@ function createYoutubeAccount(deps) {
   }
 
   async function status() {
-    const cookies = await deps.session().cookies.get({ domain: "youtube.com" });
-    return { loggedIn: isLoggedIn(cookies) && (await fs.pathExists(cookiesFile)) };
+    try {
+      return { loggedIn: fileHasSession(await fs.readFile(cookiesFile, "utf8")) };
+    } catch {
+      return { loggedIn: false };
+    }
   }
 
   /** Abre a janela de login; resolve quando ela fecha, com o estado da conta. */
@@ -87,6 +119,8 @@ function createYoutubeAccount(deps) {
       loginWindow.focus();
       return new Promise((resolve) => loginWindow.once("closed", () => void status().then(resolve)));
     }
+    const ses = deps.session();
+    if (deps.userAgent) ses.setUserAgent?.(chromeUserAgent(deps.userAgent));
     loginWindow = deps.createWindow({
       width: 480,
       height: 720,
@@ -121,12 +155,22 @@ function createYoutubeAccount(deps) {
     return { loggedIn: false };
   }
 
-  /** O arquivo, para o yt-dlp, só quando há alguém logado. */
+  /** Uma cópia do arquivo para uma execução do yt-dlp; nada quando ninguém entrou. */
   function cookiesFor() {
-    return fs.pathExistsSync(cookiesFile) ? cookiesFile : undefined;
+    if (!fs.pathExistsSync(cookiesFile)) return undefined;
+    try {
+      fs.ensureDirSync(copiesDir);
+      const copy = path.join(copiesDir, `${crypto.randomUUID()}.txt`);
+      fs.copyFileSync(cookiesFile, copy);
+      fs.chmodSync(copy, 0o600);
+      setTimeout(() => void fs.remove(copy), COPY_TTL_MS).unref?.();
+      return copy;
+    } catch {
+      return undefined;
+    }
   }
 
   return { status, login, logout, cookiesFor, exportCookies };
 }
 
-module.exports = { createYoutubeAccount, toNetscape, isLoggedIn, PARTITION, LOGIN_URL };
+module.exports = { createYoutubeAccount, toNetscape, isLoggedIn, fileHasSession, chromeUserAgent, PARTITION, LOGIN_URL };

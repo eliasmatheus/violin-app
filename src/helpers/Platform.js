@@ -349,10 +349,10 @@ export default {
     );
   },
 
-  /** Grava o histórico da série (o main junta com o que já está no disco). */
-  seriesWrite(dirPath, data) {
+  /** Aplica uma operação ao histórico da série, sobre o que está no disco agora. */
+  seriesApply(dirPath, op) {
     return (
-      api?.storage?.seriesWrite?.(dirPath, data) ??
+      api?.storage?.seriesApply?.(dirPath, op) ??
       Promise.resolve({ ok: false, error: "unsupported" })
     );
   },

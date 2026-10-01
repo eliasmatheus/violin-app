@@ -2124,7 +2124,7 @@ ipcMain.handle("storage:readDir", async (_e, dirPath) => {
 ipcMain.handle("files:listDir", (_e, dirPath) => fileBrowser.listDir(dirPath));
 // Histórico de uma série de vídeos, gravado na própria pasta (nome de arquivo fixo).
 ipcMain.handle("files:seriesRead", (_e, dirPath) => seriesFile.read(dirPath));
-ipcMain.handle("files:seriesWrite", (_e, dirPath, data) => seriesFile.write(dirPath, data));
+ipcMain.handle("files:seriesApply", (_e, dirPath, op) => seriesFile.apply(dirPath, op));
 // Cópias em conflito do sincronizador: "merge" ou o nome da versão escolhida.
 ipcMain.handle("files:seriesResolve", (_e, dirPath, choice) => seriesFile.resolve(dirPath, choice));
 

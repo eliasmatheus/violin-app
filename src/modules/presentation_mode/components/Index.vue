@@ -341,7 +341,10 @@ const liveOrigin = computed<Playable | null>(() => {
     kind: liveKind.value,
     audio: audioLive.value,
     songId: liveSongId.value,
-    songTitle: liveKind.value === "music" ? slides.title.value || null : null,
+    customSongId:
+      liveKind.value === "music"
+        ? ((slides.slides.value[0]?.custom_song_id as string | undefined) ?? null)
+        : null,
     passage: live.bible.value?.passage ?? null,
     // O ID vale enquanto o vídeo for o que está por cima na tela.
     videoId:

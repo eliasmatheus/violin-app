@@ -7,6 +7,7 @@ const { performance } = require("node:perf_hooks");
 const { createStore } = require("./store.js");
 const runner = require("./runner.js");
 const collections = require("./collections.js");
+const { createLinkCache } = require("./linkCache.js");
 const progressive = require("./progressive.js");
 const { isVideoId } = require("./ids.js");
 const { WorkPriority, canStartWork } = require("../presentationAdmission.js");
@@ -47,14 +48,6 @@ async function defaultFreeBytes(dir) {
     return null;
   }
 }
-
-/** Depois de um bloqueio "não é um robô", as consultas adiantadas param por este tempo. */
-const BLOCKED_PAUSE_MS = 10 * 60 * 1000;
-
-/** Quantos vídeos com links prontos ficam à espera: a prévia, o "a seguir" e o próximo da fila. */
-const PREFETCH_MAX = 6;
-/** Links que vencem antes disto são resolvidos de novo: o vídeo precisa tocar até o fim. */
-const PREFETCH_MARGIN_MS = 30 * 60 * 1000;
 
 function urlFor(id) {
   return `${URL_PREFIX}${id}.mp4`;
@@ -130,12 +123,8 @@ function createManager(cfg) {
   const jobs = new Map();
   /** Pedidos de URL direta em andamento (tocar já, sem baixar). */
   const resolutions = new Map();
-  /**
-   * Links resolvidos antes do play (`prefetch`), à espera de quem for tocar. Cada
-   * entrada serve uma vez: o `stream` que a usa abre a sessão dela.
-   * @type {Map<string, { links: any, maxHeight: number }>}
-   */
-  const prefetched = new Map();
+  /** Links resolvidos antes do play, e o bloqueio "não é um robô" (ver linkCache.js). */
+  const prefetched = createLinkCache({ now });
   /** Vídeos tocando enquanto baixam, por ID: as trilhas em disco de que as janelas leem. */
   const sessions = new Map();
   /** Descartes já retirados de `sessions`, mas que ainda podem apagar a pasta compartilhada. */
@@ -662,23 +651,9 @@ function createManager(cfg) {
     for (const resolution of resolutions.values()) resolution.controller.abort();
   }
 
-  /** Links do `prefetch` que servem para tocar `maxHeight` até o fim (não vencem antes da margem). */
-  function usablePrefetch(hit, maxHeight) {
-    const fresh = !hit.links.expiresAt || hit.links.expiresAt - now() > PREFETCH_MARGIN_MS;
-    return hit.maxHeight === maxHeight && fresh;
-  }
-
-  /** Os links guardados pelo `prefetch`, uma vez só; null se não há ou não servem. */
-  function takePrefetched(id, maxHeight) {
-    const hit = prefetched.get(id);
-    if (!hit) return null;
-    prefetched.delete(id);
-    return usablePrefetch(hit, maxHeight) ? hit.links : null;
-  }
-
   /** Os links diretos do YouTube (vídeo e áudio) que o yt-dlp descobre em ~2 s; um pedido só por vídeo. */
   function resolveLinks(id, opts) {
-    const ready = takePrefetched(id, clampHeight(opts.maxHeight));
+    const ready = prefetched.take(id, clampHeight(opts.maxHeight));
     if (ready) return Promise.resolve({ ok: true, id, ...ready });
     const existing = resolutions.get(id);
     if (existing && !existing.controller.signal.aborted) return existing.promise;
@@ -1089,16 +1064,6 @@ function createManager(cfg) {
   }
 
   /**
-   * O YouTube recusou com "não é um robô". Continuar consultando só piora o
-   * bloqueio: por um tempo, nada de consultas adiantadas — só o que o operador pede.
-   */
-  let blockedUntil = 0;
-  function noteBlocked() {
-    blockedUntil = now() + BLOCKED_PAUSE_MS;
-    prefetched.clear();
-  }
-
-  /**
    * Resolve os links de um vídeo antes do play, sem baixar nada: é o que o
    * operador está vendo na prévia ou o que vem a seguir. Quando ele mandar tocar,
    * o `stream` pula a consulta ao YouTube (~2 s). Pedido do operador, então
@@ -1106,20 +1071,17 @@ function createManager(cfg) {
    */
   async function prefetch(id, opts = {}) {
     if (!isVideoId(id)) return fail(new OnlineVideoError("invalid", "ID de vídeo inválido"));
-    if (now() < blockedUntil) return { ok: true, skipped: "blocked" };
+    if (prefetched.blocked()) return { ok: true, skipped: "blocked" };
     if (!tools.supported || !tools.ready()) return { ok: true, skipped: "tools" };
     if (store.has(id) || jobs.has(id) || sessions.has(id)) return { ok: true, skipped: "ready" };
     const maxHeight = clampHeight(opts.maxHeight);
-    const hit = prefetched.get(id);
-    if (hit && usablePrefetch(hit, maxHeight)) return { ok: true, cached: true };
+    if (prefetched.has(id, maxHeight)) return { ok: true, cached: true };
     const res = await resolveLinks(id, { maxHeight });
     if (!res.ok) return res;
     // Enquanto resolvia, o operador pode ter mandado tocar — aí a sessão já existe.
     if (sessions.has(id) || jobs.has(id)) return { ok: true, skipped: "ready" };
     const { ok: _ok, id: _id, ...links } = res;
-    prefetched.delete(id);
-    prefetched.set(id, { links, maxHeight });
-    while (prefetched.size > PREFETCH_MAX) prefetched.delete(prefetched.keys().next().value);
+    prefetched.put(id, links, maxHeight);
     return { ok: true };
   }
 
@@ -1183,7 +1145,8 @@ function createManager(cfg) {
     diagnosticSnapshot,
     list,
     prefetch,
-    noteBlocked,
+    /** O YouTube recusou com "não é um robô": pausa as consultas adiantadas. */
+    noteBlocked: () => prefetched.noteBlocked(),
     collection,
     init,
     close,

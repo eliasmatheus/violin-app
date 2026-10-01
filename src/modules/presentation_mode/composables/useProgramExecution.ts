@@ -17,14 +17,6 @@ import type { MusicMode } from "../program/musicModes";
 import { nextVerseOf } from "../program/bible";
 import { useBibleLibrary } from "./useBibleLibrary";
 
-/** Versões da música que têm letra para a grade. */
-const SLIDE_MODES: Record<string, MusicActionEnum> = {
-  sung: MusicActionEnum.AUDIO,
-  pb: MusicActionEnum.INSTRUMENTAL,
-  lyric: MusicActionEnum.NO_AUDIO,
-  no_audio: MusicActionEnum.NO_AUDIO,
-};
-
 /**
  * Toca uma música no formato pedido. Com letra, ela vai minimizada — os
  * slides aparecem na grade do palco do módulo, não na janela do player por
@@ -40,7 +32,7 @@ export function playMusicInMode(idMusic: number, mode: MusicMode | string = "sun
     });
     return;
   }
-  void Media.open({ id_music: idMusic, mode: SLIDE_MODES[mode] ?? MusicActionEnum.AUDIO, minimized: true });
+  void Media.open({ id_music: idMusic, mode: LITURGY_VERSION_ACTION[mode] ?? MusicActionEnum.AUDIO, minimized: true });
 }
 
 /**

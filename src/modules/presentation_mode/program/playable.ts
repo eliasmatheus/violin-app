@@ -43,8 +43,8 @@ export interface LiveExpectation {
   kind: LiveKind | "audio" | null;
   /** Música: os slides no ar têm de ser desta. */
   songId?: number;
-  /** Música personalizada: os slides não trazem id; vale o título. */
-  songTitle?: string;
+  /** Música personalizada: os slides dela trazem o UUID, não `id_music`. */
+  customSongId?: string;
   /** Bíblia: o trecho no ar tem de ser este. */
   passage?: BiblePassage;
   /**
@@ -59,7 +59,7 @@ export interface LiveSignal {
   kind: LiveKind | null;
   audio: boolean;
   songId: number | null;
-  songTitle: string | null;
+  customSongId: string | null;
   passage: BiblePassage | null;
   videoId: string | null;
 }
@@ -76,9 +76,9 @@ function fromMusic(idMusic: number, mode: MusicMode | string | undefined): LiveE
   return { kind: "music", songId: idMusic };
 }
 
-function fromCustomMusic(title: string, mode: MusicMode | string | undefined): LiveExpectation {
+function fromCustomMusic(customSongId: string, mode: MusicMode | string | undefined): LiveExpectation {
   if (mode === "audio" || mode === "audio_pb") return { kind: "audio" };
-  return { kind: "music", songTitle: title };
+  return { kind: "music", customSongId };
 }
 
 export function expectationOf(
@@ -88,7 +88,7 @@ export function expectationOf(
 ): LiveExpectation {
   if (playable.type === "file") return fromPath(playable.entry.path);
   if (playable.type === "song") {
-    return playable.customId ? fromCustomMusic(playable.title, mode) : fromMusic(playable.id_music, mode);
+    return playable.customId ? fromCustomMusic(playable.customId, mode) : fromMusic(playable.id_music, mode);
   }
   if (playable.type === "bible") return { kind: "bible", passage: playable.ref };
   if (playable.type === "online") return { kind: "online_video", videoId: playable.videoId };
@@ -98,7 +98,7 @@ export function expectationOf(
   switch (src?.tipo) {
     case LiturgyItemTypeEnum.MUSICA:
       if (src.escolha || !src.id_music) return { kind: null };
-      if (src.id_music < 0) return src.ref_id ? fromCustomMusic(src.item || item.title, src.subtipo) : { kind: null };
+      if (src.id_music < 0) return src.ref_id ? fromCustomMusic(src.ref_id, src.subtipo) : { kind: null };
       return fromMusic(src.id_music, src.subtipo);
     case LiturgyItemTypeEnum.ARQUIVO:
       return src.dir ? fromPath(src.dir) : { kind: null };
@@ -121,6 +121,6 @@ export function isOnAir(expected: LiveExpectation, signal: LiveSignal): boolean 
   if (expected.videoId !== undefined) return signal.videoId === expected.videoId;
   if (signal.kind !== expected.kind) return false;
   if (expected.passage && !(signal.passage && samePassage(expected.passage, signal.passage))) return false;
-  if (expected.songTitle !== undefined && signal.songTitle !== expected.songTitle) return false;
+  if (expected.customSongId !== undefined && signal.customSongId !== expected.customSongId) return false;
   return expected.songId === undefined || signal.songId === expected.songId;
 }

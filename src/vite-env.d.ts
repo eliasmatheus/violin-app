@@ -155,10 +155,13 @@ declare global {
       seriesResolve?: (
         dirPath: string,
         choice: string
-      ) => Promise<{ ok: true; series: import("./types/Series").SeriesDoc | null } | { ok: false; error: string }>;
-      seriesWrite?: (
+      ) => Promise<
+        | { ok: true; series: import("./types/Series").SeriesDoc | null; partial?: number }
+        | { ok: false; error: string }
+      >;
+      seriesApply?: (
         dirPath: string,
-        data: import("./types/Series").SeriesDoc
+        op: import("./types/Series").SeriesOp
       ) => Promise<{ ok: true; series: import("./types/Series").SeriesDoc } | { ok: false; error: string }>;
       setDataDir: (dir: string, opts?: { moveExisting?: boolean }) => Promise<void>;
       enforceQuota: (maxBytes: number) => Promise<void>;

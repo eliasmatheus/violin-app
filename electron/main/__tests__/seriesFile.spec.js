@@ -4,93 +4,124 @@ import { createRequire } from "module";
 import os from "os";
 import path from "path";
 import fs from "fs";
+import { IMAGE_EXT, VIDEO_EXT } from "../../../src/constants/FileTypes";
 
 const require = createRequire(import.meta.url);
 const series = require("../seriesFile.js");
 
 let dir;
+const touch = (...names) => names.forEach((n) => fs.writeFileSync(path.join(dir, n), "x"));
+const raw = () => JSON.parse(fs.readFileSync(path.join(dir, series.FILE_NAME), "utf8"));
+const active = (doc) => doc.plays.filter((p) => !p.undone && p.cycle === doc.cycle).map((p) => p.file);
+
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "lj-series-"));
+  touch("01.mp4", "02.mp4", "notas.pdf");
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-const doc = (plays, extra = {}) => ({
-  version: 1,
-  active: true,
-  name: "Momento Saúde",
-  onEnd: "restart",
-  cycle: 1,
-  updatedAt: "2026-10-01T10:00:00Z",
-  plays,
-  ...extra,
-});
-const play = (id, file, at, extra = {}) => ({ id, file, at, cycle: 1, ...extra });
-
 describe("seriesFile", () => {
-  it("pasta sem série devolve null; caminho relativo é recusado", async () => {
+  it("a lista de mídia é a mesma do renderer", () => {
+    expect([...series.MEDIA_EXT].sort()).toEqual([...VIDEO_EXT, ...IMAGE_EXT].sort());
+  });
+
+  it("pasta sem série devolve null; caminho relativo e operação inválida são recusados", async () => {
     expect(await series.read(dir)).toEqual({ ok: true, series: null, versions: [] });
     expect((await series.read("relativo")).ok).toBe(false);
-    expect((await series.write("relativo", doc([]))).ok).toBe(false);
+    expect((await series.apply(dir, { type: "play", file: "01.mp4" })).error).toBe("not_a_series");
+    expect((await series.apply(dir, "x")).ok).toBe(false);
   });
 
-  it("grava na própria pasta e lê de volta", async () => {
-    const res = await series.write(dir, doc([play("a", "01.mp4", "2026-09-24T19:30:00Z")]));
-    expect(res.ok).toBe(true);
-    expect(fs.existsSync(path.join(dir, series.FILE_NAME))).toBe(true);
-    expect((await series.read(dir)).series.plays.map((p) => p.file)).toEqual(["01.mp4"]);
+  it("registra exibições sobre o que está no disco, com o ciclo do disco", async () => {
+    await series.apply(dir, { type: "create", name: "Momento Saúde", onEnd: "suggest_new" });
+    // Outro computador recomeçou a série enquanto esta cópia estava aberta.
+    fs.writeFileSync(path.join(dir, series.FILE_NAME), JSON.stringify({ ...raw(), cycle: 4 }));
+    const res = await series.apply(dir, { type: "play", file: "01.mp4" });
+    expect(res.series.plays.at(-1)).toMatchObject({ file: "01.mp4", cycle: 4 });
   });
 
-  it("dois computadores gravando: as exibições se somam e desmarcar vence", async () => {
-    await series.write(dir, doc([play("a", "01.mp4", "2026-09-24T19:30:00Z")]));
-    // O outro computador não viu "a", e passou "b".
-    await series.write(dir, doc([play("b", "02.mp4", "2026-09-27T19:30:00Z")]));
-    // Um terceiro desmarca "a".
-    const res = await series.write(dir, doc([play("a", "01.mp4", "2026-09-24T19:30:00Z", { undone: true })]));
-    expect(res.series.plays).toEqual([
-      play("a", "01.mp4", "2026-09-24T19:30:00Z", { undone: true }),
-      play("b", "02.mp4", "2026-09-27T19:30:00Z"),
+  it("registrar um vídeo não desfaz configurações de outro computador", async () => {
+    await series.apply(dir, { type: "create", name: "Saúde", onEnd: "restart" });
+    await series.apply(dir, { type: "settings", active: false });
+    const res = await series.apply(dir, { type: "play", file: "01.mp4" });
+    expect(res.series.active).toBe(false);
+  });
+
+  it("com todos os vídeos passados, recomeça sozinho — PDF não conta", async () => {
+    await series.apply(dir, { type: "create", name: "Saúde", onEnd: "restart" });
+    await series.apply(dir, { type: "play", file: "01.mp4" });
+    const res = await series.apply(dir, { type: "play", file: "02.mp4" });
+    expect(res.series.cycle).toBe(2);
+    expect(active(res.series)).toEqual([]);
+  });
+
+  it("recomeçar só vale uma vez por ciclo, mesmo pedido por dois computadores", async () => {
+    await series.apply(dir, { type: "create", name: "S", onEnd: "suggest_new" });
+    await series.apply(dir, { type: "restart", fromCycle: 1 });
+    const res = await series.apply(dir, { type: "restart", fromCycle: 1 });
+    expect(res.series.cycle).toBe(2);
+  });
+
+  it("gravações simultâneas na mesma pasta não se perdem", async () => {
+    await series.apply(dir, { type: "create", name: "S", onEnd: "suggest_new" });
+    await Promise.all([
+      series.apply(dir, { type: "play", file: "01.mp4" }),
+      series.apply(dir, { type: "play", file: "02.mp4" }),
+      series.apply(dir, { type: "undo", file: "01.mp4" }),
     ]);
+    expect(active(raw())).toEqual(["02.mp4"]);
   });
 
-  it("o ciclo só anda para frente e as configurações seguem a gravação mais nova", async () => {
-    await series.write(dir, doc([], { cycle: 3, updatedAt: "2026-10-02T00:00:00Z", name: "Novo" }));
-    const res = await series.write(dir, doc([], { cycle: 2, updatedAt: "2026-10-01T00:00:00Z" }));
-    expect(res.series.cycle).toBe(3);
-    expect(res.series.name).toBe("Novo");
+  it("histórico ilegível (meio sincronizado) não é sobrescrito", async () => {
+    fs.writeFileSync(path.join(dir, series.FILE_NAME), "{ meio");
+    expect((await series.read(dir)).error).toBe("unreadable");
+    expect((await series.apply(dir, { type: "create", name: "S", onEnd: "restart" })).error).toBe("unreadable");
+    expect(fs.readFileSync(path.join(dir, series.FILE_NAME), "utf8")).toBe("{ meio");
   });
 
-  it("encontra as cópias em conflito do OneDrive e descreve cada versão", async () => {
-    await series.write(dir, doc([play("a", "01.mp4", "2026-09-24T19:30:00Z")]));
-    fs.writeFileSync(
-      path.join(dir, ".louvorja-serie-IGREJA-PC.json"),
-      JSON.stringify(doc([play("b", "02.mp4", "2026-09-27T19:30:00Z"), play("c", "03.mp4", "2026-09-28T19:30:00Z")]))
-    );
-    const res = await series.read(dir);
-    expect(res.versions.map((v) => v.name)).toEqual([series.FILE_NAME, ".louvorja-serie-IGREJA-PC.json"]);
-    expect(res.versions[1]).toMatchObject({ plays: 2, lastPlay: { file: "03.mp4", at: "2026-09-28T19:30:00Z" } });
-  });
+  describe("cópias em conflito", () => {
+    const copy = (name, plays) =>
+      fs.writeFileSync(path.join(dir, name), JSON.stringify({ ...raw(), settingsAt: "2026-01-01", plays }));
+    const play = (id, file) => ({ id, file, at: `2026-09-2${id.length}T19:00:00Z`, cycle: 1 });
 
-  it("juntar todas: nenhuma exibição se perde e as cópias saem da pasta", async () => {
-    await series.write(dir, doc([play("a", "01.mp4", "2026-09-24T19:30:00Z")]));
-    const copy = path.join(dir, ".louvorja-serie-IGREJA-PC.json");
-    fs.writeFileSync(copy, JSON.stringify(doc([play("b", "02.mp4", "2026-09-27T19:30:00Z")])));
-    const res = await series.resolve(dir, "merge");
-    expect(res.series.plays.map((p) => p.file)).toEqual(["01.mp4", "02.mp4"]);
-    expect(fs.existsSync(copy)).toBe(false);
-    expect((await series.read(dir)).versions).toEqual([]);
-  });
+    beforeEach(async () => {
+      await series.apply(dir, { type: "create", name: "S", onEnd: "suggest_new" });
+      await series.apply(dir, { type: "play", file: "01.mp4" });
+    });
 
-  it("usar uma versão: ela vira a principal; nome fora da lista é recusado", async () => {
-    await series.write(dir, doc([play("a", "01.mp4", "2026-09-24T19:30:00Z")]));
-    fs.writeFileSync(path.join(dir, ".louvorja-serie-IGREJA-PC.json"), JSON.stringify(doc([play("b", "02.mp4", "2026-09-27T19:30:00Z")])));
-    expect((await series.resolve(dir, "../outro.json")).ok).toBe(false);
-    const res = await series.resolve(dir, ".louvorja-serie-IGREJA-PC.json");
-    expect(res.series.plays.map((p) => p.file)).toEqual(["02.mp4"]);
-  });
+    it("reconhece os padrões dos sincronizadores, e só eles", () => {
+      for (const n of [".louvorja-serie-IGREJA-PC.json", ".louvorja-serie (1).json", ".louvorja-serie 2.json"]) {
+        expect(series.CONFLICT_RE.test(n), n).toBe(true);
+      }
+      expect(series.CONFLICT_RE.test(".louvorja-serie.json.123.tmp")).toBe(false);
+      expect(series.CONFLICT_RE.test("louvorja-serie-x.json")).toBe(false);
+    });
 
-  it("descarta o que o formato não conhece", () => {
-    const n = series.normalize({ name: 5, onEnd: "x", plays: [{ id: 1 }, play("a", "f", "t")], extra: 1 });
-    expect(n).toMatchObject({ name: "", onEnd: "restart", cycle: 1, plays: [play("a", "f", "t")] });
-    expect(n.extra).toBeUndefined();
+    it("descreve cada versão, com a principal marcada", async () => {
+      copy(".louvorja-serie-IGREJA-PC.json", [play("b", "02.mp4")]);
+      const res = await series.read(dir);
+      expect(res.versions.map((v) => [v.name, v.main, v.plays])).toEqual([
+        [series.FILE_NAME, true, 1],
+        [".louvorja-serie-IGREJA-PC.json", false, 1],
+      ]);
+    });
+
+    it("juntar: nada se perde e a cópia lida sai da pasta", async () => {
+      copy(".louvorja-serie-IGREJA-PC.json", [play("b", "02.mp4")]);
+      const res = await series.resolve(dir, "merge");
+      expect(active(res.series).sort()).toEqual(["01.mp4", "02.mp4"]);
+      expect(fs.existsSync(path.join(dir, ".louvorja-serie-IGREJA-PC.json"))).toBe(false);
+    });
+
+    it("cópia ilegível (ainda baixando) fica na pasta e é avisada", async () => {
+      fs.writeFileSync(path.join(dir, ".louvorja-serie (1).json"), "{ meio");
+      const res = await series.resolve(dir, "merge");
+      expect(res).toMatchObject({ ok: true, partial: 1 });
+      expect(fs.existsSync(path.join(dir, ".louvorja-serie (1).json"))).toBe(true);
+    });
+
+    it("nome fora da lista é recusado", async () => {
+      expect((await series.resolve(dir, "../x.json")).ok).toBe(false);
+    });
   });
 });

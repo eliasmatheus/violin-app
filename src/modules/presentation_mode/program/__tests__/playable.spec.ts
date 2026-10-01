@@ -26,7 +26,7 @@ const signal = (s: Partial<LiveSignal>): LiveSignal => ({
   kind: null,
   audio: false,
   songId: null,
-  songTitle: null,
+  customSongId: null,
   passage: null,
   videoId: null,
   ...s,
@@ -127,14 +127,15 @@ describe("música personalizada", () => {
     expect(samePlayable(custom("a"), { type: "song", id_music: -3, title: "x" })).toBe(false);
   });
 
-  it("está no ar pelo título dos slides, que não trazem id", () => {
+  it("está no ar pelo UUID dos slides — título igual de outra música não engana", () => {
     const expected = expectationOf(custom("a"), null);
-    expect(isOnAir(expected, signal({ kind: "music", songTitle: "Minha Canção" }))).toBe(true);
-    expect(isOnAir(expected, signal({ kind: "music", songTitle: "Outra" }))).toBe(false);
+    expect(isOnAir(expected, signal({ kind: "music", customSongId: "a" }))).toBe(true);
+    expect(isOnAir(expected, signal({ kind: "music", customSongId: "b" }))).toBe(false);
+    expect(isOnAir(expected, signal({ kind: "music", songId: 7 }))).toBe(false);
     expect(isOnAir(expectationOf(custom("a"), null, "audio"), signal({ audio: true }))).toBe(true);
   });
 
-  it("item do programa vindo da liturgia (id negativo + ref_id) espera a música pelo título", () => {
+  it("item do programa vindo da liturgia (id negativo + ref_id) espera a música pelo UUID", () => {
     const item: ProgramItem = {
       id: "c",
       kind: "music",
@@ -143,6 +144,6 @@ describe("música personalizada", () => {
       source: liturgyItem({ id: "s", tipo: LiturgyItemTypeEnum.MUSICA, subtipo: "sung", id_music: -2, ref_id: "uuid", item: "Minha Canção" }),
     };
     const expected = expectationOf({ type: "program", itemId: "c" }, item);
-    expect(isOnAir(expected, signal({ kind: "music", songTitle: "Minha Canção" }))).toBe(true);
+    expect(isOnAir(expected, signal({ kind: "music", customSongId: "uuid" }))).toBe(true);
   });
 });

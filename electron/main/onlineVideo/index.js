@@ -13,11 +13,12 @@ let _account = null;
 /** Conta do YouTube do operador (sessão separada do app; cookies fora da pasta de dados). */
 function account() {
   if (!_account) {
-    const { session, BrowserWindow } = require("electron");
+    const { app, session, BrowserWindow } = require("electron");
     _account = createYoutubeAccount({
       session: () => session.fromPartition(PARTITION),
       cookiesFile: path.join(paths.bootstrapDir(), "youtube-cookies.txt"),
       createWindow: (opts) => new BrowserWindow(opts),
+      userAgent: app.userAgentFallback,
     });
   }
   return _account;

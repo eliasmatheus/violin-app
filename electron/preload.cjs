@@ -391,8 +391,8 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     listDir: (dirPath) => ipcRenderer.invoke("files:listDir", dirPath),
     /** Histórico da série de vídeos da pasta (`.louvorja-serie.json`); `series: null` se não é série. */
     seriesRead: (dirPath) => ipcRenderer.invoke("files:seriesRead", dirPath),
-    /** Grava o histórico juntando com o que já está no disco; devolve o resultado. */
-    seriesWrite: (dirPath, data) => ipcRenderer.invoke("files:seriesWrite", dirPath, data),
+    /** Aplica uma operação (`play`, `undo`, `restart`, `create`, `settings`) ao histórico do disco. */
+    seriesApply: (dirPath, op) => ipcRenderer.invoke("files:seriesApply", dirPath, op),
     /** Resolve cópias em conflito do histórico: `"merge"` ou o nome da versão a manter. */
     seriesResolve: (dirPath, choice) => ipcRenderer.invoke("files:seriesResolve", dirPath, choice),
     /** Verifica quais arquivos remotos já estão no disco. */

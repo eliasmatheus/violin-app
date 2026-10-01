@@ -10,7 +10,7 @@
     <ul class="pm-conflict__list" data-testid="pm-series-conflicts">
       <li v-for="v in versions" :key="v.name" class="pm-conflict__item">
         <div class="pm-conflict__info">
-          <strong class="pm-conflict__source">{{ sourceLabel(v.name) }}</strong>
+          <strong class="pm-conflict__source">{{ sourceLabel(v) }}</strong>
           <span>{{ tm("series.conflict_modified", { date: dateTime(v.modifiedAt) }) }}</span>
           <span>{{ tm("series.conflict_plays", { count: v.plays }) }}</span>
           <span v-if="v.lastPlay" class="pm-conflict__last">
@@ -66,8 +66,9 @@ const series = useSeries();
 const busy = ref(false);
 
 /** O sincronizador costuma pôr o nome do computador na cópia: ".louvorja-serie-IGREJA-PC.json" → "IGREJA-PC". */
-function sourceLabel(name: string): string {
-  if (name === ".louvorja-serie.json") return tm("series.conflict_main");
+function sourceLabel(v: SeriesVersion): string {
+  const name = v.name;
+  if (v.main) return tm("series.conflict_main");
   return name.replace(/^\.louvorja-serie[-\s]*/i, "").replace(/\.json$/i, "") || name;
 }
 

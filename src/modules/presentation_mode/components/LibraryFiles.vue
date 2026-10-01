@@ -74,9 +74,9 @@
     <div class="pm-files">
       <SeriesBar
         v-if="seriesDir"
-        ref="seriesBar"
         :dir="seriesDir"
-        :files="seriesFiles"
+        :doc="seriesDoc"
+        :progress="seriesProgress"
         @preview="(file: string) => byName(file) && onClick(byName(file)!)"
         @play="(file: string) => byName(file) && emit('play', filePlayable(byName(file)!))"
       />
@@ -99,7 +99,7 @@
               'pm-file--selected': entry.path === selected?.path,
               'pm-file--live': entry.path === livePath,
               'pm-file--return': entry.path === returnPath,
-              'pm-file--played': !!playedOf(entry),
+              'pm-file--played': !!playedOn(entry),
             }"
             role="button"
             tabindex="0"
@@ -115,14 +115,15 @@
               <LjIcon v-else :icon="iconOf(entry)" :size="22" class="pm-file__icon" />
               <span v-if="durationOf(entry)" class="pm-file__badge">{{ durationOf(entry) }}</span>
               <span
-                v-if="playedOf(entry)"
+                v-if="playedOn(entry)"
                 class="pm-file__series"
-                :title="tm('series.played_at', { date: playedOf(entry) })"
+                :title="tm('series.played_at', { date: playedOn(entry) })"
               >
-                ✓ {{ playedOf(entry) }}
+                <LjIcon :icon="ICONS.UI.CHECK" :size="10" />
+                {{ playedOn(entry) }}
               </span>
               <span
-                v-else-if="entry.name === seriesNext"
+                v-else-if="entry.name === seriesProgress?.next"
                 class="pm-file__series pm-file__series--next"
               >
                 {{ tm("series.next_badge") }}
@@ -184,18 +185,20 @@
           <bdi dir="ltr">{{ locationLabel }}</bdi>
         </span>
         <span class="pm-files__count">{{ countLabel }}</span>
-        <button
+        <LjButton
           v-if="seriesDir && !seriesDoc"
-          type="button"
+          size="sm"
+          variant="ghost"
+          :icon="ICONS.MEDIA.PLAYLIST"
           class="pm-files__make-series"
           data-testid="pm-series-make"
-          @click="seriesBar?.openDialog()"
+          @click="series.openDialog(seriesDir)"
         >
-          <LjIcon :icon="ICONS.MEDIA.PLAYLIST" :size="12" />
           {{ tm("series.make") }}
-        </button>
+        </LjButton>
         <span class="pm-files__hint">{{ tm("library.hint") }}</span>
       </footer>
+      <SeriesDialog />
     </div>
 
     <!-- Detalhes só a pedido — (i) ou menu de contexto. Abrir no clique
@@ -268,8 +271,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import SeriesBar from "./SeriesBar.vue";
-import { useSeries } from "../composables/useSeries";
-import { playedInCycle, progressOf } from "../program/series";
+import SeriesDialog from "./SeriesDialog.vue";
+import { useFolderSeries } from "../composables/useSeries";
 import draggable from "vuedraggable";
 import {
   LjButton,
@@ -390,7 +393,7 @@ function menuFor(entry: LibraryEntry): LjMenuItem[] {
       icon: ICONS.UI.INFORMATION_OUTLINE,
       action: () => openDetails(entry),
     },
-    ...seriesMenu(entry),
+    ...seriesMenuFor(entry),
   ];
 }
 
@@ -469,44 +472,18 @@ function confirmRemove(path: string): void {
 
 /* ─── Série: a pasta aberta pode guardar o histórico do que já passou ─── */
 
-const series = useSeries();
-const seriesBar = ref<{ openDialog: () => void } | null>(null);
-/** Só uma pasta de verdade vira série — "Todos" e "Favoritos" juntam várias. */
-const seriesDir = computed(() => lib.location.value);
-const seriesDoc = computed(() => series.of(seriesDir.value));
-const seriesFiles = computed(() => lib.entries.value.filter((e) => !e.isDir).map((e) => e.name));
-const seriesPlayed = computed(() => (seriesDoc.value ? playedInCycle(seriesDoc.value) : null));
-const seriesNext = computed(() =>
-  seriesDoc.value ? progressOf(seriesDoc.value, seriesFiles.value).next : null
-);
-const byName = (name: string) => lib.entries.value.find((e) => e.name === name && !e.isDir) ?? null;
-
-/** Data em que o vídeo passou neste ciclo da série ("24/09"), ou "" se não passou. */
-function playedOf(entry: LibraryEntry): string {
-  const play = entry.isDir ? null : seriesPlayed.value?.get(entry.name);
-  return play
-    ? new Date(play.at).toLocaleDateString(locale.value, { day: "2-digit", month: "2-digit" })
-    : "";
-}
-
-function seriesMenu(entry: LibraryEntry): LjMenuItem[] {
-  const dir = seriesDir.value;
-  if (!dir || !seriesDoc.value || entry.isDir) return [];
-  return [
-    { separator: true },
-    playedOf(entry)
-      ? {
-          label: tm("series.unmark"),
-          icon: ICONS.ACTIONS.UNDO,
-          action: () => void series.unmark(dir, entry.name),
-        }
-      : {
-          label: tm("series.mark"),
-          icon: ICONS.UI.CHECK,
-          action: () => void series.markPlayed(dir, entry.name),
-        },
-  ];
-}
+const {
+  series,
+  dir: seriesDir,
+  doc: seriesDoc,
+  progress: seriesProgress,
+  playedOn,
+  menuFor: seriesMenuFor,
+} = useFolderSeries({ location: lib.location, entries: lib.entries }, { locale, tm });
+const byName = (name: string) =>
+  lib.entries.value.find(
+    (e) => e.name === name && !e.isDir && e.path.startsWith(seriesDir.value ?? "")
+  ) ?? null;
 
 const locationLabel = computed(() => {
   if (lib.source.value === ALL) return tm("library.all");
@@ -772,6 +749,9 @@ const emptyMessage = computed(() => {
 }
 
 .pm-file__series {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   position: absolute;
   bottom: 4px;
   left: 4px;
@@ -793,17 +773,8 @@ const emptyMessage = computed(() => {
 }
 
 .pm-files__make-series {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
   flex-shrink: 0;
-  padding: 0 4px;
-  border: none;
-  background: none;
   color: var(--lj-orange);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
 }
 
 .pm-file__return {

@@ -1701,6 +1701,8 @@ const _self = {
         font_size_pct: s.tamanho_letra,
         font_size_aux_pct: s.tamanho_letra_aux,
         name: song.nome || "",
+        // Quem acompanha o que está no ar (modo apresentação) reconhece a música pelo UUID.
+        custom_song_id: song.id,
       });
     }
     if (!slidesArray.length) {

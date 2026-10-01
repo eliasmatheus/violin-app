@@ -2,6 +2,8 @@
 export interface SeriesVersion {
   /** Nome do arquivo na pasta (o principal ou a cópia). */
   name: string;
+  /** É o arquivo principal, não uma cópia. */
+  main: boolean;
   modifiedAt: string;
   plays: number;
   lastPlay: { file: string; at: string } | null;
@@ -29,6 +31,15 @@ export interface SeriesDoc {
   name: string;
   onEnd: "restart" | "suggest_new";
   cycle: number;
-  updatedAt: string;
+  /** Quando as configurações mudaram — registrar um vídeo não mexe nisto. */
+  settingsAt: string;
   plays: SeriesPlay[];
 }
+
+/** O que o renderer pede ao main: uma mudança, aplicada sobre o histórico do disco. */
+export type SeriesOp =
+  | { type: "create"; name: string; onEnd: SeriesDoc["onEnd"] }
+  | { type: "settings"; name?: string; onEnd?: SeriesDoc["onEnd"]; active?: boolean }
+  | { type: "play"; file: string }
+  | { type: "undo"; file: string }
+  | { type: "restart"; fromCycle: number };
