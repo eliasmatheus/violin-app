@@ -5,7 +5,7 @@
         <LjCard>
           <div class="about-hero">
             <div class="about-logo">
-              <LjLogo :size="72" />
+              <LjLogo :size="96" />
             </div>
             <div class="about-hero-text">
               <h1 class="about-product">
@@ -53,7 +53,7 @@
       </a>
       <a
         class="about-link"
-        href="https://app.louvorja.com.br"
+        href="https://app-violin.louvorja.com.br/"
         target="_blank"
         rel="noopener noreferrer"
       >
@@ -224,22 +224,17 @@ onMounted(loadDBVersion);
   display: flex;
   align-items: center;
   gap: var(--lj-space-6);
-  padding-bottom: var(--lj-space-7);
-  border-bottom: 1px solid var(--lj-surface-border);
-  margin-bottom: var(--lj-space-7);
 }
 
 .about-logo {
   width: 96px;
   height: 96px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--lj-navy-darker) 0%, var(--lj-navy) 100%);
+  background: var(--lj-white);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 4px 16px var(--lj-navy-alpha-30);
-  padding: var(--lj-space-5);
 }
 
 /* Display do hero: a escala tipográfica dos tokens para em 22px
@@ -260,10 +255,6 @@ onMounted(loadDBVersion);
   font-size: var(--lj-text-base);
   color: var(--lj-text-muted);
   margin: var(--lj-space-2) 0 0;
-}
-
-.about-info {
-  margin-bottom: var(--lj-space-7);
 }
 
 .about-info-row {
