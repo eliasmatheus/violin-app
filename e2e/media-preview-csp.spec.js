@@ -1,10 +1,13 @@
 import { test, expect } from "@playwright/test";
+import { Buffer } from "node:buffer";
 import process from "node:process";
 import { loadConfigFromFile } from "vite";
 
 test.use({ bypassCSP: false, serviceWorkers: "block" });
 
-test("a CSP de produção web permite imagens importadas como URLs de objeto", async ({ page }) => {
+test("a CSP de produção web permite imagens importadas e fotos dos contribuidores", async ({
+  page,
+}) => {
   const previousTarget = process.env.VITE_TARGET;
   let html;
   try {
@@ -42,4 +45,42 @@ test("a CSP de produção web permite imagens importadas como URLs de objeto", a
   });
 
   expect(result).toEqual({ loaded: true, width: 1, height: 1 });
+
+  const imageBytes = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9xkAAAAASUVORK5CYII=",
+    "base64"
+  );
+  await page.route(
+    /^https:\/\/(?:avatars\.githubusercontent\.com|www\.google\.com|t[0-3]\.gstatic\.com)\//,
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        headers: { "access-control-allow-origin": "*" },
+        body: imageBytes,
+      });
+    }
+  );
+
+  const externalImagesLoaded = await page.evaluate(async () => {
+    const urls = [
+      "https://avatars.githubusercontent.com/louvorja?s=144",
+      "https://www.google.com/s2/favicons?domain=example.com&sz=128",
+      ...[0, 1, 2, 3].map((shard) => `https://t${shard}.gstatic.com/faviconV2`),
+    ];
+    return Promise.all(
+      urls.map(
+        (url) =>
+          new Promise((resolve) => {
+            const image = new Image();
+            if (url.includes("avatars.githubusercontent.com")) image.crossOrigin = "anonymous";
+            image.onload = () => resolve(image.naturalWidth === 1);
+            image.onerror = () => resolve(false);
+            image.src = url;
+            document.body.append(image);
+          })
+      )
+    );
+  });
+  expect(externalImagesLoaded).toEqual([true, true, true, true, true, true]);
 });
