@@ -19,8 +19,21 @@
       <ModuleFormatDrawer v-model="show_format" :module-id="'clock'" :manifest="manifest" />
       <div ref="container" class="clock-stage" :style="rootStyle">
         <img v-if="bgImage" :src="bgImage" class="clock-bg-img" :style="imageStyle" alt="" />
-        <div class="clock-time" :style="textStyle">{{ time }}</div>
-        <div v-if="date" class="clock-date" :style="referenceStyle">{{ date }}</div>
+        <div
+          v-fit-clock-line="textStyle.fontSize"
+          class="clock-time"
+          :style="[textStyle, { lineHeight: 1 }]"
+        >
+          {{ time }}
+        </div>
+        <div
+          v-if="date"
+          v-fit-clock-line="referenceStyle.fontSize"
+          class="clock-date"
+          :style="[referenceStyle, { lineHeight: 1.1 }]"
+        >
+          {{ date }}
+        </div>
       </div>
     </div>
   </ModuleContainer>
@@ -42,6 +55,8 @@ import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { useModuleProjection } from "@/composables/useModuleProjection";
 import { useModuleFormat } from "@/composables/useModuleFormat";
 import { useModuleBodyStyle } from "@/composables/useModuleBodyStyle";
+import { DEFAULT_CLOCK_DATE_FORMAT, formatClockDate } from "../formatClockDate";
+import { vFitClockLine } from "../vFitClockLine";
 
 const { locale } = useI18n();
 const { fmt, show_format } = useModuleFormat("clock", manifest);
@@ -63,22 +78,13 @@ let timer = null;
 
 const tm = (key) => moduleContainer.value?.tm(key) || key;
 
-const DATE_FORMATS = {
-  long: { weekday: "long", day: "2-digit", month: "long", year: "numeric" },
-  medium: { day: "2-digit", month: "long", year: "numeric" },
-  short: { day: "2-digit", month: "2-digit", year: "numeric" },
-  weekday: { weekday: "long", day: "2-digit", month: "long" },
-  month_year: { month: "long", year: "numeric" },
-  weekday_only: { weekday: "long" },
-};
-
 // Lê configs do UserData (escritas pelo FormatPanel ou pelas actions da ribbon).
 function read() {
   return {
     is24h: (fmt.hour_cycle ?? "24h") === "24h",
     showSeconds: (fmt.time_format ?? "hh:mm:ss") === "hh:mm:ss",
-    showDate: fmt.show_date !== false,
-    dateFormat: fmt.date_format ?? "long",
+    showDate: fmt.show_date === true,
+    dateFormat: fmt.date_format ?? DEFAULT_CLOCK_DATE_FORMAT,
   };
 }
 
@@ -93,10 +99,9 @@ function formatTime(now) {
 }
 
 function formatDate(now) {
-  const { showDate, dateFormat } = read();
+  const { showDate, dateFormat, showSeconds } = read();
   if (!showDate) return "";
-  const opts = DATE_FORMATS[dateFormat] || DATE_FORMATS.long;
-  return now.toLocaleDateString(localeTag(locale.value), opts);
+  return formatClockDate(now, localeTag(locale.value), dateFormat, showSeconds);
 }
 
 // Quando user muda qualquer config do clock (FormatPanel ou ribbon),
@@ -190,13 +195,15 @@ onBeforeUnmount(() => {
   font-weight: 300;
   letter-spacing: 0.1em;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .clock-date {
   position: relative;
   z-index: 1;
-  margin-top: 0.4em;
+  margin-top: 0.15em;
   font-weight: 300;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 .clock-bg-img {
   position: absolute;

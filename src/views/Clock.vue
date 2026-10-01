@@ -1,7 +1,20 @@
 <template>
   <div ref="container" class="clock-fullscreen" :style="rootStyle">
-    <div class="clock-time" :style="textStyle">{{ time }}</div>
-    <div v-if="date" class="clock-date" :style="referenceStyle">{{ date }}</div>
+    <div
+      v-fit-clock-line="textStyle.fontSize"
+      class="clock-time"
+      :style="[textStyle, { lineHeight: 1 }]"
+    >
+      {{ time }}
+    </div>
+    <div
+      v-if="date"
+      v-fit-clock-line="referenceStyle.fontSize"
+      class="clock-date"
+      :style="[referenceStyle, { lineHeight: 1.1 }]"
+    >
+      {{ date }}
+    </div>
   </div>
 </template>
 
@@ -13,6 +26,8 @@ import UserData from "@/helpers/UserData";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { useModuleBodyStyle } from "@/composables/useModuleBodyStyle";
+import { DEFAULT_CLOCK_DATE_FORMAT, formatClockDate } from "@/modules/clock/formatClockDate";
+import { vFitClockLine } from "@/modules/clock/vFitClockLine";
 
 const { locale } = useI18n();
 const { rootStyle, textStyle, referenceStyle, container } = useModuleBodyStyle("clock");
@@ -21,17 +36,8 @@ const date = ref("");
 const timer = ref(null);
 const show24h = ref(null);
 const showSeconds = ref(null);
-const showDate = ref(true);
-const dateFormat = ref("long");
-
-const DATE_FORMATS = {
-  long: { weekday: "long", day: "2-digit", month: "long", year: "numeric" },
-  medium: { day: "2-digit", month: "long", year: "numeric" },
-  short: { day: "2-digit", month: "2-digit", year: "numeric" },
-  weekday: { weekday: "long", day: "2-digit", month: "long" },
-  month_year: { month: "long", year: "numeric" },
-  weekday_only: { weekday: "long" },
-};
+const showDate = ref(false);
+const dateFormat = ref(DEFAULT_CLOCK_DATE_FORMAT);
 
 const _tick = ref(0);
 
@@ -46,8 +52,9 @@ function readClockOptions() {
   show24h.value = savedHourCycle != null ? savedHourCycle === "24h" : params.get("h24") !== "0";
   showSeconds.value =
     savedTimeFormat != null ? savedTimeFormat === "hh:mm:ss" : params.get("sec") !== "0";
-  showDate.value = savedShowDate !== false;
-  dateFormat.value = typeof savedDateFormat === "string" ? savedDateFormat : "long";
+  showDate.value = savedShowDate === true;
+  dateFormat.value =
+    typeof savedDateFormat === "string" ? savedDateFormat : DEFAULT_CLOCK_DATE_FORMAT;
 }
 
 function _onKey(e) {
@@ -67,9 +74,7 @@ function tick() {
     ...(showSeconds.value ? { second: "2-digit" } : {}),
     hour12: !show24h.value,
   });
-  date.value = showDate.value
-    ? now.toLocaleDateString(tag, DATE_FORMATS[dateFormat.value] || DATE_FORMATS.long)
-    : "";
+  date.value = showDate.value ? formatClockDate(now, tag, dateFormat.value, showSeconds.value) : "";
 }
 
 useBroadcastListener(BROADCAST_TYPE.MODULE_FORMAT_CHANGED, (payload) => {
@@ -119,11 +124,12 @@ onBeforeUnmount(() => {
   letter-spacing: 0.1em;
   font-variant-numeric: tabular-nums;
   color: #fff;
-  line-height: 1;
+  white-space: nowrap;
 }
 .clock-date {
   font-weight: 300;
   letter-spacing: 0.05em;
-  margin-top: 0.4em;
+  margin-top: 0.15em;
+  white-space: nowrap;
 }
 </style>

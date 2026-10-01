@@ -410,7 +410,7 @@ function setSelectValue(btn: RibbonButton, val: string | number): void {
 
 function getCheckValue(btn: RibbonButton): boolean {
   if (!btn.optionKey) return false;
-  // Fallback para o defaultValue declarado (ex: clock show_date default true)
+  // Usa o defaultValue declarado quando a preferência não foi salva.
   const v = $userdata.get<boolean | null>(btn.optionKey, null);
   if (v === null) return btn.defaultValue === true;
   return v;
