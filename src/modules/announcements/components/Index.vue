@@ -349,6 +349,7 @@
 import { computed, onMounted, onBeforeUnmount, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import draggable from "vuedraggable";
+import $alert from "@/helpers/Alert";
 import {
   ContextMenuContent,
   ContextMenuItem,
@@ -555,7 +556,7 @@ function addAnnouncement(): void {
 }
 
 async function removeAnnouncement(a: Announcement): Promise<void> {
-  if (!confirm(tm("delete_confirm"))) return;
+  if (!(await $alert.confirm(tm("delete_confirm")))) return;
   await $idb.del(TABLE, a.id);
   announcements.value = announcements.value.filter((x) => x.id !== a.id);
   if (selectedId.value === a.id) {

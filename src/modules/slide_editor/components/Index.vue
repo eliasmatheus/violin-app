@@ -342,7 +342,7 @@
                 class="se-select"
                 @change="markDirty"
               >
-                <option v-for="p in 9" :key="p" :value="p">{{ t(`positions.${p}`) }}</option>
+                <option v-for="p in 9" :key="p" :value="p">{{ tm(`positions.${p}`) }}</option>
               </select>
             </div>
           </div>
@@ -974,7 +974,7 @@ async function onLoadSlja(e) {
     current.value = 0;
     dirty.value = false;
   } catch (err) {
-    alert(tm("data.invalid_file") + "\n\n" + (err?.message || err));
+    $alert.message(tm("data.invalid_file") + "\n\n" + (err?.message || err));
   }
 }
 
@@ -1115,7 +1115,7 @@ async function downloadSlja(name) {
     a.click();
     URL.revokeObjectURL(url);
   } catch (err) {
-    alert(tm("data.invalid_file") + "\n\n" + (err?.message || err));
+    $alert.message(tm("data.invalid_file") + "\n\n" + (err?.message || err));
   }
 }
 

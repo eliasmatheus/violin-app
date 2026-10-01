@@ -102,7 +102,11 @@ function onOpenAutoFocus(event: Event): void {
 // estas saídas, Escape e clique fora fechavam assim mesmo — e o chamador
 // perdia o efeito colateral que esperava rodar no fechamento.
 function onDismiss(event: Event): void {
-  if (props.persistent) event.preventDefault();
+  // O alerta é teleportado para o <body>: para a Reka, responder a ele é um
+  // clique fora, e o diálogo fecharia junto com a pergunta que ele abriu.
+  const target = (event as CustomEvent).detail?.originalEvent?.target;
+  const fromAlert = target instanceof Element && !!target.closest(".alert-overlay");
+  if (props.persistent || fromAlert) event.preventDefault();
 }
 </script>
 

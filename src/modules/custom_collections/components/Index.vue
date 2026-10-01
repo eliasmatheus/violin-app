@@ -400,7 +400,7 @@ async function renameSong(s) {
 }
 
 async function confirmDeleteSong(s) {
-  if (!confirm(tm("data.confirm_delete_song"))) return;
+  if (!(await $alert.confirm(tm("data.confirm_delete_song")))) return;
   await CustomSongs.deleteSong(s.id);
   await loadAll();
 }
@@ -559,7 +559,7 @@ async function renameCollection(c) {
 }
 
 async function confirmDeleteCollection(c) {
-  if (!confirm(tm("data.confirm_delete_collection"))) return;
+  if (!(await $alert.confirm(tm("data.confirm_delete_collection")))) return;
   await CustomSongs.deleteCollection(c.id);
   if (selectedCollectionId.value === c.id) selectedCollectionId.value = null;
   await loadAll();

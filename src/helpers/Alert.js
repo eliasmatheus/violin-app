@@ -4,6 +4,13 @@ import $dev from "@/helpers/Dev";
 import $appdata from "@/helpers/AppData";
 import { useAppStore } from "@/stores/appStore";
 
+function escapeHtml(text) {
+  return String(text ?? "").replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+  );
+}
+
 export default {
   show(data, callback = function () {}) {
     data = this.getData(data);
@@ -114,6 +121,21 @@ export default {
         callback(resp, ret);
       }
     );
+  },
+
+  /**
+   * Substituem window.confirm/alert: no Electron para Windows o diálogo nativo
+   * deixa os campos de texto sem teclado até a janela perder e retomar o foco.
+   * O texto é escapado porque o layout o renderiza com v-html.
+   */
+  confirm(text) {
+    return new Promise((resolve) => {
+      this.yesno({ text: escapeHtml(text), translate: false }, (value) => resolve(value === "yes"));
+    });
+  },
+
+  message(text) {
+    this.info({ text: escapeHtml(text).replace(/\n/g, "<br>"), translate: false });
   },
 
   getData(data) {

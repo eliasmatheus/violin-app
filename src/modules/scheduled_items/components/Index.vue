@@ -759,7 +759,7 @@ async function confirmCategoryDialog(): Promise<void> {
 }
 
 async function removeCategory(cat: ScheduledCategory): Promise<void> {
-  if (!confirm(tm("delete_category"))) return;
+  if (!(await $alert.confirm(tm("delete_category")))) return;
   if (String(selectedCategoryId.value) === String(cat.id)) selectedCategoryId.value = "";
   await ScheduledStore.deleteCategory(cat.id);
   await refresh();
@@ -1068,7 +1068,7 @@ async function saveEntry(): Promise<void> {
 
 async function removeEntry(): Promise<void> {
   if (!entryId.value) return;
-  if (!confirm(tm("remove_confirm"))) return;
+  if (!(await $alert.confirm(tm("remove_confirm")))) return;
   await ScheduledStore.deleteItem(entryId.value);
   entryId.value = null;
   entryDialog.value = false;

@@ -160,6 +160,7 @@ import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { LjButton, LjDialog, LjEmpty, LjField, LjIcon, LjInput } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
+import $alert from "@/helpers/Alert";
 import { MediaFile } from "@/types/Media";
 
 export interface CategoryFileData {
@@ -244,14 +245,14 @@ function openEditCategory(cat: CategoryFileData): void {
   showForm.value = true;
 }
 
-function deleteCategory(cat: CategoryFileData): void {
-  if (!window.confirm(t("shell.category.confirm_delete_category"))) return;
+async function deleteCategory(cat: CategoryFileData): Promise<void> {
+  if (!(await $alert.confirm(t("shell.category.confirm_delete_category")))) return;
   emit("delete", cat.id);
 }
 
-function deleteFromForm(): void {
+async function deleteFromForm(): Promise<void> {
   if (!editingId.value) return;
-  if (!window.confirm(t("shell.category.confirm_delete_category"))) return;
+  if (!(await $alert.confirm(t("shell.category.confirm_delete_category")))) return;
   emit("delete", editingId.value);
   showForm.value = false;
 }
