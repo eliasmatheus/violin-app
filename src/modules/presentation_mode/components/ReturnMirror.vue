@@ -45,8 +45,8 @@ const props = defineProps<{
   cleared: boolean;
   /** Próximo item do programa, quando o conteúdo no ar não tem próxima parte. */
   upNext: string;
-  /** Posição na pasta da biblioteca ("3/13"), quando o arquivo no ar veio dela. */
-  fileCounter?: string;
+  /** Posição na pasta ou na lista de vídeos ("3/12"), quando o que está no ar veio dela. */
+  queueCounter?: string;
   /** Imagem ou vídeo só no retorno — cobre a composição normal. */
   override?: { type: "image" | "video"; url: string } | null;
 }>();
@@ -87,14 +87,14 @@ const view = computed(() => {
         title: file.value?.title ?? "",
         text: file.value?.title ?? "",
         next: props.upNext,
-        counter: props.fileCounter || "1/1",
+        counter: props.queueCounter || "1/1",
       };
     case "online_video":
       return {
         title: onlineTitle.value,
         text: onlineTitle.value,
         next: props.upNext,
-        counter: "1/1",
+        counter: props.queueCounter || "1/1",
       };
     case "announcements":
       return {

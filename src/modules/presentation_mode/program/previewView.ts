@@ -1,4 +1,5 @@
 import $path from "@/helpers/Path";
+import { youtubeThumb } from "@/helpers/OnlineVideo";
 import { LiturgyItemTypeEnum } from "@/enums/LiturgyItemTypeEnum";
 import type { ProgramItem } from "@/types/Presentation";
 import type { PreviewView } from "../components/StagePreview.vue";
@@ -35,6 +36,9 @@ export function programView(item: ProgramItem): PreviewView {
 export function previewViewOf(target: Playable, item: ProgramItem | null): PreviewView | null {
   if (target.type === "program") return item ? programView(item) : null;
   if (target.type === "file") return fileView(target.entry.path, target.entry.name);
+  if (target.type === "online") {
+    return { kind: "image", title: target.title, icon: KIND_ICONS.online_video, playable: true, url: youtubeThumb(target.videoId) };
+  }
   if (target.type === "bible") {
     const { reference, text } = target.ref;
     return { kind: "text", title: reference, icon: KIND_ICONS.bible, playable: true, text, reference };

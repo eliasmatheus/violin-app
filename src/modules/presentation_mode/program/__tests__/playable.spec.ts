@@ -27,6 +27,7 @@ const signal = (s: Partial<LiveSignal>): LiveSignal => ({
   audio: false,
   songId: null,
   bibleReference: null,
+  videoId: null,
   ...s,
 });
 
@@ -90,5 +91,22 @@ describe("expectationOf + isOnAir", () => {
     const expected = expectationOf({ type: "program", itemId: "n" }, note);
     expect(isOnAir(expected, signal({ kind: "announcements" }))).toBe(true);
     expect(isOnAir(expected, signal({}))).toBe(false);
+  });
+});
+
+describe("vídeo on-line", () => {
+  const video = (videoId: string) => ({ type: "online", videoId, title: "Louvor" }) as const;
+
+  it("é o mesmo Playable pelo ID do vídeo", () => {
+    expect(samePlayable(video("dQw4w9WgXcQ"), video("dQw4w9WgXcQ"))).toBe(true);
+    expect(samePlayable(video("dQw4w9WgXcQ"), video("aaaaaaaaaaa"))).toBe(false);
+  });
+
+  it("está no ar pelo ID, embutido ou tocando como arquivo", () => {
+    const expected = expectationOf(video("dQw4w9WgXcQ"), null);
+    expect(isOnAir(expected, signal({ kind: "online_video", videoId: "dQw4w9WgXcQ" }))).toBe(true);
+    expect(isOnAir(expected, signal({ kind: "file", videoId: "dQw4w9WgXcQ" }))).toBe(true);
+    expect(isOnAir(expected, signal({ kind: "file", videoId: "aaaaaaaaaaa" }))).toBe(false);
+    expect(isOnAir(expected, signal({ kind: "file" }))).toBe(false);
   });
 });

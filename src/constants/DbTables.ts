@@ -9,8 +9,9 @@ export const DB_NAME = "louvorja-violin";
  *
  * v1 → v2: adicionada tabela "devices" (dispositivos autorizados)
  * v2 → v3: adicionada tabela "presentation_mode.programs" (programas do culto no navegador)
+ * v3 → v4: adicionada tabela "presentation_mode.online" (vídeos, playlists e canais favoritos)
  */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 /**
  * Nomes de todas as tabelas do banco IndexedDB unificado `louvorja`.
@@ -73,6 +74,8 @@ export const DB_TABLE = {
   DEVICES: "devices",
   // ─── Modo apresentação: um programa do culto por data (DocStore) ───
   PRESENTATION_PROGRAMS: ModuleEnum.PRESENTATION_MODE + ".programs",
+  // ─── Modo apresentação: vídeos, playlists e canais do YouTube favoritos (DocStore) ───
+  PRESENTATION_ONLINE: ModuleEnum.PRESENTATION_MODE + ".online",
   // ─── Chat ───
   CHAT_MESSAGES: "chat.messages",
 } as const;

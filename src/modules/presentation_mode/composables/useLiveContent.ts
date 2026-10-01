@@ -2,6 +2,7 @@ import { computed, reactive, ref } from "vue";
 import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useSlides } from "@/composables/useSlides";
+import { videoIdFromPlaybackUrl } from "@/helpers/OnlineVideo";
 
 /**
  * O que está na tela principal agora, para os espelhos do módulo.
@@ -37,6 +38,8 @@ const _stamps = reactive<Partial<Record<LiveKind, number>>>({});
 const _bible = ref<{ text: string; reference: string; nextReference: string } | null>(null);
 const _file = ref<LiveFile | null>(null);
 const _onlineTitle = ref("");
+/** O vídeo do YouTube no ar — embutido, transmitido ou já baixado. */
+const _onlineVideoId = ref<string | null>(null);
 const _announcements = ref<{ slides: AnnouncementSlide[]; index: number } | null>(null);
 let _seq = 0;
 let _installed = false;
@@ -75,6 +78,7 @@ function _handle(type: string, payload: Record<string, unknown> | null | undefin
     case BROADCAST_TYPE.FILE_PROJECTION:
       if (p.action === "clear" || p.active === false || !p.url) {
         _file.value = null;
+        _onlineVideoId.value = null;
         _off("file");
       } else {
         _file.value = {
@@ -83,11 +87,13 @@ function _handle(type: string, payload: Record<string, unknown> | null | undefin
           title: String(p.title ?? ""),
           playback_id: p.playback_id ? String(p.playback_id) : undefined,
         };
+        _onlineVideoId.value = videoIdFromPlaybackUrl(String(p.url));
         _on("file");
       }
       break;
     case BROADCAST_TYPE.ONLINE_VIDEO_PROJECTION:
       _onlineTitle.value = String(p.title ?? "");
+      _onlineVideoId.value = videoIdFromPlaybackUrl(String(p.url ?? ""));
       _on("online_video");
       break;
     case BROADCAST_TYPE.ANNOUNCEMENTS_STATE:
@@ -110,6 +116,7 @@ function _handle(type: string, payload: Record<string, unknown> | null | undefin
     case BROADCAST_TYPE.MEDIA_CLOSE:
       _file.value = null;
       _onlineTitle.value = "";
+      _onlineVideoId.value = null;
       _off("music", "file", "online_video");
       break;
   }
@@ -147,6 +154,7 @@ export function useLiveContent() {
     bible: _bible,
     file: _file,
     onlineTitle: _onlineTitle,
+    onlineVideoId: _onlineVideoId,
     announcement: currentAnnouncement,
   };
 }

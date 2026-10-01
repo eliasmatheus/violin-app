@@ -59,6 +59,15 @@
       @add-song="(s: LibrarySong, m: MusicMode) => emit('add-song', s, m)"
     />
 
+    <LibraryOnline
+      v-else-if="tab === 'online'"
+      :live-video-id="liveVideoId"
+      @preview="(v: OnlineEntry) => emit('preview-online', v)"
+      @play="(v: OnlineEntry) => emit('play-online', v)"
+      @add="(v: OnlineEntry) => emit('add-online', v)"
+      @stop="emit('stop')"
+    />
+
     <LibraryBible
       v-else-if="tab === 'bible'"
       :live="liveBible"
@@ -312,6 +321,8 @@ import { computed, onMounted, ref, watch } from "vue";
 import draggable from "vuedraggable";
 import LibraryMusic from "./LibraryMusic.vue";
 import LibraryBible from "./LibraryBible.vue";
+import LibraryOnline from "./LibraryOnline.vue";
+import type { OnlineEntry } from "../composables/useOnlineLibrary";
 import type { ProgramBibleRef } from "@/types/Presentation";
 import type { LibrarySong } from "./LibrarySongRow.vue";
 import type { MusicMode } from "../program/musicModes";
@@ -346,6 +357,8 @@ const props = defineProps<{
   returnPath: string | null;
   /** Trecho da Bíblia no ar, para marcar os versículos na aba Bíblia. */
   liveBible: ProgramBibleRef | null;
+  /** Vídeo do YouTube que o módulo pôs no ar. */
+  liveVideoId: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -367,6 +380,9 @@ const emit = defineEmits<{
   "preview-bible": [ref: ProgramBibleRef];
   "play-bible": [ref: ProgramBibleRef];
   "add-bible": [ref: ProgramBibleRef];
+  "preview-online": [video: OnlineEntry];
+  "play-online": [video: OnlineEntry];
+  "add-online": [video: OnlineEntry];
 }>();
 
 const { t, tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
@@ -375,6 +391,7 @@ const TABS = [
   { id: "files", label: "library.files", icon: ICONS.UI.FOLDER_OPEN },
   { id: "musics", label: "library.musics", icon: ICONS.MUSIC.MUSIC },
   { id: "bible", label: "library.bible", icon: ICONS.MODULES.BIBLE },
+  { id: "online", label: "library.online", icon: ICONS.MEDIA.YOUTUBE },
 ] as const;
 export type LibraryTab = (typeof TABS)[number]["id"];
 /** Controlada de fora: o ribbon também troca a aba. */

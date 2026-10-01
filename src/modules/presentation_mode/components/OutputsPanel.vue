@@ -34,7 +34,10 @@
 
     <section class="pm-outputs__section">
       <header class="pm-outputs__label">
-        <span class="pm-outputs__live"><span class="pm-outputs__dot" />{{ tm("program.live") }}</span>
+        <span class="pm-outputs__live">
+          <span class="pm-outputs__dot" />
+          {{ tm("program.live") }}
+        </span>
         <span class="pm-outputs__where">{{ screenLabel("outputs.main_screen", mainMonitor) }}</span>
       </header>
       <LiveMirror :cleared="cleared" />
@@ -85,7 +88,8 @@
     <section class="pm-outputs__section">
       <header class="pm-outputs__label">
         <span class="pm-outputs__title">
-          <LjIcon :icon="ICONS.PROJECTION.RETURN" :size="12" />{{ tm("outputs.stage_return") }}
+          <LjIcon :icon="ICONS.PROJECTION.RETURN" :size="12" />
+          {{ tm("outputs.stage_return") }}
         </span>
         <span class="pm-outputs__where">{{ monitorLabel(stageMonitor) }}</span>
         <LjButton
@@ -102,7 +106,7 @@
       <ReturnMirror
         :cleared="cleared"
         :up-next="upNext?.title ?? ''"
-        :file-counter="fileCounter"
+        :queue-counter="queueCounter"
         :override="returnOverride"
       />
     </section>
@@ -147,7 +151,7 @@ defineProps<{
   canNavigate: boolean;
   /** Pisca "A seguir" quando o Próximo não tem mais parte para avançar. */
   flash: boolean;
-  fileCounter?: string;
+  queueCounter?: string;
 }>();
 
 const emit = defineEmits<{
@@ -160,7 +164,8 @@ const emit = defineEmits<{
 }>();
 
 const { tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
-const { cleared, showing, busy, mainMonitor, stageMonitor, start, stop, toggleCleared } = useOutputs();
+const { cleared, showing, busy, mainMonitor, stageMonitor, start, stop, toggleCleared } =
+  useOutputs();
 const { identify, isIdentifying } = useDisplays();
 
 function monitorLabel(n: number | null): string {

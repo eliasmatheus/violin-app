@@ -47,6 +47,24 @@ export function fileItem(entry: LibraryEntry, meta: MediaMeta | null): ProgramIt
   };
 }
 
+/** Vídeo do YouTube como item do programa: o motor da liturgia o abre pelo link. */
+export function onlineItem(video: { id: string; title: string; duration: number | null; channel?: string }): ProgramItem {
+  const seconds = video.duration ?? 0;
+  return {
+    id: newId(),
+    kind: "online_video",
+    title: video.title,
+    subtitle: video.channel || undefined,
+    plannedMinutes: seconds > 0 ? Math.ceil(seconds / 60) : 5,
+    source: liturgyItem({
+      id: newId(),
+      tipo: LiturgyItemTypeEnum.VIDEO_ONLINE,
+      url: `https://www.youtube.com/watch?v=${video.id}`,
+      item: video.title,
+    }),
+  };
+}
+
 /** Trecho da Bíblia como item do programa: o título é a referência. */
 export function bibleItem(ref: ProgramBibleRef): ProgramItem {
   return {
