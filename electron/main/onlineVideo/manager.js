@@ -656,16 +656,21 @@ function createManager(cfg) {
     for (const resolution of resolutions.values()) resolution.controller.abort();
   }
 
-  /** Os links diretos do YouTube (vídeo e áudio) que o yt-dlp descobre em ~6 s; um pedido só por vídeo. */
-  /** Links guardados pelo `prefetch` que ainda valem por um bom tempo; null se não há. */
+  /** Links do `prefetch` que servem para tocar `maxHeight` até o fim (não vencem antes da margem). */
+  function usablePrefetch(hit, maxHeight) {
+    const fresh = !hit.links.expiresAt || hit.links.expiresAt - now() > PREFETCH_MARGIN_MS;
+    return hit.maxHeight === maxHeight && fresh;
+  }
+
+  /** Os links guardados pelo `prefetch`, uma vez só; null se não há ou não servem. */
   function takePrefetched(id, maxHeight) {
     const hit = prefetched.get(id);
     if (!hit) return null;
     prefetched.delete(id);
-    const fresh = !hit.links.expiresAt || hit.links.expiresAt - now() > PREFETCH_MARGIN_MS;
-    return hit.maxHeight === maxHeight && fresh ? hit.links : null;
+    return usablePrefetch(hit, maxHeight) ? hit.links : null;
   }
 
+  /** Os links diretos do YouTube (vídeo e áudio) que o yt-dlp descobre em ~2 s; um pedido só por vídeo. */
   function resolveLinks(id, opts) {
     const ready = takePrefetched(id, clampHeight(opts.maxHeight));
     if (ready) return Promise.resolve({ ok: true, id, ...ready });
@@ -1088,9 +1093,7 @@ function createManager(cfg) {
     if (store.has(id) || jobs.has(id) || sessions.has(id)) return { ok: true, skipped: "ready" };
     const maxHeight = clampHeight(opts.maxHeight);
     const hit = prefetched.get(id);
-    if (hit && hit.maxHeight === maxHeight && (!hit.links.expiresAt || hit.links.expiresAt - now() > PREFETCH_MARGIN_MS)) {
-      return { ok: true, cached: true };
-    }
+    if (hit && usablePrefetch(hit, maxHeight)) return { ok: true, cached: true };
     const res = await resolveLinks(id, { maxHeight });
     if (!res.ok) return res;
     // Enquanto resolvia, o operador pode ter mandado tocar — aí a sessão já existe.

@@ -1,13 +1,15 @@
 import { computed, ref, shallowRef } from "vue";
 import $docs from "@/helpers/DocStore";
+import $idb from "@/helpers/IndexedDB";
 import Telemetry from "@/helpers/Telemetry";
-import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
 import { DB_TABLE } from "@/constants/DbTables";
 import {
   collectionsAvailable,
   listCollection,
+  youtubeOembed,
   youtubeSourceFromUrl,
   type YouTubeCollectionEntry,
+  type YouTubeCollectionSource,
 } from "@/helpers/OnlineVideo";
 import { newId } from "./useProgram";
 
@@ -18,29 +20,37 @@ import { newId } from "./useProgram";
  * duas listas vêm aos pedaços, conforme o operador rola até o fim.
  *
  * Cada consulta ao YouTube passa pelo yt-dlp e leva segundos. Por isso a
- * primeira página fica guardada no favorito: abrir a lista é imediato, e ela
- * só é consultada de novo quando a cópia envelhece ou o operador pede.
+ * primeira página de cada lista fica guardada em cache: abrir a lista é
+ * imediato, e ela só é consultada de novo quando a cópia envelhece ou o
+ * operador pede. O cache mora no IndexedDB, não no documento do favorito —
+ * a pasta de documentos costuma ser sincronizada, e a cópia muda o tempo todo.
  */
 
-export type OnlineFavoriteKind = "video" | "playlist" | "channel";
-
-export interface OnlineFavorite {
+interface FavoriteBase {
   id: string;
-  kind: OnlineFavoriteKind;
-  /** Vídeo: o ID de 11 caracteres. Playlist: o `list=`. Canal: "UC…" ou "@nome". */
-  ytId: string;
   title: string;
   channel?: string;
-  /** Avatar do canal. */
+  addedAt: string;
+  order: number;
+}
+
+export interface OnlineVideoFavorite extends FavoriteBase {
+  kind: "video";
+  /** O ID de 11 caracteres. */
+  ytId: string;
+  duration?: number | null;
+}
+
+export interface OnlineCollectionFavorite extends FavoriteBase {
+  kind: YouTubeCollectionSource["kind"];
+  /** Playlist: o `list=`. Canal: "UC…" ou "@nome". */
+  ytId: string;
   thumbnail?: string | null;
   /** Playlist: o vídeo cuja capa a representa (o primeiro dela). */
   coverVideoId?: string;
-  duration?: number | null;
-  addedAt: string;
-  order: number;
-  /** Playlist e canal: a primeira página da última consulta. */
-  snapshot?: { entries: OnlineEntry[]; hasMore: boolean; fetchedAt: string };
 }
+
+export type OnlineFavorite = OnlineVideoFavorite | OnlineCollectionFavorite;
 
 /** Um vídeo listado na aba — favorito solto ou de uma playlist/canal aberto. */
 export interface OnlineEntry {
@@ -50,10 +60,19 @@ export interface OnlineEntry {
   channel?: string;
 }
 
+/** A primeira página da última consulta de uma playlist/canal, pelo id do favorito. */
+interface PageCache {
+  id: string;
+  entries: OnlineEntry[];
+  hasMore: boolean;
+  fetchedAt: string;
+}
+
 /** O que está aberto: os vídeos soltos, ou uma playlist/canal favorito. */
 export const VIDEOS = "__videos__";
 
 const TABLE = DB_TABLE.PRESENTATION_ONLINE;
+const CACHE = DB_TABLE.PRESENTATION_ONLINE_CACHE;
 const PAGE = 50;
 /** Depois disto a cópia guardada é mostrada, mas a lista é consultada de novo. */
 const STALE_MS = 30 * 60 * 1000;
@@ -71,15 +90,13 @@ let generation = 0;
 /** Lista de onde saiu o vídeo no ar: Anterior/Próximo andam por ela. */
 const queue = shallowRef<{ entries: OnlineEntry[]; index: number } | null>(null);
 
-function sorted(list: OnlineFavorite[]): OnlineFavorite[] {
-  return [...list].sort((a, b) => a.order - b.order);
-}
+const isCollection = (f: OnlineFavorite): f is OnlineCollectionFavorite => f.kind !== "video";
 
 function ensureLoaded(): Promise<void> {
   loaded ??= $docs
     .getAll<OnlineFavorite>(TABLE)
     .then((docs) => {
-      favorites.value = sorted(docs);
+      favorites.value = [...docs].sort((a, b) => a.order - b.order);
       if (openId.value === VIDEOS) entries.value = videoEntries();
     })
     .catch((e: unknown) => {
@@ -89,29 +106,32 @@ function ensureLoaded(): Promise<void> {
   return loaded;
 }
 
-const videos = computed(() => favorites.value.filter((f) => f.kind === "video"));
-const collections = computed(() => favorites.value.filter((f) => f.kind !== "video"));
-const openFavorite = computed(() => favorites.value.find((f) => f.id === openId.value) ?? null);
+const videos = computed(() => favorites.value.filter((f): f is OnlineVideoFavorite => f.kind === "video"));
+const collections = computed(() => favorites.value.filter(isCollection));
+const openFavorite = computed(() => collections.value.find((f) => f.id === openId.value) ?? null);
 
 function videoEntries(): OnlineEntry[] {
-  return favorites.value
-    .filter((f) => f.kind === "video")
-    .map((f) => ({ id: f.ytId, title: f.title, duration: f.duration ?? null, channel: f.channel }));
+  return videos.value.map((f) => ({ id: f.ytId, title: f.title, duration: f.duration ?? null, channel: f.channel }));
 }
 
-async function oembed(videoId: string): Promise<{ title: string; channel: string } | null> {
+function toEntries(list: YouTubeCollectionEntry[], channel?: string): OnlineEntry[] {
+  return list.map((e) => ({ id: e.id, title: e.title, duration: e.duration, channel }));
+}
+
+function sourceOf(fav: OnlineCollectionFavorite): YouTubeCollectionSource {
+  return { kind: fav.kind, id: fav.ytId };
+}
+
+function writeCache(id: string, list: OnlineEntry[], more: boolean): void {
+  const page: PageCache = { id, entries: list.slice(0, PAGE), hasMore: more, fetchedAt: new Date().toISOString() };
+  void $idb.put(CACHE, page).catch((e: unknown) => {
+    Telemetry.captureException(e, { source: "presentation_mode.online.cache" });
+  });
+}
+
+async function readCache(id: string): Promise<PageCache | null> {
   try {
-    const watch = `https://www.youtube.com/watch?v=${videoId}`;
-    const res = await fetchWithTimeout(
-      `https://www.youtube.com/oembed?url=${encodeURIComponent(watch)}&format=json`,
-      { timeout: NET_TIMEOUT.QUICK, source: "youtube-oembed", thirdParty: true }
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as { title?: unknown; author_name?: unknown };
-    return {
-      title: typeof json.title === "string" ? json.title : "",
-      channel: typeof json.author_name === "string" ? json.author_name : "",
-    };
+    return (await $idb.get<PageCache>(CACHE, id)) ?? null;
   } catch {
     return null;
   }
@@ -130,18 +150,12 @@ async function addFromUrl(url: string, lang: string): Promise<{ result: AddResul
   const existing = favorites.value.find((f) => f.kind === source.kind && f.ytId === source.id);
   if (existing) return { result: "exists", favorite: existing };
 
-  const base = {
-    id: newId(),
-    kind: source.kind,
-    ytId: source.id,
-    addedAt: new Date().toISOString(),
-    order: (favorites.value.at(-1)?.order ?? 0) + 1,
-  };
+  const base = { id: newId(), addedAt: new Date().toISOString(), order: (favorites.value.at(-1)?.order ?? 0) + 1 };
   let favorite: OnlineFavorite;
   if (source.kind === "video") {
-    const meta = await oembed(source.id);
+    const meta = await youtubeOembed(source.id);
     if (!meta) return { result: "not_found" };
-    favorite = { ...base, title: meta.title || source.id, channel: meta.channel };
+    favorite = { ...base, kind: "video", ytId: source.id, title: meta.title || source.id, channel: meta.channel };
   } else {
     if (!collectionsAvailable()) return { result: "desktop_only" };
     try {
@@ -149,12 +163,14 @@ async function addFromUrl(url: string, lang: string): Promise<{ result: AddResul
       const first = await listCollection(source, { start: 1, count: PAGE, lang });
       favorite = {
         ...base,
+        kind: source.kind,
+        ytId: source.id,
         title: first.title || source.id,
         channel: first.channel,
         thumbnail: first.thumbnail,
         coverVideoId: first.entries[0]?.id,
-        snapshot: { entries: toEntries(first.entries, first.channel), hasMore: first.hasMore, fetchedAt: new Date().toISOString() },
       };
+      writeCache(favorite.id, toEntries(first.entries, first.channel), first.hasMore);
     } catch {
       return { result: "not_found" };
     }
@@ -167,52 +183,29 @@ async function addFromUrl(url: string, lang: string): Promise<{ result: AddResul
 
 async function remove(id: string): Promise<void> {
   favorites.value = favorites.value.filter((f) => f.id !== id);
-  await $docs.del(TABLE, id);
+  await Promise.all([$docs.del(TABLE, id), $idb.del(CACHE, id).catch(() => {})]);
   if (openId.value === id) void open(VIDEOS);
   else if (openId.value === VIDEOS) entries.value = videoEntries();
 }
 
-/** Reordena um grupo (vídeos ou listas), mantendo o outro onde está. */
-async function reorder(kind: "video" | "collection", list: OnlineFavorite[]): Promise<void> {
-  const others = favorites.value.filter((f) => (kind === "video" ? f.kind !== "video" : f.kind === "video"));
-  const next = [...(kind === "video" ? list : others), ...(kind === "video" ? others : list)].map((f, i) => ({
-    ...f,
-    order: i + 1,
-  }));
+/** Reordena as playlists e canais; só regrava os favoritos que mudaram de lugar. */
+async function reorder(list: OnlineCollectionFavorite[]): Promise<void> {
+  const next = [...videos.value, ...list].map((f, i) => ({ ...f, order: i + 1 }));
+  const before = new Map(favorites.value.map((f) => [f.id, f.order]));
   favorites.value = next;
-  if (openId.value === VIDEOS) entries.value = videoEntries();
-  await Promise.all(next.map((f) => $docs.put(TABLE, f)));
+  await Promise.all(next.filter((f) => before.get(f.id) !== f.order).map((f) => $docs.put(TABLE, f)));
 }
 
-function toEntries(list: YouTubeCollectionEntry[], channel?: string): OnlineEntry[] {
-  return list.map((e) => ({ id: e.id, title: e.title, duration: e.duration, channel }));
-}
-
-/** Guarda a primeira página no favorito, para a próxima abertura ser imediata. */
-function keepSnapshot(fav: OnlineFavorite, list: OnlineEntry[], more: boolean): void {
-  const updated: OnlineFavorite = {
-    ...fav,
-    snapshot: { entries: list.slice(0, PAGE), hasMore: more, fetchedAt: new Date().toISOString() },
-  };
-  favorites.value = favorites.value.map((f) => (f.id === fav.id ? updated : f));
-  void $docs.put(TABLE, updated).catch((e: unknown) => {
-    Telemetry.captureException(e, { source: "presentation_mode.online.snapshot" });
-  });
-}
-
-async function loadPage(fav: OnlineFavorite, start: number, lang: string, gen: number): Promise<void> {
+async function loadPage(fav: OnlineCollectionFavorite, start: number, lang: string, gen: number): Promise<void> {
   loading.value = true;
   error.value = null;
   try {
-    const page = await listCollection(
-      { kind: fav.kind as "playlist" | "channel", id: fav.ytId },
-      { start, count: PAGE, lang }
-    );
+    const page = await listCollection(sourceOf(fav), { start, count: PAGE, lang });
     if (gen !== generation) return;
     const fresh = toEntries(page.entries, page.channel || fav.channel);
     if (start === 1) {
       entries.value = fresh;
-      keepSnapshot(fav, fresh, page.hasMore);
+      writeCache(fav.id, fresh, page.hasMore);
     } else {
       const known = new Set(entries.value.map((e) => e.id));
       entries.value = [...entries.value, ...fresh.filter((e) => !known.has(e.id))];
@@ -237,20 +230,23 @@ async function loadPage(fav: OnlineFavorite, start: number, lang: string, gen: n
 async function open(id: string, lang = "pt", refresh = false): Promise<void> {
   await ensureLoaded();
   const gen = ++generation;
-  openId.value = id;
-  hasMore.value = false;
+  // A consulta da lista anterior não volta a mexer no estado: quem abre agora é dono dele.
+  loading.value = false;
   error.value = null;
-  const fav = favorites.value.find((f) => f.id === id);
-  if (!fav || fav.kind === "video") {
+  hasMore.value = false;
+  const fav = collections.value.find((f) => f.id === id);
+  if (!fav) {
     openId.value = VIDEOS;
     entries.value = videoEntries();
-    loading.value = false;
     return;
   }
-  const snap = fav.snapshot;
-  entries.value = snap?.entries ?? [];
-  hasMore.value = snap?.hasMore ?? false;
-  const stale = !snap || Date.now() - Date.parse(snap.fetchedAt) > STALE_MS;
+  openId.value = id;
+  entries.value = [];
+  const cached = await readCache(id);
+  if (gen !== generation) return;
+  entries.value = cached?.entries ?? [];
+  hasMore.value = cached?.hasMore ?? false;
+  const stale = !cached || Date.now() - Date.parse(cached.fetchedAt) > STALE_MS;
   if (refresh || stale) await loadPage(fav, 1, lang, gen);
 }
 

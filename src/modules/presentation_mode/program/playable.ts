@@ -4,7 +4,7 @@ import type { LibraryEntry } from "../composables/useFileLibrary";
 import type { LiveKind } from "../composables/useLiveContent";
 import type { MusicMode } from "./musicModes";
 import { videoIdFromUrl } from "@/helpers/OnlineVideo";
-import { sameBibleRef } from "./bible";
+import { samePassage, type BiblePassage } from "./bible";
 import { kindFromPath } from "./liturgy";
 
 /**
@@ -27,7 +27,7 @@ export function samePlayable(a: Playable, b: Playable): boolean {
   if (a.type === "program" && b.type === "program") return a.itemId === b.itemId;
   if (a.type === "file" && b.type === "file") return a.entry.path === b.entry.path;
   if (a.type === "song" && b.type === "song") return a.id_music === b.id_music;
-  if (a.type === "bible" && b.type === "bible") return sameBibleRef(a.ref, b.ref);
+  if (a.type === "bible" && b.type === "bible") return samePassage(a.ref, b.ref);
   if (a.type === "online" && b.type === "online") return a.videoId === b.videoId;
   return false;
 }
@@ -40,8 +40,8 @@ export interface LiveExpectation {
   kind: LiveKind | "audio" | null;
   /** Música: os slides no ar têm de ser desta. */
   songId?: number;
-  /** Bíblia: o versículo no ar tem de ser este. */
-  reference?: string;
+  /** Bíblia: o trecho no ar tem de ser este. */
+  passage?: BiblePassage;
   /**
    * Vídeo do YouTube: o vídeo no ar tem de ser este. Ele pode estar no ar como
    * player embutido ou como arquivo (transmitido ou baixado) — o ID é o mesmo.
@@ -54,7 +54,7 @@ export interface LiveSignal {
   kind: LiveKind | null;
   audio: boolean;
   songId: number | null;
-  bibleReference: string | null;
+  passage: BiblePassage | null;
   videoId: string | null;
 }
 
@@ -77,10 +77,10 @@ export function expectationOf(
 ): LiveExpectation {
   if (playable.type === "file") return fromPath(playable.entry.path);
   if (playable.type === "song") return fromMusic(playable.id_music, mode);
-  if (playable.type === "bible") return { kind: "bible", reference: playable.ref.reference };
+  if (playable.type === "bible") return { kind: "bible", passage: playable.ref };
   if (playable.type === "online") return { kind: "online_video", videoId: playable.videoId };
   if (!item) return { kind: null };
-  if (item.bible) return { kind: "bible", reference: item.bible.reference };
+  if (item.bible) return { kind: "bible", passage: item.bible };
   const src = item.source;
   switch (src?.tipo) {
     case LiturgyItemTypeEnum.MUSICA:
@@ -105,6 +105,6 @@ export function isOnAir(expected: LiveExpectation, signal: LiveSignal): boolean 
   if (expected.kind === "audio") return signal.audio;
   if (expected.videoId !== undefined) return signal.videoId === expected.videoId;
   if (signal.kind !== expected.kind) return false;
-  if (expected.reference !== undefined && signal.bibleReference !== expected.reference) return false;
+  if (expected.passage && !(signal.passage && samePassage(expected.passage, signal.passage))) return false;
   return expected.songId === undefined || signal.songId === expected.songId;
 }

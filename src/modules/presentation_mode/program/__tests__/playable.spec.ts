@@ -26,7 +26,7 @@ const signal = (s: Partial<LiveSignal>): LiveSignal => ({
   kind: null,
   audio: false,
   songId: null,
-  bibleReference: null,
+  passage: null,
   videoId: null,
   ...s,
 });
@@ -53,10 +53,15 @@ describe("Bíblia", () => {
     expect(samePlayable(verse([16]), verse([17]))).toBe(false);
   });
 
-  it("só está no ar enquanto a referência no ar for a enviada", () => {
+  it("só está no ar enquanto o trecho no ar for o enviado", () => {
     const expected = expectationOf(verse([16]), null);
-    expect(isOnAir(expected, signal({ kind: "bible", bibleReference: "João 3:16 (NVI)" }))).toBe(true);
-    expect(isOnAir(expected, signal({ kind: "bible", bibleReference: "João 3:17 (NVI)" }))).toBe(false);
+    const onAir = (verses: number[], version_id?: number) =>
+      isOnAir(expected, signal({ kind: "bible", passage: { book_id: 43, chapter: 3, verses, version_id } }));
+    expect(onAir([16], 1)).toBe(true);
+    expect(onAir([17], 1)).toBe(false);
+    expect(onAir([16], 2)).toBe(false);
+    // O pacote sem versão (outro módulo) ainda confirma o trecho.
+    expect(onAir([16])).toBe(true);
   });
 });
 

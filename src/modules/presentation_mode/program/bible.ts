@@ -60,12 +60,24 @@ export function bibleRefOf(chapter: BibleChapter, verses: number[]): ProgramBibl
   };
 }
 
-export function sameBibleRef(a: ProgramBibleRef, b: ProgramBibleRef): boolean {
+/** Livro, capítulo e versículos — o que identifica um trecho, como a projeção o anuncia. */
+export interface BiblePassage {
+  book_id: number;
+  chapter: number;
+  verses: number[];
+  version_id?: number;
+}
+
+/**
+ * O mesmo trecho. A versão só conta quando os dois lados a dizem: o item
+ * escolhido pelo BibleSpotlight pode não trazê-la.
+ */
+export function samePassage(a: BiblePassage, b: BiblePassage): boolean {
   return (
-    a.version_id === b.version_id &&
     a.book_id === b.book_id &&
     a.chapter === b.chapter &&
-    a.verses.join(",") === b.verses.join(",")
+    a.verses.join(",") === b.verses.join(",") &&
+    (a.version_id === undefined || b.version_id === undefined || a.version_id === b.version_id)
   );
 }
 

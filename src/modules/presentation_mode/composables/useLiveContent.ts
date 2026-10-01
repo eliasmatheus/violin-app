@@ -3,6 +3,7 @@ import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useSlides } from "@/composables/useSlides";
 import { videoIdFromPlaybackUrl } from "@/helpers/OnlineVideo";
+import type { BiblePassage } from "../program/bible";
 
 /**
  * O que está na tela principal agora, para os espelhos do módulo.
@@ -35,7 +36,19 @@ interface AnnouncementSlide {
 }
 
 const _stamps = reactive<Partial<Record<LiveKind, number>>>({});
-const _bible = ref<{ text: string; reference: string; nextReference: string } | null>(null);
+const _bible = ref<
+  ({ text: string; reference: string; nextReference: string } & { passage: BiblePassage | null }) | null
+>(null);
+
+/** O trecho que a projeção anuncia, quando o pacote traz livro, capítulo e versículos. */
+function passageOf(p: Record<string, unknown>): BiblePassage | null {
+  const book = Number(p.book_id);
+  const chapter = Number(p.chapter);
+  const verses = Array.isArray(p.verses) ? p.verses.map(Number).filter(Number.isInteger) : [];
+  if (!Number.isInteger(book) || !Number.isInteger(chapter) || !verses.length) return null;
+  const version = Number(p.version_id);
+  return { book_id: book, chapter, verses, version_id: Number.isInteger(version) ? version : undefined };
+}
 const _file = ref<LiveFile | null>(null);
 const _onlineTitle = ref("");
 /** O vídeo do YouTube no ar — embutido, transmitido ou já baixado. */
@@ -68,6 +81,7 @@ function _handle(type: string, payload: Record<string, unknown> | null | undefin
           text: String(p.text),
           reference: String(p.reference ?? ""),
           nextReference: String(p.next_reference ?? ""),
+          passage: passageOf(p),
         };
         _on("bible");
       } else {

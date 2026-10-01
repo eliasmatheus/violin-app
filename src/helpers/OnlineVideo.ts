@@ -7,6 +7,7 @@
  * como reserva, para quando o download não é possível.
  */
 import Platform from "@/helpers/Platform";
+import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
 import { i18nAtual } from "@/i18n";
 import $userdata from "@/helpers/UserData";
 import Telemetry from "@/helpers/Telemetry";
@@ -176,6 +177,25 @@ export async function listCollection(
   const res = await api.collection({ kind: source.kind, id: source.id }, range);
   if (!res.ok) throw Object.assign(new Error(res.error.message), { kind: res.error.kind });
   return { title: res.title, channel: res.channel, thumbnail: res.thumbnail, entries: res.entries, hasMore: res.hasMore };
+}
+
+/** Título e canal de um vídeo pelo oEmbed do YouTube (público, sem chave); null se não achar. */
+export async function youtubeOembed(id: string): Promise<{ title: string; channel: string } | null> {
+  try {
+    const watch = `https://www.youtube.com/watch?v=${id}`;
+    const res = await fetchWithTimeout(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(watch)}&format=json`,
+      { timeout: NET_TIMEOUT.QUICK, source: "youtube-oembed", thirdParty: true }
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as { title?: unknown; author_name?: unknown };
+    return {
+      title: typeof json.title === "string" ? json.title : "",
+      channel: typeof json.author_name === "string" ? json.author_name : "",
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Miniatura do vídeo servida pelo YouTube, sem chamar API nenhuma. */

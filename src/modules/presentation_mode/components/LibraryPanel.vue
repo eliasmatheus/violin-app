@@ -52,40 +52,21 @@
       </div>
     </header>
 
-    <LibraryMusic
-      v-if="tab === 'musics'"
-      :live-song-id="liveSongId"
-      @preview-song="(s: LibrarySong) => emit('preview-song', s)"
-      @play-song="(s: LibrarySong, m: MusicMode) => emit('play-song', s, m)"
-      @add-song="(s: LibrarySong, m: MusicMode) => emit('add-song', s, m)"
-    />
-
+    <LibraryMusic v-if="tab === 'musics'" :live-song-id="liveSongId" v-bind="relay" />
     <LibraryOnline
       v-else-if="tab === 'online'"
       :live-video-id="liveVideoId"
-      @preview="(v: OnlineEntry) => emit('preview-online', v)"
-      @play="(v: OnlineEntry) => emit('play-online', v)"
-      @add="(v: OnlineEntry) => emit('add-online', v)"
+      v-bind="relay"
       @stop="emit('stop')"
     />
-
-    <LibraryBible
-      v-else-if="tab === 'bible'"
-      :live="liveBible"
-      @preview="(r: ProgramBibleRef) => emit('preview-bible', r)"
-      @play="(r: ProgramBibleRef) => emit('play-bible', r)"
-      @add="(r: ProgramBibleRef) => emit('add-bible', r)"
-    />
-
+    <LibraryBible v-else-if="tab === 'bible'" :live="liveBible" v-bind="relay" />
     <LibraryFiles
       v-else
       :live-path="livePath"
       :return-path="returnPath"
-      @project="(e: LibraryEntry) => emit('project', e)"
-      @preview="(e: LibraryEntry) => emit('preview', e)"
+      v-bind="relay"
       @stop="emit('stop')"
       @show-on-return="(e: LibraryEntry | null) => emit('show-on-return', e)"
-      @add-to-program="(e: LibraryEntry, m: MediaMeta | null) => emit('add-to-program', e, m)"
     />
   </section>
 </template>
@@ -96,28 +77,24 @@ import LibraryFiles from "./LibraryFiles.vue";
 import LibraryMusic from "./LibraryMusic.vue";
 import LibraryBible from "./LibraryBible.vue";
 import LibraryOnline from "./LibraryOnline.vue";
-import type { OnlineEntry } from "../composables/useOnlineLibrary";
-import type { ProgramBibleRef } from "@/types/Presentation";
-import type { LibrarySong } from "../program/song";
+import type { ProgramBibleRef, ProgramItem } from "@/types/Presentation";
 import type { MusicMode } from "../program/musicModes";
+import type { Playable } from "../program/playable";
 import { LjButton, LjIcon } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import type { LibraryEntry } from "../composables/useFileLibrary";
 import { useVerticalResize } from "../composables/useVerticalResize";
-import type { MediaMeta } from "../composables/useMediaMeta";
 
 const props = defineProps<{
   fullWidth: boolean;
   tall: boolean;
   height: number;
-  /** Caminho do arquivo que está no ar (aba Arquivos). */
   livePath: string | null;
   returnPath: string | null;
   /** Trecho da Bíblia no ar, para marcar os versículos na aba Bíblia. */
   liveBible: ProgramBibleRef | null;
-  /** Vídeo do YouTube que o módulo pôs no ar. */
   liveVideoId: string | null;
   /** Música com os slides no ar, para marcar a linha na aba Músicas. */
   liveSongId: number | null;
@@ -128,24 +105,21 @@ const emit = defineEmits<{
   "toggle-height": [];
   resize: [height: number];
   "resize-end": [height: number];
-  project: [entry: LibraryEntry];
-  /** Um clique: o arquivo vai para a prévia do palco. */
-  preview: [entry: LibraryEntry];
-  /** ✕ no arquivo que está no ar. */
+  /** Todas as abas falam a mesma língua: prévia e ar recebem um Playable; o programa, um item pronto. */
+  preview: [playable: Playable];
+  play: [playable: Playable, options?: { mode: MusicMode }];
+  add: [item: ProgramItem];
   stop: [];
   /** Imagem ou vídeo só no retorno de palco; `null` tira. */
   "show-on-return": [entry: LibraryEntry | null];
-  "preview-song": [song: LibrarySong];
-  "play-song": [song: LibrarySong, mode: MusicMode];
-  "add-song": [song: LibrarySong, mode: MusicMode];
-  "add-to-program": [entry: LibraryEntry, meta: MediaMeta | null];
-  "preview-bible": [ref: ProgramBibleRef];
-  "play-bible": [ref: ProgramBibleRef];
-  "add-bible": [ref: ProgramBibleRef];
-  "preview-online": [video: OnlineEntry];
-  "play-online": [video: OnlineEntry];
-  "add-online": [video: OnlineEntry];
 }>();
+
+/** O que toda aba repassa sem tocar: as três ações comuns. */
+const relay = {
+  onPreview: (p: Playable) => emit("preview", p),
+  onPlay: (p: Playable, options?: { mode: MusicMode }) => emit("play", p, options),
+  onAdd: (item: ProgramItem) => emit("add", item),
+};
 
 const { tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 

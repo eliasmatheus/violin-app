@@ -83,26 +83,14 @@
         :live-song-id="liveSongId"
         :live-video-id="liveOrigin?.type === 'online' ? liveOrigin.videoId : null"
         @show-on-return="onShowOnReturn"
-        @preview="(entry: LibraryEntry) => stage.show({ type: 'file', entry })"
+        @preview="stage.show"
+        @play="(p: Playable, options?: { mode: MusicMode }) => dispatch(p, options)"
+        @add="(item: ProgramItem) => addItem(item, ensureSession())"
         @stop="stopMedia"
-        @preview-song="
-          (s: LibrarySong) =>
-            stage.show({ type: 'song', id_music: s.id_music, title: s.name, subtitle: s.album })
-        "
-        @play-song="(s: LibrarySong, m: MusicMode) => playSong(s.id_music, s.name, s.album, 0, m)"
-        @add-song="addSongToProgram"
         @toggle-width="libraryLayout.toggleWidth"
         @toggle-height="libraryLayout.toggleHeight"
         @resize="libraryLayout.drag"
         @resize-end="libraryLayout.saveHeight"
-        @project="projectFile"
-        @add-to-program="addFileToProgram"
-        @preview-bible="(r: ProgramBibleRef) => stage.show({ type: 'bible', ref: r })"
-        @play-bible="(r: ProgramBibleRef) => dispatch({ type: 'bible', ref: r })"
-        @add-bible="(r: ProgramBibleRef) => addItem(bibleItem(r), ensureSession())"
-        @preview-online="(v: OnlineEntry) => stage.show(onlinePlayable(v))"
-        @play-online="(v: OnlineEntry) => dispatch(onlinePlayable(v))"
-        @add-online="(v: OnlineEntry) => addItem(onlineItem(v), ensureSession())"
       />
 
       <OutputsPanel
@@ -164,7 +152,6 @@ import ProgramSettingsDialog from "./ProgramSettingsDialog.vue";
 import OutputsPanel from "./OutputsPanel.vue";
 import StageSlides from "./StageSlides.vue";
 import StageVideo from "./StageVideo.vue";
-import type { LibrarySong } from "../program/song";
 import StagePreview from "./StagePreview.vue";
 import { useStage } from "../composables/useStage";
 import { expectationOf, isOnAir, samePlayable, type Playable } from "../program/playable";
@@ -173,11 +160,10 @@ import LiveMirror from "./LiveMirror.vue";
 import $appdata from "@/helpers/AppData";
 import { KEYS } from "@/constants/UserDataKeys";
 import { useFileLibrary, type LibraryEntry } from "../composables/useFileLibrary";
-import type { MediaMeta } from "../composables/useMediaMeta";
 import { KIND_ICONS } from "../program/kinds";
 import Media from "@/composables/useMedia";
 import { useSlides } from "@/composables/useSlides";
-import { useLiveContent } from "../composables/useLiveContent";
+import { useLiveContent, type LiveKind } from "../composables/useLiveContent";
 import {
   cleared,
   returnOverride,
@@ -189,19 +175,17 @@ import {
 import { formatHHMM, plannedStarts } from "../program/time";
 import { useProgram } from "../composables/useProgram";
 import { playMusicInMode, useProgramExecution } from "../composables/useProgramExecution";
-import { MUSIC_MODES, type MusicMode } from "../program/musicModes";
+import type { MusicMode } from "../program/musicModes";
 import $path from "@/helpers/Path";
 import { kindFromPath } from "../program/liturgy";
-import { bibleItem, fileItem, onlineItem, songItem } from "../program/items";
-import type { OnlineEntry } from "../composables/useOnlineLibrary";
-import {
-  itemVideoId,
-  onlinePlayable,
-  openOnline,
-  useOnlineQueue,
-} from "../composables/useOnlinePlayback";
+import { itemVideoId, openOnline, useOnlineQueue } from "../composables/useOnlinePlayback";
 import { useOnlinePrefetch } from "../composables/useOnlinePrefetch";
-import { bibleRefOf, stepVerse } from "../program/bible";
+import {
+  bibleSource,
+  fileQueueSource,
+  slidesSource,
+  useLiveNavigation,
+} from "../composables/useLiveNavigation";
 import { useBibleLibrary } from "../composables/useBibleLibrary";
 import { previewViewOf } from "../program/previewView";
 import { useLibraryLayout } from "../composables/useLibraryLayout";
@@ -251,21 +235,6 @@ const expanded = computed(() => isModuleExpanded(moduleId));
 
 const libraryLayout = useLibraryLayout();
 
-/** Duplo clique ou "Enviar": vai para a tela principal pelo mesmo caminho da liturgia. */
-function projectFile(entry: LibraryEntry): void {
-  dispatch({ type: "file", entry });
-}
-
-function addSongToProgram(song: LibrarySong, mode: MusicMode = "sung"): void {
-  // O formato aparece no subtítulo quando não é o de sempre ("Cantado").
-  const modeLabel =
-    mode === "sung" ? "" : tm(MUSIC_MODES.find((m) => m.value === mode)?.label ?? "");
-  addItem(songItem(song, mode, modeLabel), ensureSession());
-}
-
-function addFileToProgram(entry: LibraryEntry, meta: MediaMeta | null): void {
-  addItem(fileItem(entry, meta), ensureSession());
-}
 function toggleExpand(): void {
   toggleModuleExpanded(moduleId);
 }
@@ -366,7 +335,7 @@ const liveOrigin = computed<Playable | null>(() => {
     kind: liveKind.value,
     audio: audioLive.value,
     songId: liveSongId.value,
-    bibleReference: live.bible.value?.reference ?? null,
+    passage: live.bible.value?.passage ?? null,
     // O ID vale enquanto o vídeo for o que está por cima na tela.
     videoId:
       liveKind.value === "file" || liveKind.value === "online_video"
@@ -419,16 +388,6 @@ function goToSlideWhenLoaded(idMusic: number, index: number): void {
   cancelSlideWait = cancel;
 }
 onBeforeUnmount(() => cancelSlideWait?.());
-
-function playSong(
-  idMusic: number,
-  title: string,
-  subtitle?: string,
-  slideIndex = 0,
-  mode: MusicMode = "sung"
-): void {
-  dispatch({ type: "song", id_music: idMusic, title, subtitle }, { slideIndex, mode });
-}
 
 function playPreview(slideIndex = 0, mode: MusicMode = "sung"): void {
   const t = stage.preview.value;
@@ -537,7 +496,7 @@ const slides = useSlides();
 const live = useLiveContent();
 const liveKind = live.current;
 
-/** O arquivo no ar saiu da biblioteca? Então Anterior/Próximo andam pela pasta dele. */
+/** O arquivo no ar saiu da biblioteca? Então a grade o destaca. */
 const library = useFileLibrary();
 const libraryQueueLive = computed(() => {
   const q = library.queue.value;
@@ -552,18 +511,6 @@ const liveBibleRef = computed<ProgramBibleRef | null>(() => {
   return liveProgramItem.value?.bible ?? null;
 });
 
-const onlineQueue = useOnlineQueue(liveOrigin);
-
-/** Posição na pasta ou na lista de vídeos de onde saiu o que está no ar: "3/12". */
-const queueCounter = computed(() => {
-  const q = libraryQueueLive.value
-    ? library.queue.value
-    : onlineQueue.live.value
-      ? onlineQueue.queue.value
-      : null;
-  return q ? `${q.index + 1}/${q.entries.length}` : undefined;
-});
-
 /** Arquivo da biblioteca que está no ar — borda de destaque e ✕ na grade. */
 const libraryLivePath = computed(() => {
   const q = library.queue.value;
@@ -575,16 +522,6 @@ function stopMedia(): void {
   Media.close(true, false, true);
 }
 
-/** Há partes para percorrer: os slides da música no ar, ou a pasta do arquivo no ar. */
-const canNavigate = computed(
-  () =>
-    !outputLocked.value &&
-    ((liveKind.value === "music" && slides.totalSlides.value > 0) ||
-      (libraryQueueLive.value && (library.queue.value?.entries.length ?? 0) > 1) ||
-      !!liveBibleRef.value?.version_id ||
-      (onlineQueue.live.value && (onlineQueue.queue.value?.entries.length ?? 0) > 1))
-);
-
 const upNextFlash = ref(false);
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
 function flashUpNext(): void {
@@ -593,61 +530,58 @@ function flashUpNext(): void {
   flashTimer = setTimeout(() => (upNextFlash.value = false), 700);
 }
 
-/**
- * Próximo avança a parte do item no ar. Na última parte — ou num item sem
- * partes — não pula de item sozinho: destaca "A seguir", que o operador envia.
- */
-function navigate(to: "first" | "prev" | "next" | "last"): void {
-  if (outputLocked.value) return;
-  if (!canNavigate.value) {
-    if (to === "next") flashUpNext();
-    return;
-  }
-  if (liveBibleRef.value) {
-    void stepBible(liveBibleRef.value, to);
-    return;
-  }
-  if (onlineQueue.live.value) {
-    // Sem `dispatch`: ele recomeçaria a fila pela lista aberta agora.
-    const playable = onlineQueue.step(to);
-    if (playable) stage.markSent(playable, expectationOf(playable, null));
-    else if (to === "next") flashUpNext();
-    return;
-  }
-  if (libraryQueueLive.value) {
-    const entry = library.stepQueue(to);
-    if (entry) {
-      // Sem `dispatch`: ele recomeçaria a fila a partir da pasta aberta agora.
-      projectPath(entry.path, entry.name);
-      const playable = { type: "file", entry } as const;
-      stage.markSent(playable, expectationOf(playable, null));
-    } else if (to === "next") flashUpNext();
-    return;
-  }
-  const last = slides.totalSlides.value - 1;
-  if (to === "next" && slides.slideIndex.value >= last) {
-    flashUpNext();
-    return;
-  }
-  if (to === "first") Media.firstSlide();
-  else if (to === "prev") Media.prevSlide();
-  else if (to === "next") Media.nextSlide();
-  else Media.lastSlide();
+/* ─── Anterior/Próximo ─── */
+
+/** O que o módulo enviou, enquanto ainda há algo no ar — a navegação parte daqui, não do eco da tela. */
+function sentWhile(kinds: LiveKind[]): Playable | null {
+  const kind = liveKind.value;
+  return kind && kinds.includes(kind) ? (stage.sent.value?.playable ?? null) : null;
 }
 
-/** Anda de versículo em versículo pelo capítulo do trecho no ar. */
-async function stepBible(
-  ref: ProgramBibleRef,
-  to: "first" | "prev" | "next" | "last"
-): Promise<void> {
-  const chapter = await bibleLibrary.chapterOf(ref);
-  const verse = chapter ? stepVerse(chapter, ref.verses, to) : null;
-  if (!chapter || verse === null) {
-    if (to === "next") flashUpNext();
-    return;
-  }
-  dispatch({ type: "bible", ref: bibleRefOf(chapter, [verse]) });
+function sentBible(): ProgramBibleRef | null {
+  const sent = sentWhile(["bible"]);
+  if (sent?.type === "bible") return sent.ref;
+  return sent?.type === "program" ? (findItem(sent.itemId)?.bible ?? null) : null;
 }
+
+/** Manda ao ar sem passar pelo `dispatch`, que recomeçaria a fila pela lista aberta agora. */
+function markSent(playable: Playable): void {
+  stage.markSent(playable, expectationOf(playable, null));
+}
+
+const onlineQueue = useOnlineQueue({
+  sent: () => sentWhile(["file", "online_video"]),
+  onSent: markSent,
+});
+
+const navigation = useLiveNavigation(
+  [
+    bibleSource({
+      sent: sentBible,
+      chapterOf: (ref) => bibleLibrary.chapterOf(ref),
+      send: (ref) => dispatch({ type: "bible", ref }),
+    }),
+    onlineQueue.source,
+    fileQueueSource({
+      queue: () => library.queue.value,
+      sent: () => sentWhile(["file"]),
+      step: (to) => library.stepQueue(to),
+      send: (entry) => {
+        projectPath(entry.path, entry.name);
+        markSent({ type: "file", entry });
+      },
+    }),
+    slidesSource({
+      isMusic: () => liveKind.value === "music",
+      total: () => slides.totalSlides.value,
+      index: () => slides.slideIndex.value,
+    }),
+  ],
+  outputLocked,
+  flashUpNext
+);
+const { canNavigate, navigate } = navigation;
+const queueCounter = navigation.counter;
 
 useOnlinePrefetch(() => {
   const preview = stage.preview.value;

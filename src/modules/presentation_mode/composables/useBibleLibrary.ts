@@ -110,6 +110,11 @@ async function chapterOf(ref: ProgramBibleRef): Promise<BibleChapter | null> {
   }
 }
 
+/** O capítulo do trecho, se já foi lido — sem esperar o banco. */
+function cachedChapterOf(ref: ProgramBibleRef): BibleChapter | null {
+  return ref.version_id ? (chapterCache.get(`bible_${ref.version_id}_${ref.book_id}_${ref.chapter}`) ?? null) : null;
+}
+
 let openGeneration = 0;
 
 async function openChapter(bId: number, n: number): Promise<void> {
@@ -134,7 +139,6 @@ async function setVersion(id: number): Promise<void> {
   if (open) await openChapter(open.bookId, open.chapter);
 }
 
-/** Livro escolhido: a aba mostra os capítulos dele. */
 function openBook(bId: number): void {
   openGeneration++;
   bookId.value = bId;
@@ -142,7 +146,6 @@ function openBook(bId: number): void {
   loading.value = false;
 }
 
-/** Do capítulo de volta à lista de capítulos do livro. */
 function closeChapter(): void {
   if (bookId.value) openBook(bookId.value);
 }
@@ -158,6 +161,7 @@ export function useBibleLibrary() {
     loading,
     ensureLoaded,
     chapterOf,
+    cachedChapterOf,
     openChapter,
     setVersion,
     openBook,

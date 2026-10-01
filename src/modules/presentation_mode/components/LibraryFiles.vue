@@ -117,7 +117,9 @@
                     class="pm-file__action"
                     :aria-label="entry.path === livePath ? tm('library.stop') : tm('library.play')"
                     :data-testid="`pm-file-action-${entry.name}`"
-                    @click.stop="entry.path === livePath ? emit('stop') : emit('project', entry)"
+                    @click.stop="
+                      entry.path === livePath ? emit('stop') : emit('play', filePlayable(entry))
+                    "
                     @dblclick.stop
                   >
                     <LjIcon
@@ -214,7 +216,7 @@
           block
           :icon="ICONS.PROJECTION.START"
           data-testid="pm-library-send"
-          @click="emit('project', details)"
+          @click="emit('play', filePlayable(details))"
         >
           {{ tm("library.send") }}
         </LjButton>
@@ -222,7 +224,7 @@
           block
           :icon="ICONS.ACTIONS.ADD"
           data-testid="pm-library-add"
-          @click="emit('add-to-program', details, detailsMeta)"
+          @click="emit('add', fileItem(details, detailsMeta))"
         >
           {{ tm("library.add_to_program") }}
         </LjButton>
@@ -254,7 +256,10 @@ import {
   useFileLibrary,
   type LibraryEntry,
 } from "../composables/useFileLibrary";
-import { useMediaMeta, type MediaMeta } from "../composables/useMediaMeta";
+import { useMediaMeta } from "../composables/useMediaMeta";
+import type { ProgramItem } from "@/types/Presentation";
+import { fileItem } from "../program/items";
+import type { Playable } from "../program/playable";
 
 /**
  * Aba Arquivos da biblioteca: as pastas do computador que o operador
@@ -269,15 +274,15 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  project: [entry: LibraryEntry];
-  /** Um clique: o arquivo vai para a prévia do palco. */
-  preview: [entry: LibraryEntry];
-  /** ✕ no arquivo que está no ar. */
+  preview: [playable: Playable];
+  play: [playable: Playable];
+  add: [item: ProgramItem];
   stop: [];
   /** Imagem ou vídeo só no retorno de palco; `null` tira. */
   "show-on-return": [entry: LibraryEntry | null];
-  "add-to-program": [entry: LibraryEntry, meta: MediaMeta | null];
 }>();
+
+const filePlayable = (entry: LibraryEntry): Playable => ({ type: "file", entry });
 
 const { t, tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 
@@ -286,7 +291,6 @@ const { meta, request } = useMediaMeta();
 
 const selected = computed(() => lib.selected.value);
 
-/** Detalhes abertos pelo (i) ou pelo menu de contexto. */
 const detailsPath = ref<string | null>(null);
 const details = computed(() => lib.entries.value.find((e) => e.path === detailsPath.value) ?? null);
 const detailsMeta = computed(() => (details.value ? (meta.get(details.value.path) ?? null) : null));
@@ -298,7 +302,7 @@ function openDetails(entry: LibraryEntry): void {
 
 function onClick(entry: LibraryEntry): void {
   lib.select(entry);
-  if (!entry.isDir) emit("preview", entry);
+  if (!entry.isDir) emit("preview", filePlayable(entry));
 }
 
 function menuFor(entry: LibraryEntry): LjMenuItem[] {
@@ -317,7 +321,7 @@ function menuFor(entry: LibraryEntry): LjMenuItem[] {
       : {
           label: tm("library.play"),
           icon: ICONS.PLAYER.PLAY,
-          action: () => emit("project", entry),
+          action: () => emit("play", filePlayable(entry)),
         },
     { label: tm("library.preview"), icon: ICONS.UI.EYE, action: () => onClick(entry) },
     ...(fileKind(entry.ext) === "image" || fileKind(entry.ext) === "video"
@@ -338,7 +342,7 @@ function menuFor(entry: LibraryEntry): LjMenuItem[] {
     {
       label: tm("library.add_to_program"),
       icon: ICONS.ACTIONS.ADD,
-      action: () => emit("add-to-program", entry, meta.get(entry.path) ?? null),
+      action: () => emit("add", fileItem(entry, meta.get(entry.path) ?? null)),
     },
     { separator: true },
     {
@@ -412,7 +416,7 @@ function formatDate(ms: number): string {
 
 function onOpen(entry: LibraryEntry): void {
   if (entry.isDir) void lib.enter(entry);
-  else emit("project", entry);
+  else emit("play", filePlayable(entry));
 }
 
 function confirmRemove(path: string): void {

@@ -87,8 +87,8 @@
           tabindex="0"
           :data-testid="`pm-verse-${n}`"
           @click="select(n, $event)"
-          @dblclick="emit('play', refFor(n))"
-          @keydown.enter.self="emit('play', refFor(n))"
+          @dblclick="play(n)"
+          @keydown.enter.self="play(n)"
         >
           <span class="pm-verse__num">{{ n }}</span>
           <span class="pm-verse__text">{{ chapter.verses[String(n)] }}</span>
@@ -99,7 +99,7 @@
                 class="pm-verse__btn"
                 :aria-label="tm('library.play')"
                 :data-testid="`pm-verse-play-${n}`"
-                @click.stop="emit('play', refFor(n))"
+                @click.stop="play(n)"
                 @dblclick.stop
               >
                 <LjIcon :icon="ICONS.PLAYER.PLAY" :size="13" />
@@ -111,7 +111,7 @@
                 class="pm-verse__btn"
                 :aria-label="tm('library.add_to_program')"
                 :data-testid="`pm-verse-add-${n}`"
-                @click.stop="emit('add', refFor(n))"
+                @click.stop="emit('add', bibleItem(refFor(n)))"
                 @dblclick.stop
               >
                 <LjIcon :icon="ICONS.ACTIONS.ADD" :size="13" />
@@ -147,7 +147,9 @@ import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import Strings from "@/helpers/Strings";
 import { useModuleI18n } from "@/composables/useModuleI18n";
-import type { ProgramBibleRef } from "@/types/Presentation";
+import type { ProgramBibleRef, ProgramItem } from "@/types/Presentation";
+import { bibleItem } from "../program/items";
+import type { Playable } from "../program/playable";
 import { useBibleLibrary } from "../composables/useBibleLibrary";
 import { bibleRefOf, verseNumbers } from "../program/bible";
 
@@ -159,9 +161,9 @@ import { bibleRefOf, verseNumbers } from "../program/bible";
 
 const props = defineProps<{ live: ProgramBibleRef | null }>();
 const emit = defineEmits<{
-  preview: [ref: ProgramBibleRef];
-  play: [ref: ProgramBibleRef];
-  add: [ref: ProgramBibleRef];
+  preview: [playable: Playable];
+  play: [playable: Playable];
+  add: [item: ProgramItem];
 }>();
 
 const { tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
@@ -186,7 +188,6 @@ const title = computed(() => {
   return book.value?.name ?? tm("bible.title");
 });
 
-/** Versículos do capítulo aberto que estão no ar agora. */
 const liveVerses = computed(() => {
   const live = props.live;
   const c = chapter.value;
@@ -235,13 +236,18 @@ function select(n: number, event: MouseEvent): void {
     selected.value = [n];
     anchor = n;
   }
-  if (selected.value.length) emit("preview", bibleRefOf(chapter.value, selected.value));
+  if (selected.value.length)
+    emit("preview", { type: "bible", ref: bibleRefOf(chapter.value, selected.value) });
 }
 
 /** A ação vale para a seleção quando o versículo faz parte dela; senão, só para ele. */
 function refFor(n: number): ProgramBibleRef {
   const verses = selected.value.includes(n) ? selected.value : [n];
   return bibleRefOf(chapter.value!, verses);
+}
+
+function play(n: number): void {
+  emit("play", { type: "bible", ref: refFor(n) });
 }
 
 function openChapter(n: number): void {

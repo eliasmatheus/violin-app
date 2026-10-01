@@ -22,7 +22,7 @@
         class="pm-online__list"
         :animation="150"
         ghost-class="pm-online__src--ghost"
-        @update:model-value="(list: OnlineFavorite[]) => online.reorder('collection', list)"
+        @update:model-value="(list: OnlineCollectionFavorite[]) => online.reorder(list)"
       >
         <template #item="{ element: fav }">
           <div
@@ -166,8 +166,8 @@
             :title="video.title"
             :data-testid="`pm-online-video-${video.id}`"
             @click="select(video)"
-            @dblclick="emit('play', video)"
-            @keydown.enter.self="emit('play', video)"
+            @dblclick="emit('play', onlinePlayable(video))"
+            @keydown.enter.self="emit('play', onlinePlayable(video))"
           >
             <span class="pm-online__thumb">
               <img :src="youtubeThumb(video.id)" alt="" loading="lazy" />
@@ -180,7 +180,9 @@
                   class="pm-online__action"
                   :aria-label="video.id === liveVideoId ? tm('library.stop') : tm('library.play')"
                   :data-testid="`pm-online-play-${video.id}`"
-                  @click.stop="video.id === liveVideoId ? emit('stop') : emit('play', video)"
+                  @click.stop="
+                    video.id === liveVideoId ? emit('stop') : emit('play', onlinePlayable(video))
+                  "
                   @dblclick.stop
                 >
                   <LjIcon
@@ -195,7 +197,7 @@
                   class="pm-online__add"
                   :aria-label="tm('library.add_to_program')"
                   :data-testid="`pm-online-addprog-${video.id}`"
-                  @click.stop="emit('add', video)"
+                  @click.stop="emit('add', onlineItem(video))"
                   @dblclick.stop
                 >
                   <LjIcon :icon="ICONS.ACTIONS.ADD" :size="14" />
@@ -242,9 +244,14 @@ import DateTime from "@/helpers/DateTime";
 import $snackbar from "@/helpers/Snackbar";
 import { prepare as prepareOnlineVideo, youtubeThumb } from "@/helpers/OnlineVideo";
 import { useModuleI18n } from "@/composables/useModuleI18n";
+import type { ProgramItem } from "@/types/Presentation";
+import { onlineItem } from "../program/items";
+import type { Playable } from "../program/playable";
+import { onlinePlayable } from "../composables/useOnlinePlayback";
 import {
   useOnlineLibrary,
   VIDEOS,
+  type OnlineCollectionFavorite,
   type OnlineEntry,
   type OnlineFavorite,
 } from "../composables/useOnlineLibrary";
@@ -258,9 +265,9 @@ import {
 
 defineProps<{ liveVideoId: string | null }>();
 const emit = defineEmits<{
-  preview: [video: OnlineEntry];
-  play: [video: OnlineEntry];
-  add: [video: OnlineEntry];
+  preview: [playable: Playable];
+  play: [playable: Playable];
+  add: [item: ProgramItem];
   stop: [];
 }>();
 
@@ -272,7 +279,7 @@ const current = online.openFavorite;
 const selectedId = ref<string | null>(null);
 function select(video: OnlineEntry): void {
   selectedId.value = video.id;
-  emit("preview", video);
+  emit("preview", onlinePlayable(video));
 }
 
 const favoriteVideo = (id: string) => online.videos.value.find((f) => f.ytId === id) ?? null;
@@ -280,11 +287,15 @@ const favoriteVideo = (id: string) => online.videos.value.find((f) => f.ytId ===
 function menuFor(video: OnlineEntry): LjMenuItem[] {
   const fav = favoriteVideo(video.id);
   return [
-    { label: tm("library.play"), icon: ICONS.PLAYER.PLAY, action: () => emit("play", video) },
+    {
+      label: tm("library.play"),
+      icon: ICONS.PLAYER.PLAY,
+      action: () => emit("play", onlinePlayable(video)),
+    },
     {
       label: tm("library.add_to_program"),
       icon: ICONS.ACTIONS.ADD,
-      action: () => emit("add", video),
+      action: () => emit("add", onlineItem(video)),
     },
     { separator: true },
     fav

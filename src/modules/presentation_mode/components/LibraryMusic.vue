@@ -151,7 +151,10 @@ import DateTime from "@/helpers/DateTime";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import { albumLabel, musicTitle } from "@root/config/musicCatalog.mjs";
 import { modeOfAction, modesFor, type MusicMode } from "../program/musicModes";
-import type { LibrarySong } from "../program/song";
+import { songPlayable, type LibrarySong } from "../program/song";
+import { songItem } from "../program/items";
+import type { Playable } from "../program/playable";
+import type { ProgramItem } from "@/types/Presentation";
 
 /**
  * Aba Músicas da biblioteca: a mesma tabela do módulo Músicas — busca com
@@ -177,9 +180,9 @@ interface CatalogRow {
 
 defineProps<{ liveSongId: number | null }>();
 const emit = defineEmits<{
-  "preview-song": [song: LibrarySong];
-  "play-song": [song: LibrarySong, mode: MusicMode];
-  "add-song": [song: LibrarySong, mode: MusicMode];
+  preview: [playable: Playable];
+  play: [playable: Playable, options: { mode: MusicMode }];
+  add: [item: ProgramItem];
 }>();
 
 const { tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
@@ -267,12 +270,12 @@ function toSong(item: CatalogRow): LibrarySong {
 
 function select(item: CatalogRow): void {
   selectedId.value = item.id_music;
-  emit("preview-song", toSong(item));
+  emit("preview", songPlayable(toSong(item)));
 }
 
 function play(item: CatalogRow, mode: MusicMode): void {
   selectedId.value = item.id_music;
-  emit("play-song", toSong(item), mode);
+  emit("play", songPlayable(toSong(item)), { mode });
 }
 
 /** Os botões de formato da linha tocam pelo palco; a letra avulsa segue o caminho de sempre. */
@@ -289,7 +292,9 @@ function programMenu(item: CatalogRow) {
       menu: modesFor(!!item.has_instrumental_music).map((m) => ({
         title: tm(m.label),
         icon: m.icon,
-        click: () => emit("add-song", toSong(item), m.value),
+        // O formato aparece no subtítulo quando não é o de sempre ("Cantado").
+        click: () =>
+          emit("add", songItem(toSong(item), m.value, m.value === "sung" ? "" : tm(m.label))),
       })),
     },
   ];

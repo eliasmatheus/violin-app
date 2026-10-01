@@ -9,7 +9,8 @@ export const DB_NAME = "louvorja-violin";
  *
  * v1 → v2: adicionada tabela "devices" (dispositivos autorizados)
  * v2 → v3: adicionada tabela "presentation_mode.programs" (programas do culto no navegador)
- * v3 → v4: adicionada tabela "presentation_mode.online" (vídeos, playlists e canais favoritos)
+ * v3 → v4: adicionadas "presentation_mode.online" (vídeos, playlists e canais favoritos) e
+ *          "presentation_mode.online_cache" (primeira página de cada playlist/canal)
  */
 export const DB_VERSION = 4;
 
@@ -76,6 +77,8 @@ export const DB_TABLE = {
   PRESENTATION_PROGRAMS: ModuleEnum.PRESENTATION_MODE + ".programs",
   // ─── Modo apresentação: vídeos, playlists e canais do YouTube favoritos (DocStore) ───
   PRESENTATION_ONLINE: ModuleEnum.PRESENTATION_MODE + ".online",
+  // ─── Modo apresentação: cópia da primeira página de cada playlist/canal (cache, IndexedDB) ───
+  PRESENTATION_ONLINE_CACHE: ModuleEnum.PRESENTATION_MODE + ".online_cache",
   // ─── Chat ───
   CHAT_MESSAGES: "chat.messages",
 } as const;

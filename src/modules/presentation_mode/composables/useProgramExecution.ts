@@ -61,15 +61,16 @@ export function useProgramExecution() {
   const { executeItem } = useLiturgyExecution();
   const bible = useBibleLibrary();
 
-  /** O retorno de palco mostra o versículo seguinte quando o capítulo é conhecido. */
-  async function nextOf(ref: ProgramBibleRef): Promise<{ text: string; reference: string } | null> {
-    const chapter = await bible.chapterOf(ref);
-    return chapter ? nextVerseOf(chapter, ref.verses) : null;
-  }
-
+  /**
+   * O versículo vai ao ar na hora. O retorno de palco mostra o seguinte quando o
+   * capítulo já foi lido — esperar o banco atrasaria a projeção; o capítulo é
+   * lido em seguida, para os próximos passos.
+   */
   async function projectBible(ref: ProgramBibleRef): Promise<void> {
     $userdata.set(KEYS.MODULES.BIBLE.IS_PLAYING, true);
-    const [next] = await Promise.all([nextOf(ref), ProjectionWindows.openBibleWindow()]);
+    await ProjectionWindows.openBibleWindow();
+    const chapter = bible.cachedChapterOf(ref);
+    const next = chapter ? nextVerseOf(chapter, ref.verses) : null;
     Broadcast.send(BROADCAST_TYPE.BIBLE_VERSE_INTENT, {
       text: ref.text,
       reference: ref.reference,
@@ -81,6 +82,7 @@ export function useProgramExecution() {
       next_reference: next?.reference ?? "",
       active: true,
     });
+    if (!chapter) void bible.chapterOf(ref);
   }
 
   function sendBible(ref: ProgramBibleRef): void {

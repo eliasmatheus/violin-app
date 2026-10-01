@@ -1,10 +1,11 @@
-import { computed, type Ref } from "vue";
+import { computed } from "vue";
 import Telemetry from "@/helpers/Telemetry";
 import { videoIdFromUrl, youtubeEmbedUrl } from "@/helpers/OnlineVideo";
 import Media from "@/composables/useMedia";
 import type { ProgramItem } from "@/types/Presentation";
 import type { Playable } from "../program/playable";
 import { useOnlineLibrary, type OnlineEntry } from "./useOnlineLibrary";
+import { queueCounter, type NavigableSource } from "./useLiveNavigation";
 
 /**
  * Vídeos do YouTube no palco: como um vídeo da aba vira um Playable, como ele
@@ -22,37 +23,41 @@ export function openOnline(videoId: string, title: string): void {
   });
 }
 
-/** Vídeo do YouTube de um item do programa, se ele for um. */
 export function itemVideoId(item: ProgramItem | null | undefined): string | null {
   return item?.kind === "online_video" ? videoIdFromUrl(item.source?.url) : null;
 }
 
 /**
- * A fila da playlist ou do canal de onde saiu o vídeo no ar: Anterior/Próximo
- * andam por ela enquanto aquele vídeo for o que está no ar.
+ * A fila da playlist ou do canal de onde saiu o vídeo enviado ao ar: o
+ * Anterior/Próximo anda por ela, e o vídeo seguinte fica preparado.
  */
-export function useOnlineQueue(liveOrigin: Ref<Playable | null>) {
+export function useOnlineQueue(deps: { sent: () => Playable | null; onSent: (playable: Playable) => void }) {
   const lib = useOnlineLibrary();
 
-  const live = computed(() => {
+  const live = () => {
     const q = lib.queue.value;
-    const origin = liveOrigin.value;
-    return !!q && origin?.type === "online" && q.entries[q.index]?.id === origin.videoId;
-  });
+    const sent = deps.sent();
+    return !!q && sent?.type === "online" && q.entries[q.index]?.id === sent.videoId;
+  };
 
-  /** O vídeo seguinte da lista — o candidato natural a ir ao ar. */
   const nextId = computed(() => {
     const q = lib.queue.value;
-    return live.value && q ? (q.entries[q.index + 1]?.id ?? null) : null;
+    return live() && q ? (q.entries[q.index + 1]?.id ?? null) : null;
   });
 
-  /** Põe no ar o vídeo vizinho e devolve o Playable dele; null quando não há para onde ir. */
-  function step(to: "first" | "prev" | "next" | "last"): Playable | null {
-    const video = lib.stepQueue(to);
-    if (!video) return null;
-    openOnline(video.id, video.title);
-    return onlinePlayable(video);
-  }
+  const source: NavigableSource = {
+    active: live,
+    canStep: () => (lib.queue.value?.entries.length ?? 0) > 1,
+    counter: () => queueCounter(lib.queue.value),
+    step(to) {
+      // Sem `dispatch`: ele recomeçaria a fila pela lista aberta agora.
+      const video = lib.stepQueue(to);
+      if (!video) return false;
+      openOnline(video.id, video.title);
+      deps.onSent(onlinePlayable(video));
+      return true;
+    },
+  };
 
-  return { queue: lib.queue, live, nextId, step, start: lib.startQueue };
+  return { source, nextId, start: lib.startQueue };
 }
