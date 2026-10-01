@@ -115,6 +115,79 @@ export function videoIdFromUrl(url: string | null | undefined): string | null {
   return m ? m[1] : null;
 }
 
+/** Canal ou playlist do YouTube, como o main aceita listar. */
+export interface YouTubeCollectionSource {
+  kind: "channel" | "playlist";
+  /** Canal: "UC…" ou "@nome". Playlist: o `list=` do link. */
+  id: string;
+}
+
+/** Um link do YouTube colado pelo operador: um vídeo, uma playlist ou um canal. */
+export type YouTubeSource = { kind: "video"; id: string } | YouTubeCollectionSource;
+
+export interface YouTubeCollectionEntry {
+  id: string;
+  title: string;
+  /** Segundos; null quando o YouTube não informa. */
+  duration: number | null;
+}
+
+export interface YouTubeCollectionPage {
+  title: string;
+  channel: string;
+  thumbnail: string | null;
+  entries: YouTubeCollectionEntry[];
+  hasMore: boolean;
+}
+
+const PLAYLIST_RE = /[?&]list=([A-Za-z0-9_-]{12,64})/;
+const CHANNEL_RE = /youtube\.com\/(?:channel\/(UC[A-Za-z0-9_-]{22})|(@[\p{L}\p{N}._-]{3,100}))/u;
+
+/**
+ * O que um link do YouTube aponta. Link de vídeo dentro de uma playlist
+ * (`watch?v=…&list=…`) conta como o vídeo: é ele que o operador estava vendo.
+ */
+export function youtubeSourceFromUrl(url: string | null | undefined): YouTubeSource | null {
+  if (typeof url !== "string" || !/(?:youtube\.com|youtu\.be)/i.test(url)) return null;
+  const video = videoIdFromUrl(url);
+  if (video) return { kind: "video", id: video };
+  const playlist = url.match(PLAYLIST_RE);
+  if (playlist) return { kind: "playlist", id: playlist[1] };
+  const channel = url.match(CHANNEL_RE);
+  if (channel) return { kind: "channel", id: channel[1] ?? decodeURIComponent(channel[2]) };
+  return null;
+}
+
+/** Só no desktop: o yt-dlp lista o canal ou a playlist no processo principal. */
+export function collectionsAvailable(): boolean {
+  return typeof Platform.onlineVideo?.collection === "function";
+}
+
+/**
+ * Uma página de vídeos de um canal (do mais recente ao mais antigo) ou de uma
+ * playlist. Lança com `kind` quando o main devolve falha.
+ */
+export async function listCollection(
+  source: YouTubeCollectionSource,
+  range: { start: number; count: number; lang?: string }
+): Promise<YouTubeCollectionPage> {
+  const api = Platform.onlineVideo;
+  if (!api?.collection) throw Object.assign(new Error("unsupported"), { kind: "unsupported" });
+  const res = await api.collection({ kind: source.kind, id: source.id }, range);
+  if (!res.ok) throw Object.assign(new Error(res.error.message), { kind: res.error.kind });
+  return { title: res.title, channel: res.channel, thumbnail: res.thumbnail, entries: res.entries, hasMore: res.hasMore };
+}
+
+/** Miniatura do vídeo servida pelo YouTube, sem chamar API nenhuma. */
+export function youtubeThumb(id: string): string {
+  return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+}
+
+/** O player embutido, como o resto do app abre os vídeos on-line. */
+export function youtubeEmbedUrl(id: string): string {
+  return `https://www.youtube.com/embed/${id}?autoplay=1&rel=0&controls=0`;
+}
+
 /**
  * Quando o download falha, cair no player do YouTube só ajuda se o problema for
  * nosso (ferramenta, rede até o GitHub, formato). Se o próprio vídeo é o problema
@@ -319,6 +392,17 @@ export async function ensure(
  */
 export function isProgressiveUrl(url: string | null | undefined): boolean {
   return typeof url === "string" && url.startsWith("louvorja://onlinestream/");
+}
+
+const PLAYBACK_URL_RE = /^louvorja:\/\/online(?:video|stream)\/([A-Za-z0-9_-]{11})(?:[./]|$)/;
+
+/**
+ * O vídeo do YouTube por trás do que está tocando: o arquivo baixado, o que
+ * ainda baixa ou o player embutido. null para qualquer outro arquivo.
+ */
+export function videoIdFromPlaybackUrl(url: string | null | undefined): string | null {
+  if (typeof url !== "string") return null;
+  return url.match(PLAYBACK_URL_RE)?.[1] ?? videoIdFromUrl(url);
 }
 
 /**

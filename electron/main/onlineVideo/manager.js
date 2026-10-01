@@ -6,6 +6,7 @@ const path = require("path");
 const { performance } = require("node:perf_hooks");
 const { createStore } = require("./store.js");
 const runner = require("./runner.js");
+const collections = require("./collections.js");
 const progressive = require("./progressive.js");
 const { isVideoId } = require("./ids.js");
 const { WorkPriority, canStartWork } = require("../presentationAdmission.js");
@@ -98,6 +99,7 @@ function createManager(cfg) {
     tools,
     run = runner.run,
     resolve = runner.resolveStreams,
+    listCollection = collections.listCollection,
     mux = runner.muxCopy,
     openSession = progressive.openSession,
     fetchRange,
@@ -1050,6 +1052,21 @@ function createManager(cfg) {
     return store.list();
   }
 
+  /**
+   * Os vídeos de um canal ou de uma playlist, uma página por vez. Instala as
+   * ferramentas na primeira vez, como o tocar faria.
+   */
+  async function collection(source, range) {
+    if (!tools.supported) return fail(new OnlineVideoError("unsupported", "Plataforma sem suporte"));
+    try {
+      if (!tools.ready()) await tools.ensure();
+      const result = await listCollection({ tools: tools.paths(), cacheDir, jsRuntime: jsRuntime(), source, range });
+      return { ok: true, ...result };
+    } catch (error) {
+      return fail(error);
+    }
+  }
+
   async function init() {
     // Recém-aberto o app, nada pode estar lendo as trilhas de um vídeo que baixava antes.
     await fs.remove(streamDir).catch(() => {});
@@ -1087,6 +1104,7 @@ function createManager(cfg) {
     status,
     diagnosticSnapshot,
     list,
+    collection,
     init,
     close,
     setPresentationActive,

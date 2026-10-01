@@ -252,6 +252,13 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     has: (id) => ipcRenderer.invoke("onlineVideo:has", id),
     /** Vídeos em disco: [{ id, size, usedAt, kept }] */
     list: () => ipcRenderer.invoke("onlineVideo:list"),
+    /**
+     * Vídeos de um canal (do mais recente ao mais antigo) ou de uma playlist, sem baixar.
+     * `source`: `{ kind: "channel" | "playlist", id }` — id do canal (UC…), @ dele ou id
+     * da playlist. `range`: `{ start, count }` (1-based, até 50). Resolve
+     * `{ ok, title, channel, thumbnail, entries: [{ id, title, duration }], hasMore }`.
+     */
+    collection: (source, range) => ipcRenderer.invoke("onlineVideo:collection", source, range),
     /** Manda manter um vídeo já baixado: o despejo por espaço não o leva. */
     keep: (id) => ipcRenderer.invoke("onlineVideo:keep", id),
     /** Instala yt-dlp e ffmpeg de antemão, em silêncio. Resolve `{ ok, ready }`. */

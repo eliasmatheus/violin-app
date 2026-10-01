@@ -250,6 +250,13 @@ declare global {
       cancel: (id: string) => Promise<boolean>;
       has: (id: string) => Promise<boolean>;
       list: () => Promise<import("./helpers/OnlineVideo").OnlineVideoFile[]>;
+      collection?: (
+        source: import("./helpers/OnlineVideo").YouTubeCollectionSource,
+        range: { start: number; count: number; lang?: string }
+      ) => Promise<
+        | ({ ok: true } & import("./helpers/OnlineVideo").YouTubeCollectionPage)
+        | { ok: false; error: { kind: string; message: string } }
+      >;
       keep: (id: string) => Promise<boolean>;
       prepare: () => Promise<{ ok: boolean; ready?: boolean; error?: unknown }>;
       remove: (id: string) => Promise<boolean>;

@@ -521,17 +521,33 @@ function parseStreams(info, now = Date.now()) {
  * @param {boolean} [opts.systemCerts] confiar no repositório de certificados do sistema em vez do `certifi`
  */
 function resolveStreamsOnce(opts) {
+  return runJson({ ...opts, args: buildResolveArgs(opts) }).then((info) => parseStreams(info));
+}
+
+/**
+ * Roda o yt-dlp com `args` e devolve o JSON que ele escreve na saída. Serve às
+ * consultas que não baixam nada: os formatos de um vídeo, a lista de um canal.
+ *
+ * @param {object} opts
+ * @param {{ ytdlp: string }} opts.tools
+ * @param {string[]} opts.args
+ * @param {string} [opts.jsRuntime]
+ * @param {AbortSignal} [opts.signal]
+ * @param {typeof spawn} [opts.spawnImpl]
+ * @param {typeof killTree} [opts.killImpl]
+ * @param {number} [opts.timeoutMs]
+ * @param {number} [opts.maxOutput]
+ */
+function runJson(opts) {
   const {
     tools,
-    id,
-    maxHeight,
-    cacheDir,
+    args,
     jsRuntime,
-    systemCerts,
     signal,
     spawnImpl = spawn,
     killImpl = killTree,
     timeoutMs = RESOLVE_TIMEOUT_MS,
+    maxOutput = RESOLVE_MAX_OUTPUT,
   } = opts;
 
   return new Promise((resolve, reject) => {
@@ -541,7 +557,7 @@ function resolveStreamsOnce(opts) {
     }
     let child;
     try {
-      child = spawnImpl(tools.ytdlp, buildResolveArgs({ id, maxHeight, cacheDir, jsRuntime, systemCerts }), {
+      child = spawnImpl(tools.ytdlp, args, {
         windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
         env: childEnv(jsRuntime),
@@ -577,7 +593,7 @@ function resolveStreamsOnce(opts) {
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
-      if (stdout.length > RESOLVE_MAX_OUTPUT) {
+      if (stdout.length > maxOutput) {
         killImpl(child);
         finish(reject, new OnlineVideoError("format", "Resposta do yt-dlp grande demais"));
       }
@@ -594,12 +610,9 @@ function resolveStreamsOnce(opts) {
         return;
       }
       try {
-        finish(resolve, parseStreams(JSON.parse(stdout)));
-      } catch (error) {
-        finish(
-          reject,
-          error instanceof OnlineVideoError ? error : new OnlineVideoError("format", "Resposta do yt-dlp ilegível")
-        );
+        finish(resolve, JSON.parse(stdout));
+      } catch {
+        finish(reject, new OnlineVideoError("format", "Resposta do yt-dlp ilegível"));
       }
     });
   });
@@ -737,4 +750,7 @@ module.exports = {
   needsFreshTool,
   killTree,
   run,
+  runJson,
+  withSystemCerts,
+  SYSTEM_CERTS_ARGS,
 };

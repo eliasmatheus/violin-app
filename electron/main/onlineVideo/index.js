@@ -138,6 +138,10 @@ function registerIpc(ipcMain) {
   ipcMain.handle("onlineVideo:keep", async (_event, id) => (await readyManager()).keep(id));
   ipcMain.handle("onlineVideo:prepare", async () => (await readyManager()).prepare());
   ipcMain.handle("onlineVideo:list", async () => (await readyManager()).list());
+  // Canal ou playlist: `source` é `{ kind, id }`, validado e transformado em URL no main.
+  ipcMain.handle("onlineVideo:collection", async (_event, source, range) =>
+    logFailure("collection", source?.id, await (await readyManager()).collection(source, range))
+  );
   ipcMain.handle("onlineVideo:remove", async (_event, id) => (await readyManager()).remove(id));
   ipcMain.handle("onlineVideo:clear", async () => (await readyManager()).clear());
 }
