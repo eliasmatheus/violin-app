@@ -88,6 +88,11 @@ controlPresentationScreens(() =>
 );
 // Apresentação ligada: o fim de um vídeo ou música não fecha as telas (ficam no fundo).
 keepPresentationScreens(() => _on.value.main || _on.value.stage);
+// O vídeo só no retorno acabou: sai do retorno, como o da tela principal sai
+// da tela — senão o último quadro cobre o retorno (e a letra que vier depois).
+useReturnPlayer().onEnded((id) => {
+  if (_returnOverride.value?.id === id) void showOnReturn(null);
+});
 /** Janela que sumiu com a apresentação iniciada (Esc no telão, monitor desligado). */
 const _mainMissing = ref(false);
 const _stageMissing = ref(false);

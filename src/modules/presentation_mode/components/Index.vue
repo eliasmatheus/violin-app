@@ -77,7 +77,7 @@
             </LjButton>
             <ReturnControl :live-kind="liveKind" />
             <LjButton
-              v-if="!stagePreview && liveKind"
+              v-if="!stagePreview && canTakeOff"
               class="pm-bar__take-off"
               size="sm"
               :icon="ICONS.PLAYER.STOP_CIRCLE"
@@ -192,7 +192,7 @@
         :locked="outputLocked"
         :can-navigate="canNavigate"
         :flash="upNextFlash"
-        :on-air="!!liveKind"
+        :on-air="canTakeOff"
         @take-off="takeOff"
         @first="navigate('first')"
         @prev="navigate('prev')"
@@ -645,11 +645,18 @@ const { libraryLivePath, liveBibleRef } = useLibraryLiveMarks({ liveOrigin, live
 
 /** Tira do ar o que está na tela, mantendo a apresentação aberta. */
 function takeOff(): void {
-  Telemetry.track("presentation_take_off", { kind: liveKind.value });
+  Telemetry.track("presentation_take_off", {
+    kind: liveKind.value,
+    return_only: !!returnOverride.value,
+  });
   takeOffAir(liveKind.value);
+  // O que está só no retorno também está no ar: o operador não vê o palco da mesa.
+  if (returnOverride.value) void showOnReturn(null);
   stage.clearSent();
 }
-watch(liveKind, (kind) => $appdata.set(KEYS.MODULES.PRESENTATION_MODE.CAN_TAKE_OFF, !!kind), {
+/** Há o que tirar do ar: algo na tela principal ou algo só no retorno. */
+const canTakeOff = computed(() => !!liveKind.value || !!returnOverride.value);
+watch(canTakeOff, (can) => $appdata.set(KEYS.MODULES.PRESENTATION_MODE.CAN_TAKE_OFF, can), {
   immediate: true,
 });
 

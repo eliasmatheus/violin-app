@@ -26,6 +26,12 @@ const state = reactive({
 
 let el: HTMLVideoElement | null = null;
 let ticker: ReturnType<typeof setInterval> | null = null;
+/** Quem tira o vídeo do retorno quando ele acaba (useOutputs). */
+let endedHandler: ((id: string) => void) | null = null;
+
+function onEnded(handler: ((id: string) => void) | null): void {
+  endedHandler = handler;
+}
 
 function publish(): void {
   if (!el || !state.id) return;
@@ -67,6 +73,7 @@ function start(video: { id: string; url: string; title: string }): void {
   for (const event of ["loadedmetadata", "play", "pause", "seeked", "ended", "timeupdate"]) {
     media.addEventListener(event, sync);
   }
+  media.addEventListener("ended", () => endedHandler?.(video.id));
   media.src = video.url;
   el = media;
   Object.assign(state, { id: video.id, title: video.title, currentTime: 0, duration: 0, paused: false });
@@ -104,5 +111,5 @@ function toggleMute(): void {
 }
 
 export function useReturnPlayer() {
-  return { state, start, stop, toggle, seek, advance, setVolume, toggleMute };
+  return { state, start, stop, toggle, seek, advance, setVolume, toggleMute, onEnded };
 }
