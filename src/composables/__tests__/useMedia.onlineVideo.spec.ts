@@ -1154,10 +1154,34 @@ describe("fim natural do player embutido", () => {
     emitState(projection?.playback_id as string);
     emitState(projection?.playback_id as string);
     expect(close).toHaveBeenCalledOnce();
-    expect(close).toHaveBeenCalledWith(true);
+    expect(close).toHaveBeenCalledWith(true, false, false);
     expect(h.send).toHaveBeenCalledWith(BROADCAST_TYPE.MEDIA_CLOSE);
+    await vi.waitFor(() => expect(h.closeWindows).toHaveBeenCalled());
 
     close.mockRestore();
+  });
+
+  it("com a apresentação ligada, o fim do vídeo limpa as telas mas não fecha as janelas", async () => {
+    const { keepPresentationScreens } = await import("@/helpers/ProjectionWindows");
+    keepPresentationScreens(() => true);
+    try {
+      await media.openEmbeddedYouTube(embed(ID), "Vídeo 1");
+      const projection = h.send.mock.calls.find(
+        ([type]) => type === BROADCAST_TYPE.ONLINE_VIDEO_PROJECTION
+      )?.[1] as { playback_id?: string } | undefined;
+      h.closeWindows.mockClear();
+      for (const listener of [...h.listeners]) {
+        listener({
+          type: BROADCAST_TYPE.YOUTUBE_STATE,
+          payload: { state: 0, playback_id: projection?.playback_id, currentTime: 10, duration: 10, isPaused: true, sampledAt: Date.now() },
+        });
+      }
+      expect(h.send).toHaveBeenCalledWith(BROADCAST_TYPE.MEDIA_CLOSE);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(h.closeWindows).not.toHaveBeenCalled();
+    } finally {
+      keepPresentationScreens(null);
+    }
   });
 });
 

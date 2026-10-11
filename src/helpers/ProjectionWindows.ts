@@ -259,6 +259,14 @@ export async function openMediaWindow(
 
   if (kind === "return" && media !== "music") {
     if (placeable || (await isWindowOpen(PROJECTION_TYPE.RETURN))) await _close(PROJECTION_TYPE.RETURN);
+    /*
+     * Arquivo e vídeo on-line usam a mesma rota de retorno com chaves
+     * diferentes: a do outro, se ficou aberta, seria uma segunda janela de
+     * retorno no mesmo monitor — dois "retornos" com o vídeo anterior por baixo.
+     */
+    const sibling =
+      plan.feature === PROJECTION_TYPE.FILE_RETURN ? PROJECTION_TYPE.ONLINE_VIDEO_RETURN : PROJECTION_TYPE.FILE_RETURN;
+    if (await isWindowOpen(sibling)) await _close(sibling);
   }
   if (!placeable) return;
   /*
@@ -311,6 +319,24 @@ export interface PresentationScreens {
 let _screens: (() => PresentationScreens | null) | null = null;
 export function controlPresentationScreens(provider: (() => PresentationScreens | null) | null): void {
   _screens = provider;
+}
+
+/**
+ * Há uma apresentação com telas ligadas (Modo apresentação), em qualquer aba?
+ * Então o fim natural de uma mídia não encerra a apresentação: as telas ficam
+ * abertas, no fundo configurado, à espera do próximo conteúdo — como o
+ * "Tirar do ar". Sem apresentação ligada, o fim da mídia fecha as janelas.
+ */
+let _keepScreens: (() => boolean) | null = null;
+export function keepPresentationScreens(provider: (() => boolean) | null): void {
+  _keepScreens = provider;
+}
+export function presentationKeepsScreens(): boolean {
+  try {
+    return !!_keepScreens?.();
+  } catch {
+    return false;
+  }
 }
 
 /**

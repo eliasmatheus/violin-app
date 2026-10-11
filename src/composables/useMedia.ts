@@ -29,6 +29,7 @@ import {
   closeProjectionWindows,
   closeFileProjectionWindows,
   closeMusicProjectionWindows,
+  presentationKeepsScreens,
 } from "@/helpers/ProjectionWindows";
 import { Music } from "@/types/Music";
 import type { Lyric } from "@/types/Lyric";
@@ -1102,13 +1103,16 @@ _audio.onTimeUpdate((ct, d) => {
   }
 
   if (!_audio.isPaused.value && ct >= d && d > 0 && !_switchingMode) {
+    // Com uma apresentação ligada, acabar a mídia não acaba a apresentação:
+    // as telas ficam abertas, no fundo configurado.
+    const keepWindows = presentationKeepsScreens();
     if (_playlistOnEnd) {
       const handled = _playlistOnEnd();
       if (!handled) {
-        _self.close(true, true);
+        _self.close(true, true, keepWindows);
       }
     } else {
-      _self.close(true, true);
+      _self.close(true, true, keepWindows);
     }
   }
 
@@ -2620,7 +2624,7 @@ const _self = {
         ) {
           // A janela apenas reporta o fim; a Shell é a dona do lifecycle e
           // publica MEDIA_CLOSE uma única vez para todas as projeções.
-          _self.close(true);
+          _self.close(true, false, presentationKeepsScreens());
           return;
         }
       }

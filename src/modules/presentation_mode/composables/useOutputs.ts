@@ -6,6 +6,7 @@ import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import {
   closeProjectionWindows,
   controlPresentationScreens,
+  keepPresentationScreens,
   openMediaWindow,
 } from "@/helpers/ProjectionWindows";
 import { close as closeProjection } from "@/helpers/Projection";
@@ -85,6 +86,8 @@ const _showing = _presenting;
 controlPresentationScreens(() =>
   $appdata.get<string>(KEYS.SHELL.ACTIVE_MODULE, "") === ModuleEnum.PRESENTATION_MODE ? { ..._on.value } : null
 );
+// Apresentação ligada: o fim de um vídeo ou música não fecha as telas (ficam no fundo).
+keepPresentationScreens(() => _on.value.main || _on.value.stage);
 /** Janela que sumiu com a apresentação iniciada (Esc no telão, monitor desligado). */
 const _mainMissing = ref(false);
 const _stageMissing = ref(false);
