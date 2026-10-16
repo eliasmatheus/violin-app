@@ -30,10 +30,18 @@ export function useMonitorRole(role: MonitorRole) {
     monitor.value === null ? tm("outputs.no_monitor") : tm("outputs.monitor", { n: monitor.value })
   );
 
+  /** O mesmo texto do menu ("Monitor 2 — Built-in Retina Display"): o nome diz qual aparelho é. */
+  const displayLabel = (d: { name?: string; number?: number | null; label: string }) =>
+    d.name ? `${tm("outputs.monitor", { n: d.number ?? "?" })} — ${d.name}` : d.label;
+  /** Seletor da coluna Apresentação: o monitor com o nome do aparelho. */
+  const selectorLabel = computed(() =>
+    display.value ? displayLabel(display.value) : tm("outputs.no_monitor")
+  );
+
   const items = computed<LjMenuItem[]>(() => [
     { label: tm(role === "stage" ? "monitors.stage_title" : "monitors.main_title") },
     ...displays.value.map((d) => ({
-      label: d.name ? `${tm("outputs.monitor", { n: d.number ?? "?" })} — ${d.name}` : d.label,
+      label: displayLabel(d),
       hint: d.primary ? tm("monitors.operator_screen") : undefined,
       checked: String(d.id) === String(currentId.value),
       action: () => void setRole(role, d.id),
@@ -45,5 +53,5 @@ export function useMonitorRole(role: MonitorRole) {
     },
   ]);
 
-  return { monitor, monitorLabel, items, size, identify: () => void identify(3000) };
+  return { monitor, monitorLabel, selectorLabel, items, size, identify: () => void identify(3000) };
 }

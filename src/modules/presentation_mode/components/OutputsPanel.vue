@@ -65,7 +65,7 @@
           <template #trigger>
             <button type="button" class="pm-outputs__monitor" data-testid="pm-monitor-main">
               <LjIcon :icon="ICONS.PROJECTION.SCREEN_OUTLINE" :size="13" />
-              <span class="pm-outputs__monitor-label">{{ mainRole.monitorLabel.value }}</span>
+              <span class="pm-outputs__monitor-label">{{ mainRole.selectorLabel.value }}</span>
               <LjIcon :icon="ICONS.UI.CHEVRON_DOWN" :size="11" />
             </button>
           </template>
@@ -142,7 +142,7 @@
           <template #trigger>
             <button type="button" class="pm-outputs__monitor" data-testid="pm-monitor-stage">
               <LjIcon :icon="ICONS.PROJECTION.RETURN" :size="13" />
-              <span class="pm-outputs__monitor-label">{{ stageRole.monitorLabel.value }}</span>
+              <span class="pm-outputs__monitor-label">{{ stageRole.selectorLabel.value }}</span>
               <LjIcon :icon="ICONS.UI.CHEVRON_DOWN" :size="11" />
             </button>
           </template>
