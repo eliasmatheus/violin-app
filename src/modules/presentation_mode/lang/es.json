@@ -36,7 +36,6 @@
     "outputs": "Salidas"
   },
   "empty": {
-    "program": "No hay ítems en el programa de este día.",
     "stage": "Nada al aire.",
     "outputs": "Pantalla principal y retorno de escenario."
   },
@@ -551,5 +550,16 @@
     "discard": "Descartar vista previa",
     "present": "Presentar ↵",
     "present_title": "Presentar la vista previa (Enter)"
+  },
+  "history": {
+    "no_program_today": "Sin programa hoy",
+    "no_program_day": "Sin programa en este día",
+    "no_program_hint": "Presente directo desde la biblioteca. Lo que pase en las pantallas queda anotado aquí abajo.",
+    "build": "Armar programa",
+    "title": "Ya pasó hoy",
+    "empty": "Nada salió al aire todavía.",
+    "again": "Presentar de nuevo",
+    "save": "Guardar lo que pasó como programa",
+    "session_label": "Lo que pasó"
   }
 }

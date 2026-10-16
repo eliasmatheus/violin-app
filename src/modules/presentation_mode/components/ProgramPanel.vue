@@ -72,7 +72,12 @@
           <span class="pm-clock__label">{{ tm("program.now") }}</span>
           <span class="pm-clock__now">{{ nowLabel }}</span>
         </div>
-        <div class="pm-clock__col pm-clock__col--end">
+        <!-- Sem programa: não há término a prever; vale há quanto o que está no ar entrou. -->
+        <div v-if="!items.length" class="pm-clock__col pm-clock__col--end">
+          <span class="pm-clock__label">{{ tm("control.on_air_for") }}</span>
+          <span class="pm-clock__end" data-testid="pm-clock-on-air">{{ onAirForLabel }}</span>
+        </div>
+        <div v-else class="pm-clock__col pm-clock__col--end">
           <span class="pm-clock__label">{{ tm("program.forecast_end") }}</span>
           <span class="pm-clock__end">
             <span :class="{ 'pm-clock__end--late': fc.status === 'late' }">
@@ -82,7 +87,7 @@
           </span>
         </div>
       </div>
-      <div class="pm-clock__row pm-clock__row--center">
+      <div v-if="items.length" class="pm-clock__row pm-clock__row--center">
         <span class="pm-delta" :class="`pm-delta--${fc.status}`" data-testid="pm-delta">
           <LjIcon
             v-if="fc.status !== 'on_time'"
@@ -95,7 +100,7 @@
           {{ tm("program.live_started", { time: liveStartedLabel }) }}
         </span>
       </div>
-      <div class="pm-progress" role="presentation">
+      <div v-if="items.length" class="pm-progress" role="presentation">
         <span class="pm-progress__done" :style="{ width: `${progress.done}%` }" />
         <span class="pm-progress__live" :style="{ width: `${progress.live}%` }" />
       </div>
@@ -103,25 +108,16 @@
 
     <div class="pm-program__body">
       <div class="pm-program__list" data-testid="pm-program-list">
-        <div v-if="!program.sessions.length" class="pm-program__empty">
-          <LjEmpty :icon="ICONS.LITURGY.SCRIPT" :title="tm('empty.program')">
-            <LjButton
-              size="sm"
-              variant="primary"
-              :icon="ICONS.LITURGY.SCRIPT"
-              data-testid="pm-program-from-model"
-              @click="openModels('new')"
-            >
-              {{ tm("models.use") }}
-            </LjButton>
-            <LjButton size="sm" :icon="ICONS.ACTIONS.IMPORT" @click="emit('import')">
-              {{ tm("ribbon.btn.import_liturgy") }}
-            </LjButton>
-            <LjButton size="sm" :icon="ICONS.ACTIONS.ADD" @click="emit('new-item')">
-              {{ tm("ribbon.btn.new_item") }}
-            </LjButton>
-          </LjEmpty>
-        </div>
+        <!-- Sem programa: o módulo funciona igual; o que passa nas telas fica anotado. -->
+        <AirHistory
+          v-if="!items.length"
+          :entries="history"
+          :live-id="liveHistoryId ?? null"
+          :is-today="isToday"
+          @build="emit('new-item')"
+          @model="openModels('new')"
+          @replay="(entry: HistoryEntry) => emit('replay', entry)"
+        />
 
         <section v-for="session in program.sessions" :key="session.id" class="pm-session">
           <header class="pm-session__head" @dblclick="emit('edit-session', session.id)">
@@ -200,6 +196,18 @@
 
     <!-- Próximo item: enviar, voltar, travar. Sem item nenhum, o total do programa. -->
     <slot v-if="items.length" name="foot" />
+    <footer v-else-if="isToday && history.length" class="pm-program__foot pm-program__foot--save">
+      <LjButton
+        variant="ghost"
+        size="sm"
+        block
+        :icon="ICONS.ACTIONS.SAVE"
+        data-testid="pm-history-save"
+        @click="emit('save-history')"
+      >
+        {{ tm("history.save") }}
+      </LjButton>
+    </footer>
     <footer v-else class="pm-program__foot">
       <span>{{ countsLabel }}</span>
       <span class="pm-program__total">{{ formatDuration(totalMinutes(program)) }}</span>
@@ -213,7 +221,6 @@ import draggable from "vuedraggable";
 import {
   LjButton,
   LjContextMenu,
-  LjEmpty,
   LjIcon,
   LjInput,
   LjMenu,
@@ -225,6 +232,9 @@ import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import type { ProgramItem, ProgramSubItem } from "@/types/Presentation";
 import ProgramItemRow from "./ProgramItemRow.vue";
+import AirHistory from "./AirHistory.vue";
+import { useAirHistory } from "../composables/useAirHistory";
+import type { HistoryEntry } from "../program/history";
 import ProgramModelDialog from "./ProgramModelDialog.vue";
 import ProgramSyncStatus from "./ProgramSyncStatus.vue";
 import ReadinessDialog from "./ReadinessDialog.vue";
@@ -258,10 +268,29 @@ const emit = defineEmits<{
   settings: [];
   "child-preview": [itemId: string, childId: string];
   "child-play": [itemId: string, childId: string];
+  /** "Já passou hoje": apresentar de novo uma linha. */
+  replay: [entry: HistoryEntry];
+  /** "Guardar o que passou como programa". */
+  "save-history": [];
 }>();
 
 /** O filho de momento que está no ar, para destacar na lista. */
-defineProps<{ liveChildId: string | null }>();
+const props = defineProps<{
+  liveChildId: string | null;
+  /** Sem programa: a linha de "Já passou hoje" que está no ar. */
+  liveHistoryId?: string | null;
+}>();
+
+const history = useAirHistory().entries;
+
+/** Sem programa: há quanto o que está no ar entrou (a linha dele no histórico). */
+const onAirForLabel = computed(() => {
+  const entry = history.value.find((e) => e.id === props.liveHistoryId);
+  if (!entry) return "—";
+  const s = Math.max(0, Math.floor((now.value.getTime() - entry.at) / 1000));
+  const m = Math.floor(s / 60);
+  return m >= 60 ? formatDuration(m) : `${m}m${String(s % 60).padStart(2, "0")}s`;
+});
 
 const { t, tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 const {
@@ -835,6 +864,10 @@ function onSessionItems(sessionId: string, list: ProgramItem[]): void {
 
 .pm-session__items :deep(.pm-drag-ghost) {
   opacity: 0.5;
+}
+
+.pm-program__foot--save {
+  padding: 6px 8px;
 }
 
 .pm-program__foot {

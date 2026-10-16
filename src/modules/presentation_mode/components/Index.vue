@@ -22,6 +22,12 @@
       <ProgramPanel
         v-if="!programHidden"
         :live-child-id="liveOrigin?.type === 'child' ? liveOrigin.childId : null"
+        :live-history-id="liveHistoryId"
+        @replay="
+          (entry: HistoryEntry) =>
+            dispatch(entry.playable, { mode: entry.mode, muted: entry.muted })
+        "
+        @save-history="saveHistoryAsProgram"
         @activate="activate"
         @child-preview="
           (itemId: string, childId: string) => stage.show({ type: 'child', itemId, childId })
@@ -284,7 +290,9 @@ import {
   stopOutputs,
 } from "../composables/useOutputs";
 import { formatHHMM, plannedStarts } from "../program/time";
-import { useProgram } from "../composables/useProgram";
+import { newId, useProgram } from "../composables/useProgram";
+import { useAirHistory } from "../composables/useAirHistory";
+import { historyItem, type HistoryEntry } from "../program/history";
 import {
   playCustomMusicInMode,
   playMusicInMode,
@@ -315,6 +323,7 @@ const {
   selectedItemId,
   ensureLoaded,
   setPlannedStart,
+  setSessions,
   addItem,
   duplicateItem,
   goLive,
@@ -455,6 +464,7 @@ function dispatch(
     Telemetry.track("presentation_library_online_projected", {});
   }
   stage.markSent(playable, expected);
+  airHistory.record(playable, { mode, muted });
   if (expected.songId) goToSlideWhenLoaded(expected.songId, slideIndex);
 }
 
@@ -749,6 +759,34 @@ function toggleLock(): void {
   const queued = preparedItemId.value;
   prepare(null);
   if (queued) activate(queued, { force: true });
+}
+
+/* ─── Sem programa: "Já passou hoje" ─── */
+
+const airHistory = useAirHistory();
+
+/** A linha do histórico que está no ar: a última que ainda é o que está nas telas. */
+const liveHistoryId = computed(() => {
+  const origin = liveOrigin.value;
+  if (!origin) return null;
+  const list = airHistory.entries.value;
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (samePlayable(list[i].playable, origin)) return list[i].id;
+  }
+  return null;
+});
+
+/** "Guardar o que passou como programa": as linhas viram os itens do dia, na ordem. */
+function saveHistoryAsProgram(): void {
+  const list = airHistory.entries.value.map(historyItem).filter((i): i is ProgramItem => !!i);
+  if (!list.length) return;
+  const sessions = program.value.sessions;
+  if (sessions.length) {
+    setSessions(sessions.map((s, i) => (i === 0 ? { ...s, items: [...s.items, ...list] } : s)));
+  } else {
+    setSessions([{ id: newId(), label: tm("history.session_label"), items: list }]);
+  }
+  Telemetry.track("presentation_history_saved", { items: list.length });
 }
 
 /* ─── Itens e sessões: os diálogos de edição do programa ─── */
