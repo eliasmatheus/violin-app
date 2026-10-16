@@ -594,7 +594,7 @@
     "out": "Reduzir (−)",
     "fit": "Ajustar",
     "fit_title": "Ajustar à tela (0)",
-    "visor_hint": "Ctrl/Cmd + roda ou pinça amplia · clique duplo alterna entre ajustar e o detalhe · com zoom, arraste (ou segure a roda) para mover",
+    "visor_hint": "Ctrl/Cmd + roda ou pinça amplia · clique duplo alterna entre ajustar e o detalhe · com zoom, arraste, segure a roda ou role com dois dedos para mover",
     "actual_title": "Tamanho real na tela principal (1)",
     "double_title": "Ampliar 2× (1)"
   }

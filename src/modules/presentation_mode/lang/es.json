@@ -594,7 +594,7 @@
     "out": "Reducir (−)",
     "fit": "Ajustar",
     "fit_title": "Ajustar a la pantalla (0)",
-    "visor_hint": "Ctrl/Cmd + rueda o pellizco amplía · doble clic alterna entre ajustar y el detalle · con zoom, arrastre (o mantenga la rueda) para mover",
+    "visor_hint": "Ctrl/Cmd + rueda o pellizco amplía · doble clic alterna entre ajustar y el detalle · con zoom, arrastre, mantenga la rueda o desplace con dos dedos para mover",
     "actual_title": "Tamaño real en la pantalla principal (1)",
     "double_title": "Ampliar 2× (1)"
   }

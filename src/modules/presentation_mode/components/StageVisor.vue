@@ -82,14 +82,30 @@ function pointAt(box: DOMRect, x: number, y: number): { x: number; y: number } {
   return { x: (x - box.left) / box.width, y: (y - box.top) / box.height };
 }
 
-/** Ctrl/Cmd + roda, ou a pinça do trackpad (que chega como roda com Ctrl). A roda sozinha não amplia. */
+/**
+ * Ctrl/Cmd + roda, ou a pinça do trackpad (que chega como roda com Ctrl),
+ * amplia no ponto. Sem Ctrl, com zoom, a rolagem (dois dedos no trackpad,
+ * roda do mouse; Shift para o lado) move o recorte, como no Preview.
+ * Ajustado, a roda sozinha não faz nada.
+ */
 function onWheel(e: WheelEvent): void {
-  if (!zoomable.value || !(e.ctrlKey || e.metaKey)) return;
-  e.preventDefault();
+  if (!zoomable.value) return;
   const box = mediaBox();
-  // A pinça manda passos pequenos; a roda do mouse, passos de ~100. A sensação é a mesma.
-  const rate = Math.abs(e.deltaY) < 40 ? 0.01 : 0.002;
-  zoom.zoomBy(Math.exp(-e.deltaY * rate), box ? pointAt(box, e.clientX, e.clientY) : undefined);
+  if (e.ctrlKey || e.metaKey) {
+    e.preventDefault();
+    // A pinça manda passos pequenos; a roda do mouse, passos de ~100. A sensação é a mesma.
+    const rate = Math.abs(e.deltaY) < 40 ? 0.01 : 0.002;
+    zoom.zoomBy(Math.exp(-e.deltaY * rate), box ? pointAt(box, e.clientX, e.clientY) : undefined);
+    return;
+  }
+  if (zoom.scale.value <= 1 || !box) return;
+  e.preventDefault();
+  // Linhas (roda de mouse em alguns sistemas) viram pixels.
+  const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? box.height : 1;
+  const dx = (e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX) * unit;
+  const dy = (e.shiftKey && !e.deltaX ? 0 : e.deltaY) * unit;
+  // Rolar para baixo mostra o que está mais abaixo: o contrário de arrastar.
+  zoom.panBy(-dx / box.width, -dy / box.height);
 }
 
 function onDoubleClick(e: MouseEvent): void {
