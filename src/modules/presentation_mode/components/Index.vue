@@ -118,6 +118,7 @@
           :view="previewView"
           @play="playPreview"
           @play-return="playPreviewOnReturn"
+          @play-muted="stage.preview.value && dispatch(stage.preview.value, { muted: true })"
         />
         <!-- Música e PDF: a grade de hoje. Pasta e momento no ar não repetem os arquivos aqui. -->
         <StageSlides v-else-if="showSlideGrid" :locked="outputLocked" />
@@ -130,6 +131,13 @@
         </div>
         <!-- Vídeo só no retorno: o player dele fica no palco enquanto toca. -->
         <ReturnPlayerBar @close="onShowOnReturn(null)" />
+        <!-- Vídeo dentro de uma pasta ou momento: a barra anda pelos arquivos; o tempo dele fica aqui. -->
+        <LiveVideoBar
+          v-if="position && (transport.isVideo.value || audioLive)"
+          :transport="transport"
+          :title="liveTitle"
+          :locked="outputLocked"
+        />
         <!-- Uma barra para tudo o que vai ao ar: controla sempre o que está no ar, nunca a prévia. -->
         <ControlBar
           :transport="transport"
@@ -217,6 +225,7 @@ import OutputsPanel from "./OutputsPanel.vue";
 import StageSlides from "./StageSlides.vue";
 import StageVisor from "./StageVisor.vue";
 import ControlBar from "./ControlBar.vue";
+import LiveVideoBar from "./LiveVideoBar.vue";
 import StagePreview from "./StagePreview.vue";
 import MomentStage from "./MomentStage.vue";
 import SeriesDialog from "./SeriesDialog.vue";

@@ -55,16 +55,25 @@
           <span>{{ view.title }}</span>
         </div>
 
-        <LjButton
-          v-if="view.kind === 'image' || view.kind === 'video'"
-          size="sm"
-          class="pm-preview__return"
-          :icon="ICONS.PROJECTION.RETURN"
-          data-testid="pm-preview-return"
-          @click="emit('play-return')"
-        >
-          {{ tm("library.play_on_return") }}
-        </LjButton>
+        <div v-if="view.kind === 'image' || view.kind === 'video'" class="pm-preview__actions">
+          <LjButton
+            v-if="view.kind === 'video'"
+            size="sm"
+            :icon="ICONS.PLAYER.VOLUME_MUTE"
+            data-testid="pm-preview-muted"
+            @click="emit('play-muted')"
+          >
+            {{ tm("library.play_muted") }}
+          </LjButton>
+          <LjButton
+            size="sm"
+            :icon="ICONS.PROJECTION.RETURN"
+            data-testid="pm-preview-return"
+            @click="emit('play-return')"
+          >
+            {{ tm("library.play_on_return") }}
+          </LjButton>
+        </div>
         <LjTooltip v-if="view.playable && !view.needsMode" :text="tm('preview.play')">
           <button
             type="button"
@@ -142,6 +151,7 @@ const props = defineProps<{ view: PreviewView }>();
 const emit = defineEmits<{
   play: [slideIndex?: number, mode?: MusicMode];
   "play-return": [];
+  "play-muted": [];
 }>();
 
 const { tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
@@ -321,10 +331,12 @@ watch(
     background 120ms var(--lj-ease);
 }
 
-.pm-preview__return {
+.pm-preview__actions {
   position: absolute;
   right: 10px;
   bottom: 10px;
+  display: flex;
+  gap: 6px;
 }
 
 .pm-preview__play:hover,
