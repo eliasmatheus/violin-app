@@ -23,9 +23,7 @@
         data-testid="pm-zoom-out"
         @click="zoom.zoomOut()"
       />
-      <span class="pm-zoom__pct" data-testid="pm-zoom-pct">
-        {{ Math.round(zoom.scale.value * 100) }}%
-      </span>
+      <span class="pm-zoom__pct" data-testid="pm-zoom-pct">{{ zoom.percent.value }}%</span>
       <LjButton
         size="sm"
         variant="ghost"
@@ -35,6 +33,19 @@
         data-testid="pm-zoom-in"
         @click="zoom.zoomIn()"
       />
+      <LjButton
+        size="sm"
+        variant="ghost"
+        :title="
+          zoom.detail.value.label === '100%'
+            ? tm('zoom_live.actual_title')
+            : tm('zoom_live.double_title')
+        "
+        data-testid="pm-zoom-detail"
+        @click="zoom.zoomDetail()"
+      >
+        {{ zoom.detail.value.label }}
+      </LjButton>
       <LjButton
         size="sm"
         variant="ghost"

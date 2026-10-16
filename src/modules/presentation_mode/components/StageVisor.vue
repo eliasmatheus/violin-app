@@ -10,7 +10,12 @@
       <span class="pm-visor__audio-title">{{ audioTitle }}</span>
       <span class="pm-visor__audio-hint">{{ tm("video.audio_only") }}</span>
     </div>
-    <!-- Imagem ou PDF no ar: roda do mouse amplia no ponto, arrastar move o recorte. -->
+    <!--
+      Imagem ou PDF no ar, como nos visualizadores: ajustado, o cursor é o
+      normal e a imagem se arrasta como sempre; com zoom, arrastar move o
+      recorte. Ctrl/Cmd + roda (ou pinça no trackpad) amplia no ponto; clique
+      duplo alterna entre ajustado e o detalhe.
+    -->
     <div
       v-else
       ref="frame"
@@ -22,8 +27,10 @@
       :title="zoomable ? tm('zoom_live.visor_hint') : undefined"
       data-testid="pm-visor-frame"
       @wheel="onWheel"
-      @pointerdown="startPointer"
-      @dragstart.prevent
+      @pointerdown="startPan"
+      @dblclick="onDoubleClick"
+      @mousedown.middle.prevent
+      @auxclick.middle.prevent
     >
       <LiveMirror :cleared="false" />
     </div>
@@ -71,55 +78,49 @@ function mediaBox(): DOMRect | null {
   );
 }
 
-function onWheel(e: WheelEvent): void {
-  if (!zoomable.value) return;
-  e.preventDefault();
-  const box = mediaBox();
-  const at = box ? pointAt(box, e.clientX, e.clientY) : undefined;
-  zoom.zoomBy(Math.exp(-e.deltaY * 0.0015), at);
-}
-
-/** Menos que isso entre apertar e soltar é clique, não arraste. */
-const CLICK_SLOP = 4;
-
 function pointAt(box: DOMRect, x: number, y: number): { x: number; y: number } {
   return { x: (x - box.left) / box.width, y: (y - box.top) / box.height };
 }
 
+/** Ctrl/Cmd + roda, ou a pinça do trackpad (que chega como roda com Ctrl). A roda sozinha não amplia. */
+function onWheel(e: WheelEvent): void {
+  if (!zoomable.value || !(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  const box = mediaBox();
+  // A pinça manda passos pequenos; a roda do mouse, passos de ~100. A sensação é a mesma.
+  const rate = Math.abs(e.deltaY) < 40 ? 0.01 : 0.002;
+  zoom.zoomBy(Math.exp(-e.deltaY * rate), box ? pointAt(box, e.clientX, e.clientY) : undefined);
+}
+
+function onDoubleClick(e: MouseEvent): void {
+  if (!zoomable.value) return;
+  const box = mediaBox();
+  zoom.toggle(box ? pointAt(box, e.clientX, e.clientY) : undefined);
+}
+
 /**
- * Clique amplia no ponto (Alt+clique reduz); com zoom, arrastar move o
- * recorte. O `dragstart` da imagem é cancelado no elemento: o arrastar nativo
- * do navegador cancelaria o ponteiro no primeiro movimento.
+ * Com zoom, arrastar (botão esquerdo ou a roda pressionada) move o recorte.
+ * Ajustado, nada aqui: o arrastar é o do navegador.
  */
-function startPointer(e: PointerEvent): void {
-  if (!zoomable.value || e.button !== 0) return;
+function startPan(e: PointerEvent): void {
+  // Botão esquerdo ou a roda pressionada (botão do meio), como nos visualizadores.
+  if (zoom.scale.value <= 1 || (e.button !== 0 && e.button !== 1)) return;
   const box = mediaBox();
   if (!box) return;
   e.preventDefault();
   const el = e.currentTarget as HTMLElement;
   el.setPointerCapture(e.pointerId);
-  const startX = e.clientX;
-  const startY = e.clientY;
-  let lastX = startX;
-  let lastY = startY;
-  let dragging = false;
+  let lastX = e.clientX;
+  let lastY = e.clientY;
   const move = (ev: PointerEvent) => {
-    if (!dragging && Math.hypot(ev.clientX - startX, ev.clientY - startY) < CLICK_SLOP) return;
-    dragging = true;
-    if (zoom.scale.value > 1) {
-      zoom.panBy((ev.clientX - lastX) / box.width, (ev.clientY - lastY) / box.height);
-    }
+    zoom.panBy((ev.clientX - lastX) / box.width, (ev.clientY - lastY) / box.height);
     lastX = ev.clientX;
     lastY = ev.clientY;
   };
-  const end = (ev: PointerEvent) => {
+  const end = () => {
     el.removeEventListener("pointermove", move);
     el.removeEventListener("pointerup", end);
     el.removeEventListener("pointercancel", end);
-    if (dragging || ev.type === "pointercancel") return;
-    const at = pointAt(box, startX, startY);
-    if (e.altKey) zoom.zoomOut(at);
-    else zoom.zoomIn(at);
   };
   el.addEventListener("pointermove", move);
   el.addEventListener("pointerup", end);
@@ -144,25 +145,18 @@ function startPointer(e: PointerEvent): void {
   width: min(100cqw, calc(100cqh * 16 / 9));
 }
 
-.pm-visor__frame--zoomable {
-  cursor: zoom-in;
-}
-
-.pm-visor__frame--zoomable {
-  touch-action: none;
-  user-select: none;
-}
-
 .pm-visor__frame--zoomed {
   cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
 .pm-visor__frame--zoomed:active {
   cursor: grabbing;
 }
 
-/* A imagem não é alvo: o arrastar nativo dela roubaria o ponteiro do pan. */
-.pm-visor__frame--zoomable :deep(img) {
+/* Com zoom, a imagem não é alvo: o arrastar nativo dela roubaria o ponteiro do pan. */
+.pm-visor__frame--zoomed :deep(img) {
   pointer-events: none;
   -webkit-user-drag: none;
 }

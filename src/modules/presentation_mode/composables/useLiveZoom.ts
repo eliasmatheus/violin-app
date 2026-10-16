@@ -1,4 +1,4 @@
-import { computed, ref, watch } from "vue";
+import { computed, getCurrentInstance, ref, watch } from "vue";
 import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/helpers/ProjectionZoom";
 import { useLiveContent } from "./useLiveContent";
 import { usePdfDeck } from "./usePdfDeck";
+import { useMonitorRole } from "./useMonitorRole";
 
 /**
  * Zoom da imagem ou da página de PDF que está no ar. O operador amplia no
@@ -21,6 +22,12 @@ import { usePdfDeck } from "./usePdfDeck";
 const STEP = 1.25;
 
 const _zoom = ref<ProjectionZoom | null>(null);
+/** Tamanho em pixels da imagem no ar — para o "100%" (tamanho real na tela). */
+const _natural = ref<{ url: string; w: number; h: number } | null>(null);
+/** Tela principal desconhecida (sem monitor escolhido): o projetor mais comum. */
+const DEFAULT_SCREEN = { width: 1920, height: 1080 };
+/** Abaixo disso o "100%" quase não amplia: o atalho vira 2×. */
+const ACTUAL_MIN = 1.05;
 let _installed = false;
 
 function install(): void {
@@ -39,6 +46,24 @@ function install(): void {
     () => {
       if (_zoom.value) set(null);
     }
+  );
+
+  // O tamanho real da imagem, lido uma vez por arquivo.
+  watch(
+    () =>
+      live.current.value === "file" && live.file.value?.type === "image"
+        ? live.file.value.url
+        : null,
+    (url) => {
+      if (!url || _natural.value?.url === url) return;
+      const img = new Image();
+      img.onload = () => {
+        if (img.naturalWidth && img.naturalHeight)
+          _natural.value = { url, w: img.naturalWidth, h: img.naturalHeight };
+      };
+      img.src = url;
+    },
+    { immediate: true }
   );
 
   // Tela que abriu (ou recarregou) no meio do zoom pede o recorte atual.
@@ -83,6 +108,35 @@ export function useLiveZoom() {
 
   const scale = computed(() => current.value?.scale ?? 1);
 
+  /**
+   * Escala do "tamanho real": a foto ajustada à tela principal fica reduzida
+   * (ou ampliada); 1/ajuste devolve um pixel da foto a um pixel da tela.
+   */
+  // Fora de um componente (testes, scripts) não há monitores: vale a tela padrão.
+  const screen = getCurrentInstance() ? useMonitorRole("projection").size : ref(null);
+  const actualScale = computed<number | null>(() => {
+    const t = target.value;
+    const n = _natural.value;
+    if (t?.type !== "image" || !n || n.url !== t.url) return null;
+    const sw = screen.value?.width ?? DEFAULT_SCREEN.width;
+    const sh = screen.value?.height ?? DEFAULT_SCREEN.height;
+    return 1 / Math.min(sw / n.w, sh / n.h);
+  });
+
+  /** O zoom em % do tamanho real quando ele é conhecido (como nos visualizadores); senão, do ajustado. */
+  const percent = computed(() => {
+    const real = actualScale.value;
+    return Math.round((real ? scale.value / real : scale.value) * 100);
+  });
+
+  /** O atalho de detalhe: "100%" quando a foto é maior que a tela; senão (ou no PDF), "2×". */
+  const detail = computed(() => {
+    const real = actualScale.value;
+    return real && real > ACTUAL_MIN
+      ? { label: "100%", scale: Math.min(ZOOM_MAX, real) }
+      : { label: "2×", scale: 2 };
+  });
+
   function base(): ProjectionZoom | null {
     const t = target.value;
     if (!t) return null;
@@ -106,6 +160,12 @@ export function useLiveZoom() {
     set({ ...z, scale: nextScale, cx, cy });
   }
 
+  /** Vai direto a uma escala, mantendo parado o ponto `at`. */
+  function zoomTo(nextScale: number, at?: { x: number; y: number }): void {
+    const z = base();
+    if (z && z.scale !== nextScale) zoomBy(nextScale / z.scale, at);
+  }
+
   /** Arrasta o recorte: `dx`/`dy` em frações do visor (arrastar para a direita mostra o que está à esquerda). */
   function panBy(dx: number, dy: number): void {
     const z = current.value;
@@ -127,7 +187,17 @@ export function useLiveZoom() {
     zoomIn: (at?: { x: number; y: number }) => zoomBy(STEP, at),
     zoomOut: (at?: { x: number; y: number }) => zoomBy(1 / STEP, at),
     zoomBy,
+    zoomTo,
     fit: () => set(null),
+    percent,
+    detail,
+    /** O atalho de detalhe ("100%" ou "2×"), no ponto `at`. */
+    zoomDetail: (at?: { x: number; y: number }) => zoomTo(detail.value.scale, at),
+    /** Clique duplo: ajustado → detalhe no ponto; com zoom → ajustado. */
+    toggle(at?: { x: number; y: number }): void {
+      if (scale.value > 1) set(null);
+      else zoomTo(detail.value.scale, at);
+    },
     panBy,
     centerAt,
     /** O estilo da mídia nos espelhos do módulo (visor, miniaturas). */

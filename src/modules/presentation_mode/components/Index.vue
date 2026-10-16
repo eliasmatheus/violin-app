@@ -707,6 +707,7 @@ useClicker({
   zoomIn: () => liveZoom.zoomIn(),
   zoomOut: () => liveZoom.zoomOut(),
   zoomFit: () => liveZoom.fit(),
+  zoomDetail: () => liveZoom.zoomDetail(),
   togglePlay: transport.togglePlay,
   toggleMute: transport.toggleMute,
 });

@@ -14,6 +14,9 @@ const file = ref<{ type: string; url: string; playback_id?: string } | null>({
 vi.mock("../useLiveContent", () => ({ useLiveContent: () => ({ current, file }) }));
 const page = ref(1);
 vi.mock("../usePdfDeck", () => ({ usePdfDeck: () => ({ page, thumbs: new Map() }) }));
+vi.mock("../useMonitorRole", () => ({
+  useMonitorRole: () => ({ size: ref({ width: 1920, height: 1080 }) }),
+}));
 
 const { useLiveZoom, _resetLiveZoom } = await import("../useLiveZoom");
 
@@ -54,5 +57,15 @@ describe("useLiveZoom", () => {
     zoom.zoomIn();
     expect(zoom.scale.value).toBe(1);
     file.value = { type: "pdf", url: "blob:x", playback_id: "p1" };
+  });
+
+  it("PDF: o atalho de detalhe é 2×; clique duplo alterna entre ajustado e ele", () => {
+    const zoom = useLiveZoom();
+    expect(zoom.detail.value.label).toBe("2×");
+    zoom.toggle({ x: 0.5, y: 0.5 });
+    expect(zoom.scale.value).toBe(2);
+    expect(zoom.percent.value).toBe(200);
+    zoom.toggle();
+    expect(zoom.scale.value).toBe(1);
   });
 });

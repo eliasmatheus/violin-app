@@ -593,7 +593,9 @@
     "in": "Ampliar (+)",
     "out": "Reduzir (−)",
     "fit": "Ajustar",
-    "fit_title": "Voltar à imagem inteira (0)",
-    "visor_hint": "Clique amplia · Alt+clique reduz · roda do mouse amplia no ponto · arraste para mover"
+    "fit_title": "Ajustar à tela (0)",
+    "visor_hint": "Ctrl/Cmd + roda ou pinça amplia · clique duplo alterna entre ajustar e o detalhe · com zoom, arraste (ou segure a roda) para mover",
+    "actual_title": "Tamanho real na tela principal (1)",
+    "double_title": "Ampliar 2× (1)"
   }
 }

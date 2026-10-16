@@ -37,6 +37,8 @@ export function useClicker(actions: {
   zoomIn?: () => void;
   zoomOut?: () => void;
   zoomFit?: () => void;
+  /** 1: tamanho real (ou 2×). */
+  zoomDetail?: () => void;
 }): void {
   // A tecla é só daqui: outro ouvinte na janela (o player de músicas montado
   // depois dos atalhos) passaria o slide de novo.
@@ -80,6 +82,7 @@ export function useClicker(actions: {
     "-": actions.zoomOut,
     _: actions.zoomOut,
     "0": actions.zoomFit,
+    "1": actions.zoomDetail,
   };
   const onZoomKey = (e: KeyboardEvent) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
