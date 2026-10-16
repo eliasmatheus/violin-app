@@ -588,5 +588,11 @@
       "unwritable": "Não foi possível renomear: o arquivo pode estar em uso ou sem permissão.",
       "trash_failed": "Não foi possível mover para a Lixeira."
     }
+  },
+  "zoom_live": {
+    "in": "Ampliar (+)",
+    "out": "Reduzir (−)",
+    "fit": "Ajustar",
+    "fit_title": "Voltar à imagem inteira (0)"
   }
 }

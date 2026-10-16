@@ -19,7 +19,13 @@
     />
 
     <template v-else-if="current === 'file' && file">
-      <img v-if="file.type === 'image'" class="pm-mirror__media" :src="file.url" alt="" />
+      <img
+        v-if="file.type === 'image'"
+        class="pm-mirror__media"
+        :src="file.url"
+        :style="zoom.style.value"
+        alt=""
+      />
       <video
         v-else-if="file.type === 'video'"
         ref="videoEl"
@@ -29,7 +35,15 @@
         playsinline
         preload="auto"
       />
-      <img v-else-if="pdfPage" class="pm-mirror__media" :src="pdfPage" alt="" />
+      <!-- A página com a proporção dela, como o canvas da tela: o recorte do zoom coincide. -->
+      <img
+        v-else-if="pdfPage"
+        class="pm-mirror__page"
+        :src="pdfPage"
+        :style="[pageBox, zoom.style.value]"
+        alt=""
+        @load="onPageLoad"
+      />
       <div v-else class="pm-mirror__label">
         <LjIcon :icon="ICONS.UI.FILE_PDF" :size="22" />
         <span>{{ file.title }}</span>
@@ -74,10 +88,26 @@ import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { useMainBackground } from "@/composables/useMainBackground";
 import { useLiveContent } from "../composables/useLiveContent";
 import { usePdfDeck } from "../composables/usePdfDeck";
+import { useLiveZoom } from "../composables/useLiveZoom";
 
 defineProps<{ cleared: boolean }>();
 
 const { current, music, bible, file, onlineTitle, onlineVideoId, announcement } = useLiveContent();
+// Zoom de imagem/PDF: a miniatura mostra o recorte que está nas telas.
+const zoom = useLiveZoom();
+
+/** Largura/altura da página do PDF; a caixa da miniatura é 16:9. */
+const pageRatio = ref(16 / 9);
+function onPageLoad(e: Event): void {
+  const img = e.target as HTMLImageElement;
+  if (img.naturalWidth && img.naturalHeight) pageRatio.value = img.naturalWidth / img.naturalHeight;
+}
+const pageBox = computed(() => {
+  const frame = 16 / 9;
+  return pageRatio.value >= frame
+    ? { width: "100%", height: `${(frame / pageRatio.value) * 100}%` }
+    : { width: `${(pageRatio.value / frame) * 100}%`, height: "100%" };
+});
 const { style: background } = useMainBackground();
 
 /** O slide do PDF que está na tela, pela miniatura que o palco já desenhou. */
@@ -148,6 +178,12 @@ onBeforeUnmount(() => {
 
 .pm-mirror__media {
   object-fit: contain;
+}
+
+.pm-mirror__page {
+  position: absolute;
+  inset: 0;
+  margin: auto;
 }
 
 .pm-mirror__label,

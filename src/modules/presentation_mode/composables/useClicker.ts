@@ -33,6 +33,10 @@ export function useClicker(actions: {
   togglePlay?: () => void;
   /** M: silenciar. */
   toggleMute?: () => void;
+  /** + − 0: zoom da imagem ou página de PDF no ar. */
+  zoomIn?: () => void;
+  zoomOut?: () => void;
+  zoomFit?: () => void;
 }): void {
   // A tecla é só daqui: outro ouvinte na janela (o player de músicas montado
   // depois dos atalhos) passaria o slide de novo.
@@ -66,10 +70,34 @@ export function useClicker(actions: {
     ["m", mute, "hotkeys.presentation_mute"],
   ];
 
+  /*
+   * + − 0 não passam pelo Hotkeys: ele separa a combinação pelo "+". O "+"
+   * vem com Shift em muitos teclados e o "=" é a mesma tecla sem ele.
+   */
+  const ZOOM_KEYS: Record<string, (() => void) | undefined> = {
+    "+": actions.zoomIn,
+    "=": actions.zoomIn,
+    "-": actions.zoomOut,
+    _: actions.zoomOut,
+    "0": actions.zoomFit,
+  };
+  const onZoomKey = (e: KeyboardEvent) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const el = document.activeElement as HTMLElement | null;
+    if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+    if (el?.closest?.("[data-dismissable-layer]")) return;
+    const run = ZOOM_KEYS[e.key];
+    if (!run) return;
+    e.preventDefault();
+    run();
+  };
+
   let registered = false;
   function setActive(active: boolean): void {
     if (active === registered) return;
     registered = active;
+    if (active) window.addEventListener("keydown", onZoomKey);
+    else window.removeEventListener("keydown", onZoomKey);
     for (const [combo, handler, description, preventDefault] of bindings) {
       if (active)
         Hotkeys.register(combo, handler, {

@@ -13,6 +13,7 @@
               v-if="fileProjection.type === 'image'"
               :src="fileProjection.url"
               class="return-file-projection__media"
+              :style="projectionZoom.styleFor(fileProjection.playback_id ?? fileProjection.url)"
               alt=""
             />
             <template v-else-if="fileProjection.type === 'video'">
@@ -58,6 +59,12 @@
               v-else-if="fileProjection.type === 'pdf'"
               ref="pdfCanvas"
               class="return-file-projection__pdf"
+              :style="
+                projectionZoom.styleFor(
+                  fileProjection.playback_id ?? fileProjection.url,
+                  fileProjection.page
+                )
+              "
             />
           </div>
         </Transition>
@@ -74,6 +81,7 @@ import "@/assets/styles/transitions.css";
 import { estiloDeFundo } from "@/helpers/BackgroundStyle";
 import { pdfPageFit } from "@/helpers/PdfPageFit";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
+import { useProjectionZoom } from "@/composables/useProjectionZoom";
 import { useTransitionStage } from "@/composables/useTransitionStage";
 import { createTransitionContext } from "@/config/Transitions";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
@@ -174,6 +182,9 @@ let latestVideoState: VideoMediaState | null = null;
 let activationGeneration = 0;
 const ytContainer = ref<HTMLDivElement | null>(null);
 const pdfCanvas = ref<HTMLCanvasElement | null>(null);
+// Zoom de imagem/PDF escolhido no Modo apresentação: esta tela só aplica o recorte.
+const projectionZoom = useProjectionZoom();
+
 const ready = ref<boolean>(false);
 
 let pdfDoc: PDFDocumentProxy | null = null;

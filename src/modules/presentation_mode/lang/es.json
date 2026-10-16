@@ -588,5 +588,11 @@
       "unwritable": "No se pudo renombrar: el archivo puede estar en uso o sin permiso.",
       "trash_failed": "No se pudo mover a la Papelera."
     }
+  },
+  "zoom_live": {
+    "in": "Ampliar (+)",
+    "out": "Reducir (−)",
+    "fit": "Ajustar",
+    "fit_title": "Volver a la imagen completa (0)"
   }
 }

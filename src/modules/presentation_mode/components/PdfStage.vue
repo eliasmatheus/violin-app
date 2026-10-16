@@ -1,5 +1,7 @@
 <template>
   <div class="pm-pdf" data-testid="pm-pdf">
+    <!-- O zoom da página no ar: ampliar leva ao visor, onde dá para arrastar o recorte. -->
+    <ZoomControls v-if="deck.total.value" />
     <p v-if="!deck.total.value" class="pm-pdf__loading">{{ tm("library.loading") }}</p>
     <div v-else ref="grid" class="pm-pdf__grid">
       <button
@@ -29,6 +31,7 @@ import { nextTick, ref, watch, type Directive } from "vue";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import { usePdfDeck } from "../composables/usePdfDeck";
+import ZoomControls from "./ZoomControls.vue";
 
 /**
  * Os slides do PDF no ar, como a grade de uma música: clicar vai à página; a
@@ -65,6 +68,7 @@ watch(deck.page, async (n) => {
 
 <style scoped>
 .pm-pdf {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;

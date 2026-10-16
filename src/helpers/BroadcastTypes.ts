@@ -170,6 +170,15 @@ export const BROADCAST_TYPE = Object.freeze({
    *  Payload: { playback_id, page, totalPages?, source: "operator" | "projection" }.
    *  O ID impede que um arquivo anterior altere a projeção ativa. */
   FILE_PROJECTION_PAGE: "file_projection_page",
+
+  /** Zoom de imagem ou página de PDF nas telas: o recorte que o operador escolheu.
+   *  Payload: { key: playback_id | url, page, scale, cx, cy } (centro em frações 0–1).
+   *  Emitido por: presentation_mode. Recebido por: FileProjection, FileProjectionReturn,
+   *  BackgroundProjection, BackgroundProjectionReturn e os espelhos do módulo. */
+  FILE_PROJECTION_ZOOM: "file_projection_zoom",
+
+  /** Tela recém-aberta pedindo o recorte atual. Respondido pelo presentation_mode. */
+  REQUEST_FILE_PROJECTION_ZOOM: "request_file_projection_zoom",
   /** Snapshot versionado dos anúncios, emitido pela janela principal. */
   ANNOUNCEMENTS_STATE: "announcements_state",
   /** Atualização pequena de navegação dentro do deck ativo. */

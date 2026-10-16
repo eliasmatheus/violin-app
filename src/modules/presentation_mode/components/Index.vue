@@ -128,7 +128,11 @@
           />
           <!-- Música e PDF: a grade de hoje. Pasta e momento no ar não repetem os arquivos aqui. -->
           <StageSlides v-else-if="showSlideGrid" :locked="outputLocked" />
-          <PdfStage v-else-if="pdfDeck.active.value" :locked="outputLocked" />
+          <!-- PDF ampliado: o visor mostra o recorte; "Ajustar" volta à grade das páginas. -->
+          <PdfStage
+            v-else-if="pdfDeck.active.value && liveZoom.scale.value <= 1"
+            :locked="outputLocked"
+          />
           <StageVisor v-else-if="audioLive" :audio-title="audioTitle" />
           <!-- Vídeo, imagem, versículo, anúncio: o visor mostra o que está na tela. -->
           <StageVisor v-else-if="liveKind" />
@@ -304,6 +308,7 @@ import { useOnlinePrefetch } from "../composables/useOnlinePrefetch";
 import { useSeriesRecorder } from "../composables/useSeries";
 import { useClicker } from "../composables/useClicker";
 import { useLiveTransport } from "../composables/useLiveTransport";
+import { useLiveZoom } from "../composables/useLiveZoom";
 import { previewViewOf } from "../program/previewView";
 import { useLibraryLayout } from "../composables/useLibraryLayout";
 import { useColumnLayout } from "../composables/useColumnLayout";
@@ -680,6 +685,8 @@ const { canNavigate, navigate, position, onlineQueue, pdfDeck } = useStageNaviga
 });
 
 // Passador e teclado: o mesmo Anterior/Próximo das saídas; "B" e "." alternam a tela preta.
+const liveZoom = useLiveZoom();
+
 const transport = useLiveTransport({
   liveKind,
   audioLive,
@@ -697,6 +704,9 @@ useClicker({
   navigate,
   toggleBlack: () => setCleared(!cleared.value),
   send: onEnter,
+  zoomIn: () => liveZoom.zoomIn(),
+  zoomOut: () => liveZoom.zoomOut(),
+  zoomFit: () => liveZoom.fit(),
   togglePlay: transport.togglePlay,
   toggleMute: transport.toggleMute,
 });
