@@ -85,6 +85,14 @@ describe("useProgram", () => {
     expect(program.upNextItem.value).toBeNull();
   });
 
+  it("Item anterior: o que vem antes do que está no ar; sem nada no ar, antes do próximo", () => {
+    expect(program.previousItem.value).toBeNull();
+    program.goLive("b");
+    expect(program.previousItem.value?.id).toBe("a");
+    program.goLive("c");
+    expect(program.previousItem.value?.id).toBe("b");
+  });
+
   it("com a saída travada, o item na fila passa à frente em A seguir", () => {
     program.setOutputLocked(true);
     expect(program.outputLocked.value).toBe(true);

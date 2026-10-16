@@ -101,102 +101,106 @@
       </div>
     </section>
 
-    <div class="pm-program__list" data-testid="pm-program-list">
-      <div v-if="!program.sessions.length" class="pm-program__empty">
-        <LjEmpty :icon="ICONS.LITURGY.SCRIPT" :title="tm('empty.program')">
-          <LjButton
-            size="sm"
-            variant="primary"
-            :icon="ICONS.LITURGY.SCRIPT"
-            data-testid="pm-program-from-model"
-            @click="openModels('new')"
+    <div class="pm-program__body">
+      <div class="pm-program__list" data-testid="pm-program-list">
+        <div v-if="!program.sessions.length" class="pm-program__empty">
+          <LjEmpty :icon="ICONS.LITURGY.SCRIPT" :title="tm('empty.program')">
+            <LjButton
+              size="sm"
+              variant="primary"
+              :icon="ICONS.LITURGY.SCRIPT"
+              data-testid="pm-program-from-model"
+              @click="openModels('new')"
+            >
+              {{ tm("models.use") }}
+            </LjButton>
+            <LjButton size="sm" :icon="ICONS.ACTIONS.IMPORT" @click="emit('import')">
+              {{ tm("ribbon.btn.import_liturgy") }}
+            </LjButton>
+            <LjButton size="sm" :icon="ICONS.ACTIONS.ADD" @click="emit('new-item')">
+              {{ tm("ribbon.btn.new_item") }}
+            </LjButton>
+          </LjEmpty>
+        </div>
+
+        <section v-for="session in program.sessions" :key="session.id" class="pm-session">
+          <header class="pm-session__head" @dblclick="emit('edit-session', session.id)">
+            <span class="pm-session__label">{{ session.label }}</span>
+            <button
+              type="button"
+              class="pm-program__icon-btn pm-session__edit"
+              :title="tm('program.edit_session')"
+              :aria-label="tm('program.edit_session')"
+              @click="emit('edit-session', session.id)"
+            >
+              <LjIcon :icon="ICONS.ACTIONS.EDIT_OUTLINE" :size="11" />
+            </button>
+            <span class="pm-session__meta">
+              {{ formatHHMM(sessionStartMap.get(session.id) ?? 0) }} ·
+              {{ formatDuration(sessionMinutes(program, session.id)) }}
+            </span>
+          </header>
+          <draggable
+            :model-value="session.items"
+            item-key="id"
+            group="pm-program-items"
+            tag="div"
+            class="pm-session__items"
+            :animation="150"
+            ghost-class="pm-drag-ghost"
+            @update:model-value="(list: ProgramItem[]) => onSessionItems(session.id, list)"
           >
-            {{ tm("models.use") }}
-          </LjButton>
-          <LjButton size="sm" :icon="ICONS.ACTIONS.IMPORT" @click="emit('import')">
-            {{ tm("ribbon.btn.import_liturgy") }}
-          </LjButton>
-          <LjButton size="sm" :icon="ICONS.ACTIONS.ADD" @click="emit('new-item')">
-            {{ tm("ribbon.btn.new_item") }}
-          </LjButton>
-        </LjEmpty>
+            <template #item="{ element }">
+              <ProgramItemRow
+                :item="element"
+                :start="formatHHMM(itemStartMap.get(element.id) ?? 0)"
+                :live="element.id === liveItemId"
+                :next="element.id === nextItemId"
+                :done="doneIds.has(element.id)"
+                :prepared="element.id === preparedItemId"
+                :selected="element.id === selectedItemId"
+                :open="!!openItems[element.id]"
+                :menu="itemMenu(element)"
+                :live-child-id="element.id === liveItemId ? liveChildId : null"
+                @select="onSelect(element.id)"
+                @child-preview="(childId: string) => emit('child-preview', element.id, childId)"
+                @child-play="(childId: string) => emit('child-play', element.id, childId)"
+                @children="(list: ProgramSubItem[]) => updateItem(element.id, { children: list })"
+                @activate="onActivate(element)"
+                @toggle="toggleOpen(element.id)"
+                @edit="emit('edit-item', element.id)"
+              />
+            </template>
+          </draggable>
+        </section>
+
+        <!-- O resto da lista é "parte vazia": o botão direito ali cria itens. -->
+        <LjContextMenu :items="addMenu">
+          <div class="pm-program__filler" data-testid="pm-program-filler" />
+        </LjContextMenu>
       </div>
 
-      <section v-for="session in program.sessions" :key="session.id" class="pm-session">
-        <header class="pm-session__head" @dblclick="emit('edit-session', session.id)">
-          <span class="pm-session__label">{{ session.label }}</span>
+      <LjMenu :items="addMenu" side="top" align="end">
+        <template #trigger>
           <button
             type="button"
-            class="pm-program__icon-btn pm-session__edit"
-            :title="tm('program.edit_session')"
-            :aria-label="tm('program.edit_session')"
-            @click="emit('edit-session', session.id)"
+            class="pm-program__fab"
+            :aria-label="tm('program.add')"
+            :title="tm('program.add')"
+            data-testid="pm-program-fab"
           >
-            <LjIcon :icon="ICONS.ACTIONS.EDIT_OUTLINE" :size="11" />
+            <LjIcon :icon="ICONS.ACTIONS.ADD" :size="20" />
           </button>
-          <span class="pm-session__meta">
-            {{ formatHHMM(sessionStartMap.get(session.id) ?? 0) }} ·
-            {{ formatDuration(sessionMinutes(program, session.id)) }}
-          </span>
-        </header>
-        <draggable
-          :model-value="session.items"
-          item-key="id"
-          group="pm-program-items"
-          tag="div"
-          class="pm-session__items"
-          :animation="150"
-          ghost-class="pm-drag-ghost"
-          @update:model-value="(list: ProgramItem[]) => onSessionItems(session.id, list)"
-        >
-          <template #item="{ element }">
-            <ProgramItemRow
-              :item="element"
-              :start="formatHHMM(itemStartMap.get(element.id) ?? 0)"
-              :live="element.id === liveItemId"
-              :next="element.id === nextItemId"
-              :done="doneIds.has(element.id)"
-              :prepared="element.id === preparedItemId"
-              :selected="element.id === selectedItemId"
-              :open="!!openItems[element.id]"
-              :menu="itemMenu(element)"
-              :live-child-id="element.id === liveItemId ? liveChildId : null"
-              @select="onSelect(element.id)"
-              @child-preview="(childId: string) => emit('child-preview', element.id, childId)"
-              @child-play="(childId: string) => emit('child-play', element.id, childId)"
-              @children="(list: ProgramSubItem[]) => updateItem(element.id, { children: list })"
-              @activate="onActivate(element)"
-              @toggle="toggleOpen(element.id)"
-              @edit="emit('edit-item', element.id)"
-            />
-          </template>
-        </draggable>
-      </section>
-
-      <!-- O resto da lista é "parte vazia": o botão direito ali cria itens. -->
-      <LjContextMenu :items="addMenu">
-        <div class="pm-program__filler" data-testid="pm-program-filler" />
-      </LjContextMenu>
+        </template>
+      </LjMenu>
     </div>
-
-    <LjMenu :items="addMenu" side="top" align="end">
-      <template #trigger>
-        <button
-          type="button"
-          class="pm-program__fab"
-          :aria-label="tm('program.add')"
-          :title="tm('program.add')"
-          data-testid="pm-program-fab"
-        >
-          <LjIcon :icon="ICONS.ACTIONS.ADD" :size="20" />
-        </button>
-      </template>
-    </LjMenu>
 
     <ProgramModelDialog v-model="modelsOpen" :mode="modelsMode" />
     <ReadinessDialog v-model="readinessOpen" @edit="(id: string) => emit('edit-item', id)" />
 
-    <footer class="pm-program__foot">
+    <!-- Próximo item: enviar, voltar, travar. Sem item nenhum, o total do programa. -->
+    <slot v-if="items.length" name="foot" />
+    <footer v-else class="pm-program__foot">
       <span>{{ countsLabel }}</span>
       <span class="pm-program__total">{{ formatDuration(totalMinutes(program)) }}</span>
     </footer>
@@ -733,7 +737,7 @@ function onSessionItems(sessionId: string, list: ProgramItem[]): void {
 .pm-program__fab {
   position: absolute;
   right: 12px;
-  bottom: 36px;
+  bottom: 12px;
   z-index: 2;
   display: flex;
   align-items: center;
@@ -761,6 +765,14 @@ function onSessionItems(sessionId: string, list: ProgramItem[]): void {
 .pm-program__fab:focus-visible {
   outline: none;
   box-shadow: var(--lj-ui-focus);
+}
+
+.pm-program__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .pm-program__empty {

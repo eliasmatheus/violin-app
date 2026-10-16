@@ -146,6 +146,14 @@ const upNextItem = computed<ProgramItem | null>(() => {
   return list.find((item) => !_doneIds.value.has(item.id)) ?? null;
 });
 
+/** "Item anterior": o que vem antes do que está no ar (ou da fila, sem nada no ar). */
+const previousItem = computed<ProgramItem | null>(() => {
+  const list = items.value;
+  const anchor = _liveItemId.value ?? upNextItem.value?.id ?? null;
+  const i = anchor ? list.findIndex((item) => item.id === anchor) : -1;
+  return i > 0 ? list[i - 1] : null;
+});
+
 export function useProgram() {
   _watchFolder();
   return {
@@ -162,6 +170,7 @@ export function useProgram() {
     nextItemId,
     preparedItemId: _preparedItemId,
     upNextItem,
+    previousItem,
     outputLocked: _outputLocked,
 
     setOutputLocked(locked: boolean): void {

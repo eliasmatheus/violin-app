@@ -60,4 +60,20 @@ describe("useClicker", () => {
     wrapper.unmount();
     expect(registered.size).toBe(0);
   });
+
+  it("Enter envia o próximo item, mas não rouba o Enter de um botão em foco", () => {
+    const send = vi.fn();
+    mount(defineComponent({ setup: () => (useClicker({ navigate: vi.fn(), toggleBlack: vi.fn(), send }), () => h("div")) }));
+    const event = { preventDefault: vi.fn(), stopImmediatePropagation: vi.fn() } as unknown as KeyboardEvent;
+    registered.get("Enter")!(event);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(event.preventDefault).toHaveBeenCalled();
+
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.focus();
+    registered.get("Enter")!(event);
+    expect(send).toHaveBeenCalledTimes(1);
+    button.remove();
+  });
 });

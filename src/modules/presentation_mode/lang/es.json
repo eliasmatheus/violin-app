@@ -13,10 +13,6 @@
       "import_liturgy": "Importar liturgia",
       "save_program": "Guardar programa",
       "delete_item": "Eliminar ítem",
-      "previous": "Anterior",
-      "next": "Siguiente",
-      "go_to_slide": "Ir a diapositiva",
-      "lock_output": "Bloquear salida",
       "main_screen": "Pantalla principal",
       "stage_return": "Retorno de escenario",
       "stop_main_screen": "Detener pantalla principal",
@@ -28,10 +24,9 @@
       "library_bible": "Biblia",
       "expand": "Expandir módulo",
       "collapse": "Contraer módulo",
-      "slide_grid": "Cuadrícula de diapositivas",
-      "operator_notes": "Notas del operador",
-      "unlock_output": "Desbloquear salida",
-      "take_off": "Quitar del aire"
+      "take_off": "Quitar del aire",
+      "show_program": "Mostrar programa",
+      "hide_program": "Ocultar programa"
     }
   },
   "panels": {
@@ -156,13 +151,9 @@
     "stage_return": "Retorno de escenario",
     "monitor": "Monitor {n}",
     "no_monitor": "sin monitor",
-    "first": "Primero",
     "previous": "Anterior",
     "next": "Siguiente",
-    "last": "Último",
-    "up_next": "A continuación",
     "prepared": "En cola — sale al aire al desbloquear",
-    "send": "Enviar",
     "nothing_next": "Fin del programa.",
     "return_only": "SOLO EN EL RETORNO",
     "take_off": "Quitar del aire",
@@ -176,14 +167,19 @@
     "confirm_stop": "Haz clic de nuevo para detener",
     "start_target": "Presentar: {target}",
     "stop_target": "Detener: {target}",
-    "not_presenting": "NO ESTÁ PRESENTANDO"
+    "not_presenting": "NO ESTÁ PRESENTANDO",
+    "column": "Presentación",
+    "state_on": "ENCENDIDA",
+    "state_off": "APAGADA",
+    "screen_off": "APAGADA",
+    "screen_idle": "FONDO",
+    "missing_stage_full": "El retorno de escenario se cerró — reabrir"
   },
   "stage": {
     "on_air": "AL AIRE",
     "cover": "Portada",
     "play": "Reproducir",
     "pause": "Pausar",
-    "go_to_slide_title": "Ir a la diapositiva nº",
     "preview": "VISTA PREVIA",
     "show_live": "Ver lo que está al aire",
     "playing_not_presenting": "REPRODUCIENDO — NO ESTÁ EN LAS PANTALLAS",
@@ -234,7 +230,9 @@
     "remove_from_return": "Quitar del retorno",
     "play_muted": "Reproducir sin audio",
     "media": "Medios",
-    "audio": "Audio"
+    "audio": "Audio",
+    "opened_by_program": "Abierta por el programa:",
+    "close_program_folder": "Cerrar la franja del programa"
   },
   "video": {
     "back_10": "Retroceder 10 segundos",
@@ -393,26 +391,20 @@
   },
   "folder": {
     "add_to_program": "Agregar al programa",
-    "open_library": "Abrir en la biblioteca",
-    "hint": "Clic elige · doble clic o ▶ envía al aire · clic derecho para más",
     "empty": "No hay archivos en esta carpeta.",
     "count": "{n} archivos",
     "next": "Siguiente: {name}",
     "series_done": "Serie completa"
   },
   "return_control": {
-    "title": "Lo que muestra el retorno de escenario para cada tipo de contenido",
-    "short": "Retorno",
-    "showing": "Retorno: mostrando",
-    "hidden": "Retorno: oculto",
-    "menu_title": "Mostrar en el retorno de escenario",
     "hidden_badge": "OCULTO EN EL RETORNO",
     "groups": {
       "music": "Canciones",
       "file": "Fotos, videos y PDF",
       "online_video": "Videos en línea",
       "bible": "Biblia"
-    }
+    },
+    "shows": "Muestra:"
   },
   "monitors": {
     "main_title": "Pantalla principal: en qué monitor",
@@ -437,7 +429,6 @@
     "audio": "Audio",
     "empty": "—",
     "stop": "Quitar de esta capa",
-    "stop_all": "Limpiar todo",
     "announcements": "Anuncios",
     "orphans_cleared": "Las pantallas mostraban algo que la app ya no controlaba (se recargó): volvieron al fondo.",
     "hidden_video": "Video reproduciéndose fuera de la pantalla"
@@ -526,5 +517,15 @@
     "drift": "PANTALLA FUERA DE SINCRONÍA con el reproductor. Haz clic para corregir.",
     "orphan": "LA PANTALLA REPRODUCE UN VIDEO QUE EL REPRODUCTOR NO CONTROLA. Haz clic para quitarlo.",
     "repair": "Devuelve la pantalla al estado del reproductor"
+  },
+  "upnext": {
+    "title": "Siguiente ítem",
+    "position": "{n} de {total} · faltan {left}",
+    "previous": "Ítem anterior",
+    "previous_title": "Volver al ítem anterior del programa: {title}",
+    "send": "Enviar siguiente ↵",
+    "send_title": "Enviar el siguiente ítem del programa (Enter)",
+    "lock": "Bloquear salida: lo que envíe espera en la cola",
+    "unlock": "Desbloquear salida y enviar lo que está en la cola"
   }
 }

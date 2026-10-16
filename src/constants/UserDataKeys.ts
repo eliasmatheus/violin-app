@@ -136,6 +136,8 @@ export const KEYS = {
       PROGRAM_WIDTH: `${MODULES_PRESENTATION_MODE}.program_width`,
       /** UserData: largura (px) da coluna das saídas, à direita. */
       OUTPUTS_WIDTH: `${MODULES_PRESENTATION_MODE}.outputs_width`,
+      /** UserData: coluna do programa escondida (ribbon → Exibição → Mostrar programa). */
+      PROGRAM_HIDDEN: `${MODULES_PRESENTATION_MODE}.program_hidden`,
       /**
        * UserData: a pasta da igreja deste computador (OneDrive…), onde ficam os
        * programas e modelos compartilhados. Vazio: só neste computador.

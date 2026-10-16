@@ -1469,7 +1469,8 @@
     "bible_clear": "Limpar versículo selecionado",
     "presentation_next": "Modo apresentação: próximo (passador)",
     "presentation_prev": "Modo apresentação: anterior (passador)",
-    "presentation_black": "Modo apresentação: tela preta / voltar"
+    "presentation_black": "Modo apresentação: tela preta / voltar",
+    "presentation_send": "Modo apresentação: enviar o próximo item do programa"
   },
   "startup_check": {
     "title": "Verificação Inicial",

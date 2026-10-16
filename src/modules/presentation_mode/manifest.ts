@@ -1,4 +1,3 @@
-import { defineAsyncComponent } from "vue"
 import type { Module } from "@/types/Module"
 import type { RibbonPage } from "@/types/Ribbon"
 import { ModuleCategoryEnum } from "@/enums/ModuleCategoryEnum"
@@ -7,8 +6,6 @@ import { ICONS } from "@/config/Icons"
 import { ModuleEnum } from "@/enums/ModuleEnum"
 import { getModulePath } from "@/helpers/ModulePath"
 import { KEYS } from "@/constants/UserDataKeys"
-
-const MonitorRolesGroup = defineAsyncComponent(() => import("./components/MonitorRolesGroup.vue"));
 
 const moduleId = ModuleEnum.PRESENTATION_MODE;
 const modulePath = getModulePath(moduleId);
@@ -67,30 +64,6 @@ export const contextualPages: RibbonPage[] = [
         ],
       },
       {
-        id: `${moduleCtxId}_navigation`,
-        title: "ribbon.groups.navigation",
-        buttons: [
-          { id: `${moduleId}_previous`, icon: ICONS.ACTIONS.PREVIOUS, label: `${btn}.previous`, action: `${moduleId}_previous`, color: "#3498db", size: "small" },
-          { id: `${moduleId}_next`, icon: ICONS.ACTIONS.NEXT, label: `${btn}.next`, action: `${moduleId}_next`, color: "#3498db", size: "small" },
-          { id: `${moduleId}_go_to_slide`, icon: ICONS.PROJECTION.PRESENT, label: `${btn}.go_to_slide`, action: `${moduleId}_go_to_slide`, color: "#3498db", size: "small" },
-          { id: `${moduleId}_lock_output`, label: `${btn}.lock_output`, action: `${moduleId}_lock_output`, color: "#7f8c8d", size: "small", stateBinding: {
-            watchPath: KEYS.MODULES.PRESENTATION_MODE.OUTPUT_LOCKED,
-            iconOn: ICONS.ACTIONS.LOCK,
-            iconOff: ICONS.ACTIONS.LOCK_OPEN,
-            colorOn: "#e74c3c",
-            labelOn: `${btn}.unlock_output`,
-            labelOff: `${btn}.lock_output`,
-          } },
-        ],
-      },
-      {
-        id: `${moduleCtxId}_outputs`,
-        title: "ribbon.groups.outputs",
-        // Opção (qual monitor é cada tela), não estado: ligar e desligar é o Iniciar/Parar.
-        customCategory: MonitorRolesGroup,
-        buttons: [],
-      },
-      {
         id: `${moduleCtxId}_library`,
         title: "ribbon.groups.library",
         buttons: [
@@ -112,9 +85,14 @@ export const contextualPages: RibbonPage[] = [
             labelOn: `${btn}.collapse`,
             labelOff: `${btn}.expand`,
           } },
-          { id: `${moduleId}_slide_grid`, icon: ICONS.UI.VIEW_GRID_OUTLINE, label: `${btn}.slide_grid`, action: `${moduleId}_slide_grid`, color: "#1b4f8a", size: "small" },
-          // Fora do escopo por enquanto (ver handoff): o botão aparece, desabilitado.
-          { id: `${moduleId}_operator_notes`, icon: ICONS.UI.NOTE_TEXT, label: `${btn}.operator_notes`, action: `${moduleId}_operator_notes`, color: "#7f8c8d", size: "small", disabled: true },
+          { id: `${moduleId}_toggle_program`, label: `${btn}.show_program`, action: `${moduleId}_toggle_program`, color: "#f39c12", size: "small", stateBinding: {
+            watchPath: KEYS.MODULES.PRESENTATION_MODE.PROGRAM_HIDDEN,
+            iconOn: ICONS.LITURGY.SCRIPT,
+            iconOff: ICONS.LITURGY.SCRIPT,
+            colorOn: "#7f8c8d",
+            labelOn: `${btn}.show_program`,
+            labelOff: `${btn}.hide_program`,
+          } },
         ],
       },
     ],

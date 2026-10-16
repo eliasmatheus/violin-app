@@ -295,6 +295,7 @@ export const ICONS = {
     ARROW_BOTTOM_RIGHT: "arrow-down-right",
     ARROW_DOWN: "arrow-down",
     ARROW_LEFT: "arrow-left",
+    ARROW_UP: "arrow-up",
     AVATAR: "man",
     BACK: "chevron-left",
     BELL: "bell",

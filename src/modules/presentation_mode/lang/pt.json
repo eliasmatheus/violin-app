@@ -13,10 +13,6 @@
       "import_liturgy": "Importar liturgia",
       "save_program": "Salvar programa",
       "delete_item": "Excluir item",
-      "previous": "Anterior",
-      "next": "Próximo",
-      "go_to_slide": "Ir para slide",
-      "lock_output": "Travar saída",
       "main_screen": "Tela principal",
       "stage_return": "Retorno de palco",
       "stop_main_screen": "Parar tela principal",
@@ -28,10 +24,9 @@
       "library_bible": "Bíblia",
       "expand": "Expandir módulo",
       "collapse": "Recolher módulo",
-      "slide_grid": "Grade de slides",
-      "operator_notes": "Notas do operador",
-      "unlock_output": "Destravar saída",
-      "take_off": "Tirar do ar"
+      "take_off": "Tirar do ar",
+      "show_program": "Mostrar programa",
+      "hide_program": "Ocultar programa"
     }
   },
   "panels": {
@@ -156,13 +151,9 @@
     "stage_return": "Retorno de palco",
     "monitor": "Monitor {n}",
     "no_monitor": "sem monitor",
-    "first": "Primeiro",
     "previous": "Anterior",
     "next": "Próximo",
-    "last": "Último",
-    "up_next": "A seguir",
     "prepared": "Na fila — vai ao ar ao destravar",
-    "send": "Enviar",
     "nothing_next": "Fim do programa.",
     "return_only": "SÓ NO RETORNO",
     "take_off": "Tirar do ar",
@@ -176,14 +167,19 @@
     "confirm_stop": "Clique novamente para parar",
     "start_target": "Apresentar: {target}",
     "stop_target": "Parar: {target}",
-    "not_presenting": "NÃO ESTÁ APRESENTANDO"
+    "not_presenting": "NÃO ESTÁ APRESENTANDO",
+    "column": "Apresentação",
+    "state_on": "LIGADA",
+    "state_off": "DESLIGADA",
+    "screen_off": "DESLIGADA",
+    "screen_idle": "FUNDO",
+    "missing_stage_full": "O retorno de palco fechou — reabrir"
   },
   "stage": {
     "on_air": "NO AR",
     "cover": "Capa",
     "play": "Tocar",
     "pause": "Pausar",
-    "go_to_slide_title": "Ir para o slide nº",
     "preview": "PRÉVIA",
     "show_live": "Ver o que está no ar",
     "playing_not_presenting": "TOCANDO — NÃO ESTÁ NAS TELAS",
@@ -234,7 +230,9 @@
     "remove_from_return": "Tirar do retorno",
     "play_muted": "Reproduzir sem áudio",
     "media": "Mídia",
-    "audio": "Áudio"
+    "audio": "Áudio",
+    "opened_by_program": "Aberta pelo programa:",
+    "close_program_folder": "Fechar a faixa do programa"
   },
   "video": {
     "back_10": "Voltar 10 segundos",
@@ -393,26 +391,20 @@
   },
   "folder": {
     "add_to_program": "Adicionar ao programa",
-    "open_library": "Abrir na biblioteca",
-    "hint": "Clique escolhe · duplo clique ou ▶ manda ao ar · botão direito para mais",
     "empty": "Nenhum arquivo nesta pasta.",
     "count": "{n} arquivos",
     "next": "Próximo: {name}",
     "series_done": "Série completa"
   },
   "return_control": {
-    "title": "O que o retorno de palco mostra para cada tipo de conteúdo",
-    "short": "Retorno",
-    "showing": "Retorno: mostrando",
-    "hidden": "Retorno: oculto",
-    "menu_title": "Mostrar no retorno de palco",
     "hidden_badge": "OCULTO NO RETORNO",
     "groups": {
       "music": "Músicas",
       "file": "Fotos, vídeos e PDFs",
       "online_video": "Vídeos on-line",
       "bible": "Bíblia"
-    }
+    },
+    "shows": "Mostra:"
   },
   "monitors": {
     "main_title": "Tela principal: em qual monitor",
@@ -437,7 +429,6 @@
     "audio": "Áudio",
     "empty": "—",
     "stop": "Tirar desta camada",
-    "stop_all": "Limpar tudo",
     "announcements": "Anúncios",
     "orphans_cleared": "As telas mostravam algo que o app não controlava mais (ele recarregou): voltaram ao fundo.",
     "hidden_video": "Vídeo tocando fora da tela"
@@ -526,5 +517,15 @@
     "drift": "TELA FORA DE SINCRONIA com o player. Clique para corrigir.",
     "orphan": "A TELA RODA UM VÍDEO QUE O PLAYER NÃO CONTROLA. Clique para tirar.",
     "repair": "Põe a tela de volta no estado do player"
+  },
+  "upnext": {
+    "title": "Próximo item",
+    "position": "{n} de {total} · {left} restantes",
+    "previous": "Item anterior",
+    "previous_title": "Voltar ao item anterior do programa: {title}",
+    "send": "Enviar próximo ↵",
+    "send_title": "Enviar o próximo item do programa (Enter)",
+    "lock": "Travar saída: o que você enviar espera na fila",
+    "unlock": "Destravar saída e enviar o que está na fila"
   }
 }

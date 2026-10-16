@@ -67,10 +67,12 @@
       v-else
       :key="tab"
       :scope="tab === 'audio' ? 'audio' : 'files'"
+      :program-folder="tab === 'files' ? programFolder : null"
       :live-path="livePath"
       :return-path="returnPath"
       v-bind="relay"
       @stop="emit('stop')"
+      @close-program-folder="emit('close-program-folder')"
       @show-on-return="
         (e: LibraryEntry | null) => emit('show-on-return', e && { type: 'file', entry: e })
       "
@@ -118,6 +120,8 @@ const props = defineProps<{
   liveVideoId: string | null;
   /** Música com os slides no ar, para marcar a linha na aba Músicas. */
   liveSongId: number | null;
+  /** Item pasta/série do programa cuja pasta está aberta na aba Arquivos. */
+  programFolder?: ProgramItem | null;
 }>();
 
 const emit = defineEmits<{
@@ -132,6 +136,7 @@ const emit = defineEmits<{
   stop: [];
   /** Imagem ou vídeo só no retorno de palco; `null` tira. */
   "show-on-return": [target: Playable | null];
+  "close-program-folder": [];
 }>();
 
 /** O que toda aba repassa sem tocar: as três ações comuns. */

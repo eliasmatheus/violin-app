@@ -19,32 +19,57 @@ import type { Step } from "./useLiveNavigation";
 const NEXT = ["PageDown", "ArrowRight", "ArrowDown", "Space"];
 const PREV = ["PageUp", "ArrowLeft", "ArrowUp"];
 const BLACK = ["b", "."];
+/** Controle focado que já faz algo com o Enter: a tecla é dele. */
+const OWNS_ENTER =
+  'button, a[href], select, summary, [role="button"], [role="menuitem"], [role="option"], [role="tab"], [role="switch"], [role="checkbox"]';
 
-export function useClicker(actions: { navigate: (to: Step) => void; toggleBlack: () => void }): void {
+export function useClicker(actions: {
+  navigate: (to: Step) => void;
+  toggleBlack: () => void;
+  /** Enter: envia o próximo item do programa. */
+  send?: () => void;
+}): void {
   // A tecla é só daqui: outro ouvinte na janela (o player de músicas montado
   // depois dos atalhos) passaria o slide de novo.
   type Handler = (e?: KeyboardEvent) => void;
-  const own = (run: () => void): Handler => (e) => {
-    // Alça de redimensionar em foco: as setas são dela (largura e altura dos painéis).
-    if (document.activeElement?.getAttribute("role") === "separator") return;
-    e?.stopImmediatePropagation();
-    run();
-  };
+  const own =
+    (run: () => void): Handler =>
+    (e) => {
+      // Alça de redimensionar em foco: as setas são dela (largura e altura dos painéis).
+      if (document.activeElement?.getAttribute("role") === "separator") return;
+      e?.stopImmediatePropagation();
+      run();
+    };
   const next = own(() => actions.navigate("next"));
   const prev = own(() => actions.navigate("prev"));
   const black = own(() => actions.toggleBlack());
-  const bindings: [string, Handler, string][] = [
+  // Enter não cancela o padrão de saída: num botão em foco, o clique dele vale.
+  const send: Handler = (e) => {
+    if (!actions.send || document.activeElement?.closest?.(OWNS_ENTER)) return;
+    e?.preventDefault();
+    e?.stopImmediatePropagation();
+    actions.send();
+  };
+  const bindings: [string, Handler, string, boolean?][] = [
     ...NEXT.map((k): [string, Handler, string] => [k, next, "hotkeys.presentation_next"]),
     ...PREV.map((k): [string, Handler, string] => [k, prev, "hotkeys.presentation_prev"]),
     ...BLACK.map((k): [string, Handler, string] => [k, black, "hotkeys.presentation_black"]),
+    ["Enter", send, "hotkeys.presentation_send", false],
   ];
 
   let registered = false;
   function setActive(active: boolean): void {
     if (active === registered) return;
     registered = active;
-    for (const [combo, handler, description] of bindings) {
-      if (active) Hotkeys.register(combo, handler, { context: "live", description, group: "presentation", label: combo });
+    for (const [combo, handler, description, preventDefault] of bindings) {
+      if (active)
+        Hotkeys.register(combo, handler, {
+          context: "live",
+          description,
+          group: "presentation",
+          label: combo,
+          preventDefault,
+        });
       else Hotkeys.unregister(combo, handler);
     }
   }

@@ -84,6 +84,24 @@
 
     <slot v-if="paneActive" name="pane" />
     <div v-else class="pm-files">
+      <!-- A pasta veio de um item do programa: o que tocar daqui conta como esse item. -->
+      <div v-if="programBand" class="pm-files__program" data-testid="pm-library-program-folder">
+        <LjIcon :icon="ICONS.LITURGY.SCRIPT" :size="14" class="pm-files__program-icon" />
+        <span class="pm-files__program-text">
+          {{ tm("library.opened_by_program") }}
+          <b>{{ programBand.title }}</b>
+          <template v-if="programBand.detail">· {{ programBand.detail }}</template>
+        </span>
+        <LjButton
+          size="sm"
+          variant="ghost"
+          icon-only
+          :icon="ICONS.ACTIONS.CLOSE"
+          :title="tm('library.close_program_folder')"
+          data-testid="pm-library-program-folder-close"
+          @click="emit('close-program-folder')"
+        />
+      </div>
       <SeriesBar
         v-if="seriesDir"
         :dir="seriesDir"
@@ -235,6 +253,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import FileGrid from "./FileGrid.vue";
 import SeriesBar from "./SeriesBar.vue";
 import { useFolderSeries } from "../composables/useSeries";
+import { useFolderItems } from "../composables/useFolderItems";
 import draggable from "vuedraggable";
 import { LjButton, LjContextMenu, LjEmpty, LjIcon, type LjMenuItem } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
@@ -271,8 +290,10 @@ const props = withDefaults(
     scope?: LibraryScope;
     /** Uma fonte de fora (o Online da Mídia) ocupa a área da grade. */
     paneActive?: boolean;
+    /** Item pasta/série do programa que abriu a pasta (faixa "Aberta pelo programa"). */
+    programFolder?: ProgramItem | null;
   }>(),
-  { scope: "files", paneActive: false }
+  { scope: "files", paneActive: false, programFolder: null }
 );
 
 const emit = defineEmits<{
@@ -284,6 +305,7 @@ const emit = defineEmits<{
   "show-on-return": [entry: LibraryEntry | null];
   /** O operador abriu uma fonte daqui (Tudo, Favoritos, uma pasta): a de fora sai. */
   "source-opened": [];
+  "close-program-folder": [];
 }>();
 
 const filePlayable = (entry: LibraryEntry): Playable => ({ type: "file", entry });
@@ -291,6 +313,23 @@ const filePlayable = (entry: LibraryEntry): Playable => ({ type: "file", entry }
 const { t, tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 
 const lib = useFileLibrary(props.scope);
+
+const folderItems = useFolderItems();
+
+/** A faixa só aparece enquanto a pasta aberta é a do item; navegar para outra a esconde. */
+const programBand = computed(() => {
+  const item = props.programFolder;
+  if (!item?.folder || lib.location.value !== item.folder) return null;
+  const summary = folderItems.summaryOf(item.folder);
+  const detail = !summary
+    ? ""
+    : summary.isSeries
+      ? summary.next
+        ? tm("folder.next", { name: summary.next })
+        : tm("folder.series_done")
+      : tm("folder.count", { n: summary.count });
+  return { title: item.title, detail };
+});
 
 function openSource(source: string): void {
   emit("source-opened");
@@ -581,6 +620,29 @@ const emptyMessage = computed(() => {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+.pm-files__program {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px 3px 8px;
+  flex-shrink: 0;
+  background: var(--lj-ui-accent-soft);
+  border-bottom: 1px solid var(--lj-surface-border);
+  font-size: 11px;
+}
+
+.pm-files__program-icon {
+  color: var(--lj-orange);
+}
+
+.pm-files__program-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pm-files__empty {

@@ -3,20 +3,24 @@
     <div
       ref="area"
       class="pm-area"
-      :class="{ 'pm-area--library-wide': libraryLayout.fullWidth.value }"
+      :class="{
+        'pm-area--library-wide': libraryLayout.fullWidth.value,
+        'pm-area--no-program': programHidden,
+      }"
       :style="{
         '--pm-library-h': `${libraryLayout.height.value}px`,
-        '--pm-program-w': `${columns.program.value}px`,
+        '--pm-program-w': programHidden ? '0px' : `${columns.program.value}px`,
         '--pm-outputs-w': `${columns.outputs.value}px`,
       }"
     >
       <ColumnResizeHandle
-        v-for="col in ['program', 'outputs'] as const"
+        v-for="col in programHidden ? (['outputs'] as const) : (['program', 'outputs'] as const)"
         :key="col"
         :column="col"
         :layout="columns"
       />
       <ProgramPanel
+        v-if="!programHidden"
         :live-child-id="liveOrigin?.type === 'child' ? liveOrigin.childId : null"
         @activate="activate"
         @child-preview="
@@ -25,7 +29,7 @@
         @child-play="
           (itemId: string, childId: string) => dispatch({ type: 'child', itemId, childId })
         "
-        @preview="(id: string) => stage.show({ type: 'program', itemId: id })"
+        @preview="previewItem"
         @edit-item="openEditItem"
         @edit-session="openEditSession"
         @new-item="openNewItem"
@@ -35,7 +39,21 @@
         @import="importFromLiturgy"
         @save="saveAsLiturgy"
         @settings="settingsDialogOpen = true"
-      />
+      >
+        <template #foot>
+          <UpNextBlock
+            :up-next="upNextItem"
+            :previous="previousItem"
+            :meta="upNextMeta"
+            :prepared="!!preparedItemId"
+            :locked="outputLocked"
+            :flash="upNextFlash"
+            @send="sendUpNext"
+            @previous="sendPrevious"
+            @toggle-lock="toggleLock"
+          />
+        </template>
+      </ProgramPanel>
 
       <section class="pm-stage" data-testid="pm-stage">
         <header class="pm-bar">
@@ -75,7 +93,25 @@
             >
               {{ tm("stage.show_live") }}
             </LjButton>
-            <ReturnControl :live-kind="liveKind" />
+            <!-- Passar as partes do que está no ar; a barra de controle única chega na fase 2. -->
+            <template v-if="!stagePreview && canNavigate">
+              <LjButton
+                size="sm"
+                icon-only
+                :icon="ICONS.ACTIONS.PREVIOUS"
+                :title="tm('outputs.previous')"
+                data-testid="pm-stage-prev"
+                @click="navigate('prev')"
+              />
+              <LjButton
+                size="sm"
+                icon-only
+                :icon="ICONS.ACTIONS.NEXT"
+                :title="tm('outputs.next')"
+                data-testid="pm-stage-next"
+                @click="navigate('next')"
+              />
+            </template>
             <LjButton
               v-if="!stagePreview && canTakeOff"
               class="pm-bar__take-off"
@@ -106,24 +142,6 @@
           @pick="
             (childId: string) => dispatch({ type: 'child', itemId: momentPreview!.id, childId })
           "
-        />
-        <!-- Pasta do programa: em prévia, ou no ar com foto/PDF (vídeo vai ao player). -->
-        <FolderStage
-          v-else-if="folderOnStage"
-          :item="folderOnStage"
-          :live-path="liveOrigin?.type === 'folderFile' ? liveOrigin.entry.path : null"
-          :return-path="returnOverride?.path ?? null"
-          @play="
-            (entry: LibraryEntry, o?: PlayOptions) =>
-              dispatch({ type: 'folderFile', itemId: folderOnStage!.id, entry }, o)
-          "
-          @stop="takeOff"
-          @add="(added: ProgramItem) => addItem(added, ensureSession())"
-          @show-on-return="
-            (e: LibraryEntry | null) =>
-              onShowOnReturn(e && { type: 'folderFile', itemId: folderOnStage!.id, entry: e })
-          "
-          @open-library="openFolderInLibrary(folderOnStage!)"
         />
         <StagePreview
           v-else-if="stagePreview && previewView"
@@ -174,9 +192,11 @@
         :live-bible="liveBibleRef"
         :live-song-id="liveSongId"
         :live-video-id="liveOrigin?.type === 'online' ? liveOrigin.videoId : null"
+        :program-folder="programFolder"
         @show-on-return="onShowOnReturn"
         @preview="stage.show"
-        @play="(p: Playable, options?: PlayOptions) => dispatch(p, options)"
+        @play="(p: Playable, options?: PlayOptions) => dispatch(fromProgramFolder(p), options)"
+        @close-program-folder="programFolder = null"
         @add="(item: ProgramItem) => addItem(item, ensureSession())"
         @stop="takeOff"
         @toggle-width="libraryLayout.toggleWidth"
@@ -185,22 +205,7 @@
         @resize-end="libraryLayout.saveHeight"
       />
 
-      <OutputsPanel
-        :up-next="upNextItem"
-        :up-next-meta="upNextMeta"
-        :prepared="!!preparedItemId"
-        :locked="outputLocked"
-        :can-navigate="canNavigate"
-        :flash="upNextFlash"
-        :on-air="canTakeOff"
-        @take-off="takeOff"
-        @first="navigate('first')"
-        @prev="navigate('prev')"
-        @next="navigate('next')"
-        @last="navigate('last')"
-        @toggle-lock="toggleLock"
-        @send="sendUpNext"
-      />
+      <OutputsPanel :up-next="upNextItem" :live-kind="liveKind" :on-air="onAir" />
     </div>
 
     <!-- Um só diálogo de série: a barra da biblioteca e a do palco abrem o mesmo. -->
@@ -234,7 +239,6 @@ import { LjButton, LjIcon } from "@/components/ui";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
-import $alert from "@/helpers/Alert";
 import Telemetry from "@/helpers/Telemetry";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
@@ -250,9 +254,8 @@ import StageSlides from "./StageSlides.vue";
 import StageVideo from "./StageVideo.vue";
 import StagePreview from "./StagePreview.vue";
 import MomentStage from "./MomentStage.vue";
-import FolderStage from "./FolderStage.vue";
 import SeriesDialog from "./SeriesDialog.vue";
-import ReturnControl from "./ReturnControl.vue";
+import UpNextBlock from "./UpNextBlock.vue";
 import ReturnPlayerBar from "./ReturnPlayerBar.vue";
 import PdfStage from "./PdfStage.vue";
 import { preparePowerPoint } from "../composables/usePowerPoint";
@@ -279,12 +282,12 @@ import {
 import LibraryPanel, { LIBRARY_TABS, type LibraryTab } from "./LibraryPanel.vue";
 import LiveMirror from "./LiveMirror.vue";
 import $appdata from "@/helpers/AppData";
+import $userdata from "@/helpers/UserData";
 import { KEYS } from "@/constants/UserDataKeys";
-import { useFileLibrary, type LibraryEntry } from "../composables/useFileLibrary";
+import { useFileLibrary } from "../composables/useFileLibrary";
 import { useLibraryLiveMarks } from "../composables/useLibraryLiveMarks";
 import { useFlash } from "../composables/useFlash";
 import { useSlideWait } from "../composables/useSlideWait";
-import Media from "@/composables/useMedia";
 import { useSlides } from "@/composables/useSlides";
 import { useLiveContent } from "../composables/useLiveContent";
 import {
@@ -333,6 +336,7 @@ const {
   toggleOpen,
   preparedItemId,
   upNextItem,
+  previousItem,
   outputLocked,
   setOutputLocked,
   prepare,
@@ -353,6 +357,10 @@ onMounted(() => {
 });
 
 const expanded = computed(() => isModuleExpanded(moduleId));
+/** Ribbon → Exibição → Mostrar programa: o palco fica com a largura da coluna. */
+const programHidden = computed(
+  () => $userdata.get<boolean>(KEYS.MODULES.PRESENTATION_MODE.PROGRAM_HIDDEN, false) === true
+);
 /* ─── Biblioteca ─── */
 
 const libraryLayout = useLibraryLayout();
@@ -406,12 +414,12 @@ function dispatch(
     dispatch({ type: "child", itemId: item.id, childId: item.children[0].id }, { force });
     return;
   }
-  // Pasta: a série passa o próximo vídeo; a pasta comum abre no palco para o operador escolher.
+  // Pasta: a série passa o próximo vídeo; a pasta comum abre na biblioteca para o operador escolher.
   if (playable.type === "program" && item?.kind === "folder" && item.folder) {
     const folderItem = item;
+    openProgramFolder(folderItem);
     void folders.nextOf(item.folder).then((next) => {
       if (next) dispatch({ type: "folderFile", itemId: folderItem.id, entry: next }, { force });
-      else stage.show(playable);
     });
     return;
   }
@@ -581,26 +589,34 @@ const momentPreview = computed(() => {
   return item && (item.kind === "moment" || item.children?.length) ? item : null;
 });
 
-/**
- * A pasta do programa no palco: a que está em prévia, ou a de onde saiu o
- * arquivo no ar (menos vídeo, que fica com o player).
- */
-const folderOnStage = computed<ProgramItem | null>(() => {
-  const t = stage.preview.value;
-  if (stagePreview.value) {
-    const item = t?.type === "program" ? findItem(t.itemId) : null;
-    return item?.kind === "folder" ? item : null;
-  }
-  return liveOrigin.value?.type === "folderFile" && !showVideoStage.value
-    ? liveProgramItem.value
-    : null;
-});
+/* ─── Pasta do programa: abre na biblioteca, não no palco ─── */
 
-/** Abre a pasta do item na aba Arquivos da biblioteca. */
-function openFolderInLibrary(item: ProgramItem): void {
+/** O item pasta/série que abriu a pasta na aba Arquivos (a faixa "Aberta pelo programa"). */
+const programFolder = ref<ProgramItem | null>(null);
+
+function openProgramFolder(item: ProgramItem): void {
   if (!item.folder) return;
+  programFolder.value = item;
   libraryTab.value = "files";
   void library.openPath(item.folder);
+}
+
+/** Um clique no programa: pasta abre na biblioteca; o resto vai para a prévia. */
+function previewItem(itemId: string): void {
+  const item = findItem(itemId);
+  if (item?.kind === "folder" && item.folder) openProgramFolder(item);
+  else stage.show({ type: "program", itemId });
+}
+
+/**
+ * Arquivo da pasta aberta pelo programa vai ao ar como parte do item: o
+ * programa marca o item ao vivo e a série registra o que passou.
+ */
+function fromProgramFolder(p: Playable): Playable {
+  const item = programFolder.value;
+  if (p.type !== "file" || !item?.folder) return p;
+  const inFolder = folders.filesOf(item.folder)?.some((e) => e.path === p.entry.path);
+  return inFolder ? { type: "folderFile", itemId: item.id, entry: p.entry } : p;
 }
 
 /** O momento cujo arquivo está no ar. */
@@ -612,14 +628,6 @@ const liveProgramItem = computed(() => {
   const origin = liveOrigin.value;
   return itemOf(origin);
 });
-
-function goToSlidePrompt(): void {
-  if (!showSlideGrid.value || outputLocked.value) return;
-  $alert.prompt({ title: alertKey("stage.go_to_slide_title") }, (value: string | null) => {
-    const n = Number(value);
-    if (Number.isInteger(n) && n >= 1 && n <= slides.totalSlides.value) Media.goToSlide(n - 1);
-  });
-}
 
 /* ─── Saídas ─── */
 
@@ -675,7 +683,7 @@ const { canNavigate, navigate, onlineQueue, pdfDeck } = useStageNavigation({
 });
 
 // Passador e teclado: o mesmo Anterior/Próximo das saídas; "B" e "." alternam a tela preta.
-useClicker({ navigate, toggleBlack: () => setCleared(!cleared.value) });
+useClicker({ navigate, toggleBlack: () => setCleared(!cleared.value), send: sendUpNext });
 
 const pathOf = (p: Playable | null) => filePathOf(p, itemOf(p));
 
@@ -719,6 +727,12 @@ function sendUpNext(): void {
   if (!item) return;
   if (item.id === preparedItemId.value) prepare(null);
   activate(item.id);
+}
+
+/** "Item anterior": volta ao item antes do que está no ar. */
+function sendPrevious(): void {
+  const item = previousItem.value;
+  if (item) activate(item.id);
 }
 
 /** Destravar manda ao ar o que ficou na fila. */
@@ -770,12 +784,9 @@ const RIBBON_HANDLERS: Record<string, () => void> = {
   stop: () => void stopOutputs(),
   clear: () => setCleared(true),
   take_off: takeOff,
-  previous: () => navigate("prev"),
-  next: () => navigate("next"),
-  lock_output: toggleLock,
-  go_to_slide: goToSlidePrompt,
+  toggle_program: () =>
+    $userdata.set(KEYS.MODULES.PRESENTATION_MODE.PROGRAM_HIDDEN, !programHidden.value),
   ...Object.fromEntries(LIBRARY_TABS.map((t) => [`library_${t}`, () => (libraryTab.value = t)])),
-  slide_grid: focusLive,
 };
 
 useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
@@ -831,6 +842,11 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
   grid-row: 1 / 3;
   overflow-y: auto;
   border-left: 1px solid var(--lj-surface-border);
+}
+
+.pm-area--no-program .pm-stage,
+.pm-area--no-program .pm-library {
+  grid-column: 1 / 3;
 }
 
 .pm-area--library-wide .pm-program {
