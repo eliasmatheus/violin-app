@@ -8,6 +8,7 @@
           'pm-file--live': entry.path === livePath,
           'pm-file--return': entry.path === returnPath,
           'pm-file--played': !!playedOn(entry),
+          'pm-file--hidden': entry.hidden,
         }"
         role="button"
         tabindex="0"
@@ -17,6 +18,7 @@
         @click="emit('select', entry)"
         @dblclick="emit('open', entry)"
         @keydown.enter.self="emit('open', entry)"
+        @keydown.f2.self.prevent="startRename(entry)"
       >
         <span class="pm-file__thumb">
           <img v-if="thumbOf(entry)" :src="thumbOf(entry)" alt="" loading="lazy" />
@@ -32,6 +34,9 @@
           </span>
           <span v-else-if="entry.name === nextName" class="pm-file__series pm-file__series--next">
             {{ tm("series.next_badge") }}
+          </span>
+          <span v-if="entry.hidden" class="pm-file__hidden-badge">
+            {{ tm("file_actions.hidden_badge") }}
           </span>
           <span v-if="entry.path === returnPath" class="pm-file__return">
             {{ tm("library.on_return") }}
@@ -81,15 +86,40 @@
             </LjTooltip>
           </template>
         </span>
-        <span class="pm-file__name">{{ entry.name }}</span>
+        <!-- Renomear (F2 ou menu): o nome vira campo no próprio cartão. -->
+        <div
+          v-if="renaming === entry.path"
+          class="pm-file__rename"
+          @click.stop
+          @dblclick.stop
+          @keydown.enter.stop.prevent="commitRename(entry)"
+          @keydown.esc.stop.prevent="renaming = null"
+        >
+          <LjInput
+            v-model="renameValue"
+            size="sm"
+            autofocus
+            :aria-label="tm('file_actions.rename_label')"
+            :data-testid="`pm-file-rename-${entry.name}`"
+            @blur="commitRename(entry)"
+          />
+        </div>
+        <span v-else class="pm-file__name">{{ entry.name }}</span>
       </div>
     </LjContextMenu>
+    <TrashDialog
+      :entry="trashing"
+      :busy="trashBusy"
+      @confirm="confirmTrash"
+      @cancel="trashing = null"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { watch } from "vue";
-import { LjContextMenu, LjIcon, LjTooltip, type LjMenuItem } from "@/components/ui";
+import { nextTick, ref, watch } from "vue";
+import { LjContextMenu, LjIcon, LjInput, LjTooltip, type LjMenuItem } from "@/components/ui";
+import $snackbar from "@/helpers/Snackbar";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import DateTime from "@/helpers/DateTime";
@@ -101,6 +131,7 @@ import { useMediaMeta } from "../composables/useMediaMeta";
 import { useCloudFiles } from "../composables/useCloudFiles";
 import { useMoments } from "../composables/useMoments";
 import { fileItem, folderItem } from "../program/items";
+import TrashDialog from "./TrashDialog.vue";
 import type { PlayOptions } from "../program/playable";
 
 /**
@@ -282,8 +313,95 @@ function menuFor(entry: LibraryEntry): EntryMenu {
             },
           ]),
       ...(props.extraMenu?.(entry) ?? []),
+      ...fileActions(entry),
     ],
   };
+}
+
+/* ─── Renomear, não mostrar, Lixeira, Finder ─── */
+
+function fileActions(entry: LibraryEntry): LjMenuItem[] {
+  if (!Platform.isDesktop) return [];
+  const live = entry.path === props.livePath;
+  return [
+    { separator: true },
+    {
+      label: tm("file_actions.rename"),
+      icon: ICONS.ACTIONS.RENAME,
+      hint: "F2",
+      action: () => startRename(entry),
+    },
+    entry.hidden
+      ? {
+          label: tm("file_actions.unhide"),
+          icon: ICONS.UI.EYE,
+          action: () => void lib.setHidden(entry, false),
+        }
+      : {
+          label: tm("file_actions.hide"),
+          icon: ICONS.UI.EYE_OFF,
+          action: () => void lib.setHidden(entry, true),
+        },
+    {
+      label: tm(`file_actions.reveal_${Platform.platform === "darwin" ? "mac" : "other"}`),
+      icon: ICONS.UI.FOLDER_OPEN,
+      action: () => lib.reveal(entry),
+    },
+    { separator: true },
+    {
+      label: tm("file_actions.trash_menu"),
+      icon: ICONS.ACTIONS.DELETE,
+      // O que está no ar fica: tirar do ar antes é decisão do operador, não efeito colateral.
+      disabled: live,
+      action: () => (trashing.value = entry),
+    },
+  ];
+}
+
+const renaming = ref<string | null>(null);
+const renameValue = ref("");
+let committing = false;
+
+async function startRename(entry: LibraryEntry): Promise<void> {
+  if (entry.isDir || !Platform.isDesktop) return;
+  renameValue.value = entry.name;
+  renaming.value = entry.path;
+  // Seleciona só o nome, sem a extensão — como o Finder e o Explorer.
+  await nextTick();
+  const input = document.querySelector<HTMLInputElement>(".pm-file__rename input");
+  const dot = entry.name.lastIndexOf(".");
+  input?.setSelectionRange(0, dot > 0 ? dot : entry.name.length);
+}
+
+async function commitRename(entry: LibraryEntry): Promise<void> {
+  if (renaming.value !== entry.path || committing) return;
+  const name = renameValue.value.trim();
+  if (!name || name === entry.name) {
+    renaming.value = null;
+    return;
+  }
+  committing = true;
+  const result = await lib.rename(entry, name);
+  committing = false;
+  if (result.ok) {
+    renaming.value = null;
+    return;
+  }
+  $snackbar.error(tm(`file_actions.errors.${result.error ?? "unwritable"}`));
+}
+
+const trashing = ref<LibraryEntry | null>(null);
+const trashBusy = ref(false);
+
+async function confirmTrash(): Promise<void> {
+  const entry = trashing.value;
+  if (!entry) return;
+  trashBusy.value = true;
+  const ok = await lib.trash(entry);
+  trashBusy.value = false;
+  trashing.value = null;
+  if (ok) $snackbar.info(tm("file_actions.trashed", { name: entry.name }));
+  else $snackbar.error(tm("file_actions.errors.trash_failed"));
 }
 
 /* ─── Momentos do programa: destino de fotos, vídeos e PDFs ─── */
@@ -532,5 +650,29 @@ watch(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* "Não mostrar" com os ocultos à vista: apagado, com o selo. */
+.pm-file--hidden .pm-file__thumb {
+  opacity: 0.45;
+  border-style: dashed;
+}
+
+.pm-file__hidden-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--lj-black-alpha-75);
+  color: var(--lj-white-alpha-50);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.pm-file__rename {
+  min-width: 0;
 }
 </style>

@@ -497,6 +497,14 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     seriesApply: (dirPath, op) => ipcRenderer.invoke("files:seriesApply", dirPath, op),
     /** Resolve cópias em conflito do histórico: `"merge"` ou o nome da versão a manter. */
     seriesResolve: (dirPath, choice) => ipcRenderer.invoke("files:seriesResolve", dirPath, choice),
+    /** Renomeia um arquivo (mesma extensão, sem sobrescrever); a série e a marca de oculto seguem o nome. */
+    renameFile: (filePath, newName) => ipcRenderer.invoke("files:rename", filePath, newName),
+    /** Marca ou desmarca "não mostrar" — gravado na própria pasta (`.louvorja-ocultos.json`). */
+    setFileHidden: (filePath, hidden) => ipcRenderer.invoke("files:setHidden", filePath, hidden),
+    /** Move o arquivo para a Lixeira do sistema. */
+    trashFile: (filePath) => ipcRenderer.invoke("files:trash", filePath),
+    /** Mostra o arquivo no Finder/Explorer. */
+    revealFile: (filePath) => ipcRenderer.invoke("files:reveal", filePath),
     /**
      * Pasta da igreja (programas e modelos do Modo apresentação):
      * `stat`, `read`, `write`, `list`, `conflicts`, `resolve`.

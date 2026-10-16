@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => {
   const store: Record<string, unknown> = {};
-  return { store, listDir: vi.fn() };
+  return { store, listDir: vi.fn(), renameFile: vi.fn() };
 });
 vi.mock("@/helpers/UserData", async () => {
   const { reactive } = await import("vue");
@@ -14,7 +14,9 @@ vi.mock("@/helpers/UserData", async () => {
     },
   };
 });
-vi.mock("@/helpers/Platform", () => ({ default: { isDesktop: true, listDir: m.listDir } }));
+vi.mock("@/helpers/Platform", () => ({
+  default: { isDesktop: true, listDir: m.listDir, renameFile: m.renameFile },
+}));
 vi.mock("@/helpers/Telemetry", () => ({ default: { captureException: vi.fn(), track: vi.fn() } }));
 
 import { KEYS } from "@/constants/UserDataKeys";
@@ -101,5 +103,39 @@ describe("useFileLibrary por aba", () => {
     const audio = useFileLibrary("audio");
     expect(audio.folders).toBe(files.folders);
     expect(audio.queue).toBe(files.queue);
+  });
+});
+
+describe("não mostrar e renomear", () => {
+  it("os ocultos saem da grade e da contagem; o botão os mostra de novo", async () => {
+    m.listDir.mockResolvedValue({
+      ok: true,
+      entries: [entry("foto.jpg"), { ...entry("velho.jpg"), hidden: true }],
+    });
+    const lib = useFileLibrary("files");
+    await lib.openSource("/culto");
+    expect(names(lib)).toEqual(["foto.jpg"]);
+    expect(lib.hiddenCount.value).toBe(1);
+    lib.toggleShowHidden();
+    expect(names(lib)).toEqual(["foto.jpg", "velho.jpg"]);
+    lib.toggleShowHidden();
+  });
+
+  it("renomear leva o favorito junto", async () => {
+    const foto = entry("foto.jpg");
+    const lib = useFileLibrary("files");
+    lib.toggleFavorite(foto);
+    m.renameFile.mockResolvedValue({ ok: true, path: "/culto/capa.jpg", name: "capa.jpg" });
+    expect(await lib.rename(foto, "capa.jpg")).toEqual({ ok: true });
+    const favs = $userdata.get(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_FAVORITES, []) as { path: string }[];
+    expect(favs.map((f) => f.path)).toEqual(["/culto/capa.jpg"]);
+  });
+
+  it("erro do disco chega para a grade avisar", async () => {
+    m.renameFile.mockResolvedValue({ ok: false, error: "exists" });
+    expect(await useFileLibrary("files").rename(entry("foto.jpg"), "hino.jpg")).toEqual({
+      ok: false,
+      error: "exists",
+    });
   });
 });

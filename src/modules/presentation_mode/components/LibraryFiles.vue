@@ -155,6 +155,25 @@
           <bdi dir="ltr">{{ locationLabel }}</bdi>
         </span>
         <span class="pm-files__count">{{ countLabel }}</span>
+        <!-- "Não mostrar": os ocultos ficam fora; aqui o operador os vê de novo. -->
+        <LjButton
+          v-if="lib.hiddenCount.value || lib.showHidden.value"
+          size="sm"
+          variant="ghost"
+          :icon="lib.showHidden.value ? ICONS.UI.EYE : ICONS.UI.EYE_OFF"
+          :aria-pressed="lib.showHidden.value"
+          data-testid="pm-library-hidden"
+          @click="lib.toggleShowHidden()"
+        >
+          {{
+            lib.showHidden.value
+              ? tm("file_actions.hide_hidden")
+              : t(
+                  `modules.${ModuleEnum.PRESENTATION_MODE}.file_actions.hidden_count`,
+                  lib.hiddenCount.value
+                )
+          }}
+        </LjButton>
         <LjButton
           v-if="cloudFiles.length"
           size="sm"

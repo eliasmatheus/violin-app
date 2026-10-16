@@ -84,6 +84,7 @@ const docStore = require("./main/docStore.js");
 const fileBrowser = require("./main/fileBrowser.js");
 const cloudFiles = require("./main/cloudFiles.js").createCloudFiles();
 const seriesFile = require("./main/seriesFile.js");
+const fileActions = require("./main/fileActions.js");
 const churchFolder = require("./main/churchFolder.js");
 const { createPresentationConverter } = require("./main/presentationConvert.js");
 const mediaVariants = require("./main/mediaVariants.js");
@@ -2610,6 +2611,15 @@ ipcMain.handle("files:seriesRead", (_e, dirPath) => seriesFile.read(dirPath));
 ipcMain.handle("files:seriesApply", (_e, dirPath, op) => seriesFile.apply(dirPath, op));
 // Cópias em conflito do sincronizador: "merge" ou o nome da versão escolhida.
 ipcMain.handle("files:seriesResolve", (_e, dirPath, choice) => seriesFile.resolve(dirPath, choice));
+// Ações de arquivo da biblioteca do Modo apresentação (só arquivos, nunca pastas).
+ipcMain.handle("files:rename", (_e, filePath, newName) =>
+  fileActions.rename(filePath, newName, {
+    renameInSeries: (dir, from, to) => seriesFile.apply(dir, { type: "rename", from, to }),
+  })
+);
+ipcMain.handle("files:setHidden", (_e, filePath, hidden) => fileActions.setHidden(filePath, hidden));
+ipcMain.handle("files:trash", (_e, filePath) => fileActions.trash(filePath, shell));
+ipcMain.handle("files:reveal", (_e, filePath) => fileActions.reveal(filePath, shell));
 // Pasta da igreja: programas e modelos do Modo apresentação numa pasta compartilhada.
 const CHURCH_OPS = {
   stat: churchFolder.stat,

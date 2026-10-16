@@ -36,6 +36,8 @@ export interface LibraryEntry {
   ext: string;
   size: number;
   mtimeMs: number;
+  /** Marcado com "não mostrar" (a marca fica na própria pasta). */
+  hidden?: boolean;
 }
 
 export type LibraryFileKind = "image" | "video" | "audio" | "pdf" | "powerpoint" | "slja";
@@ -108,13 +110,21 @@ const _queue = ref<{ entries: LibraryEntry[]; index: number } | null>(null);
 
 export type QueueStep = "first" | "prev" | "next" | "last";
 
+/** "N ocultos": mostra os arquivos marcados com "não mostrar", apagados e com o selo. */
+const _showHidden = ref(false);
+
 /** A navegação de uma aba: a fonte aberta, a subpasta, o que a grade mostra. */
 function _createNav(scope: LibraryScope) {
   /** `ALL`, `FAVORITES` ou o caminho de uma das pastas. */
   const source = ref<string>(ALL);
   /** Pasta aberta dentro da fonte (subpasta), quando a fonte é uma pasta. */
   const dir = ref<string | null>(null);
-  const entries = ref<LibraryEntry[]>([]);
+  /** Tudo o que a pasta tem, ocultos inclusive; a grade vê `entries`. */
+  const all = ref<LibraryEntry[]>([]);
+  const entries = computed(() =>
+    _showHidden.value ? all.value : all.value.filter((e) => !e.hidden)
+  );
+  const hiddenCount = computed(() => all.value.filter((e) => e.hidden).length);
   const loading = ref(false);
   const missing = ref(false);
   const selectedPath = ref<string | null>(null);
@@ -122,7 +132,8 @@ function _createNav(scope: LibraryScope) {
   let loadSeq = 0;
 
   const fits = (e: LibraryEntry) => inScope(e, scope);
-  const files = (list: LibraryEntry[] | null) => (list ?? []).filter((e) => !e.isDir && fits(e));
+  const files = (list: LibraryEntry[] | null) =>
+    (list ?? []).filter((e) => !e.isDir && !e.hidden && fits(e));
 
   async function reload(): Promise<void> {
     const seq = ++loadSeq;
@@ -134,7 +145,8 @@ function _createNav(scope: LibraryScope) {
         next = favorites.value.filter(fits).sort(byName);
       } else if (source.value === ALL) {
         const lists = await Promise.all(folders.value.map((f) => readFolder(f.path)));
-        next = lists.flatMap(files).sort(byName);
+        // "Todos" junta as pastas; os ocultos de cada uma ficam de fora.
+        next = lists.flatMap((l) => (l ?? []).filter((e) => !e.isDir && fits(e))).sort(byName);
       } else {
         const list = await readFolder(dir.value ?? source.value);
         missing.value = list === null;
@@ -144,7 +156,7 @@ function _createNav(scope: LibraryScope) {
       Telemetry.captureException(e, { source: "presentation_mode.library.read" });
     }
     if (seq !== loadSeq) return;
-    entries.value = next;
+    all.value = next;
     loading.value = false;
     if (selectedPath.value && !next.some((e) => e.path === selectedPath.value))
       selectedPath.value = null;
@@ -174,6 +186,7 @@ function _createNav(scope: LibraryScope) {
     source,
     dir,
     entries,
+    hiddenCount,
     loading,
     missing,
     selectedPath,
@@ -201,6 +214,19 @@ async function _refreshAll(reload: (_nav: Nav) => boolean): Promise<void> {
   await Promise.all(
     [..._navs.values()].flatMap((nav) => [nav.refreshCounts(), reload(nav) ? nav.reload() : null])
   );
+}
+
+/** Um arquivo mudou no disco: toda aba relê, e quem guarda a pasta (programa) também. */
+const _folderListeners = new Set<(dir: string) => void>();
+export function onFolderChanged(listener: (dir: string) => void): () => void {
+  _folderListeners.add(listener);
+  return () => _folderListeners.delete(listener);
+}
+
+async function _changed(filePath: string): Promise<void> {
+  const dir = parentOf(filePath);
+  for (const listener of _folderListeners) listener(dir);
+  await _refreshAll(() => true);
 }
 
 export function useFileLibrary(scope: LibraryScope = "files") {
@@ -238,6 +264,8 @@ export function useFileLibrary(scope: LibraryScope = "files") {
     location,
     canGoUp,
     fileCount,
+    hiddenCount: nav.hiddenCount,
+    showHidden: _showHidden,
 
     async load(): Promise<void> {
       await Promise.all([nav.reload(), nav.refreshCounts()]);
@@ -293,7 +321,9 @@ export function useFileLibrary(scope: LibraryScope = "files") {
     /** Põe a pasta na biblioteca sem perguntar (a pasta da igreja). Já coberta por outra, nada muda. */
     async includeFolder(path: string): Promise<void> {
       const covered = folders.value.some(
-        (f) => path === f.path || path.startsWith(f.path.replace(/[\\/]$/, "") + (f.path.includes("\\") ? "\\" : "/"))
+        (f) =>
+          path === f.path ||
+          path.startsWith(f.path.replace(/[\\/]$/, "") + (f.path.includes("\\") ? "\\" : "/"))
       );
       if (covered) return;
       $userdata.set(KEYS.MODULES.PRESENTATION_MODE.LIBRARY_FOLDERS, [
@@ -343,6 +373,59 @@ export function useFileLibrary(scope: LibraryScope = "files") {
       if (target < 0 || target > last || target === q.index) return null;
       _queue.value = { ...q, index: target };
       return q.entries[target];
+    },
+
+    toggleShowHidden(): void {
+      _showHidden.value = !_showHidden.value;
+    },
+
+    /** Renomeia no disco; favoritos e a fila seguem o nome novo. */
+    async rename(entry: LibraryEntry, newName: string): Promise<{ ok: boolean; error?: string }> {
+      const result = (await Platform.renameFile(entry.path, newName)) as {
+        ok: boolean;
+        error?: string;
+        path?: string;
+        name?: string;
+      };
+      if (!result?.ok || !result.path || !result.name) return { ok: false, error: result?.error };
+      const moved = { ...entry, path: result.path, name: result.name };
+      if (favorites.value.some((f) => f.path === entry.path)) {
+        $userdata.set(
+          KEYS.MODULES.PRESENTATION_MODE.LIBRARY_FAVORITES,
+          favorites.value.map((f) => (f.path === entry.path ? { ...f, ...moved } : f))
+        );
+      }
+      const q = _queue.value;
+      if (q)
+        _queue.value = { ...q, entries: q.entries.map((e) => (e.path === entry.path ? moved : e)) };
+      for (const n of _navs.values()) {
+        if (n.selectedPath.value === entry.path) n.selectedPath.value = moved.path;
+      }
+      await _changed(entry.path);
+      return { ok: true };
+    },
+
+    async setHidden(entry: LibraryEntry, hidden: boolean): Promise<boolean> {
+      const result = (await Platform.setFileHidden(entry.path, hidden)) as { ok: boolean };
+      if (result?.ok) await _changed(entry.path);
+      return !!result?.ok;
+    },
+
+    async trash(entry: LibraryEntry): Promise<boolean> {
+      const result = (await Platform.trashFile(entry.path)) as { ok: boolean };
+      if (!result?.ok) return false;
+      if (favorites.value.some((f) => f.path === entry.path)) {
+        $userdata.set(
+          KEYS.MODULES.PRESENTATION_MODE.LIBRARY_FAVORITES,
+          favorites.value.filter((f) => f.path !== entry.path)
+        );
+      }
+      await _changed(entry.path);
+      return true;
+    },
+
+    reveal(entry: LibraryEntry): void {
+      void Platform.revealFile(entry.path);
     },
 
     isFavorite(entry: LibraryEntry): boolean {

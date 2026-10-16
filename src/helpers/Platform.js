@@ -369,6 +369,26 @@ export default {
     return api?.storage?.seriesResolve?.(dirPath, choice) ?? _unsupported();
   },
 
+  /** Renomeia um arquivo da biblioteca. No navegador: `{ ok: false }`. */
+  renameFile(filePath, newName) {
+    return api?.storage?.renameFile?.(filePath, newName) ?? _unsupported();
+  },
+
+  /** "Não mostrar" na biblioteca, gravado na pasta. No navegador: `{ ok: false }`. */
+  setFileHidden(filePath, hidden) {
+    return api?.storage?.setFileHidden?.(filePath, hidden) ?? _unsupported();
+  },
+
+  /** Move o arquivo para a Lixeira. No navegador: `{ ok: false }`. */
+  trashFile(filePath) {
+    return api?.storage?.trashFile?.(filePath) ?? _unsupported();
+  },
+
+  /** Mostra o arquivo no Finder/Explorer. No navegador: `{ ok: false }`. */
+  revealFile(filePath) {
+    return api?.storage?.revealFile?.(filePath) ?? _unsupported();
+  },
+
   /** PowerPoint → PDF pelo PowerPoint do computador. No navegador: `{ ok: false }`. */
   convertPresentation(filePath) {
     return api?.storage?.convertPresentation?.(filePath) ?? _unsupported();

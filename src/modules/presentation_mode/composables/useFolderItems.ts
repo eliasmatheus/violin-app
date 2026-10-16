@@ -1,7 +1,7 @@
 import { reactive } from "vue";
 import { kindFromPath } from "../program/liturgy";
 import { progressOf } from "../program/series";
-import { readFolder, type LibraryEntry } from "./useFileLibrary";
+import { onFolderChanged, readFolder, type LibraryEntry } from "./useFileLibrary";
 import { useSeries } from "./useSeries";
 
 /**
@@ -19,7 +19,8 @@ function load(dir: string): Promise<LibraryEntry[]> {
   if (pending) return pending;
   const job = readFolder(dir)
     .then((list) => {
-      const files = (list ?? []).filter((e) => !e.isDir);
+      // "Não mostrar" vale também para a pasta do programa.
+      const files = (list ?? []).filter((e) => !e.isDir && !e.hidden);
       listings.set(dir, files);
       return files;
     })
@@ -27,6 +28,13 @@ function load(dir: string): Promise<LibraryEntry[]> {
   loading.set(dir, job);
   return job;
 }
+
+// Renomeou, ocultou ou mandou para a Lixeira: a pasta do programa relê.
+onFolderChanged((dir) => {
+  if (listings.has(dir)) void load(dir);
+  // Renomear leva o histórico da série junto: relê para os selos seguirem.
+  void useSeries().load(dir);
+});
 
 /** Pastas cuja série (se houver) já foi pedida ao disco. */
 const seriesAsked = new Set<string>();
@@ -42,7 +50,8 @@ function filesOf(dir: string): LibraryEntry[] | undefined {
 }
 
 /** Os que contam para a série — o mesmo critério da barra de série da biblioteca. */
-const seriesFiles = (files: LibraryEntry[]) => files.filter((e) => ["video", "image"].includes(kindFromPath(e.path)));
+const seriesFiles = (files: LibraryEntry[]) =>
+  files.filter((e) => ["video", "image"].includes(kindFromPath(e.path)));
 
 /** O próximo da série, ou null se a pasta não é série (ou a série terminou). */
 async function nextOf(dir: string): Promise<LibraryEntry | null> {
@@ -51,7 +60,10 @@ async function nextOf(dir: string): Promise<LibraryEntry | null> {
   const doc = series.of(dir);
   if (!doc) return null;
   const candidates = seriesFiles(files);
-  const next = progressOf(doc, candidates.map((e) => e.name)).next;
+  const next = progressOf(
+    doc,
+    candidates.map((e) => e.name)
+  ).next;
   return candidates.find((e) => e.name === next) ?? null;
 }
 
@@ -60,7 +72,12 @@ function summaryOf(dir: string): { count: number; next: string | null; isSeries:
   const files = filesOf(dir);
   if (!files) return null;
   const doc = useSeries().of(dir);
-  const next = doc ? progressOf(doc, seriesFiles(files).map((e) => e.name)).next : null;
+  const next = doc
+    ? progressOf(
+        doc,
+        seriesFiles(files).map((e) => e.name)
+      ).next
+    : null;
   return { count: files.length, next, isSeries: !!doc };
 }
 

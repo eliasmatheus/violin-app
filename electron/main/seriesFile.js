@@ -15,6 +15,7 @@
 const fs = require("fs-extra");
 const path = require("path");
 const crypto = require("crypto");
+const { readHidden } = require("./fileActions");
 
 const FILE_NAME = ".louvorja-serie.json";
 /**
@@ -117,11 +118,13 @@ async function conflictNames(dir) {
   }
 }
 
-/** Vídeos e imagens da pasta, que é o que a série percorre. */
+/** Vídeos e imagens da pasta, que é o que a série percorre (os marcados "não mostrar" não contam). */
 async function mediaFiles(dir) {
   try {
-    const names = await fs.readdir(dir);
-    return names.filter((n) => !n.startsWith(".") && MEDIA_EXT.has(path.extname(n).slice(1).toLowerCase()));
+    const [names, hidden] = await Promise.all([fs.readdir(dir), readHidden(dir)]);
+    return names.filter(
+      (n) => !n.startsWith(".") && !hidden.has(n) && MEDIA_EXT.has(path.extname(n).slice(1).toLowerCase())
+    );
   } catch {
     return [];
   }
@@ -138,6 +141,7 @@ function playedInCycle(doc) {
  * - `play {file}` — passou; com todos passados e `onEnd: "restart"`, já abre o ciclo seguinte.
  * - `undo {file}` — passou por engano.
  * - `restart {fromCycle}` — novo ciclo; só se ninguém recomeçou antes.
+ * - `rename {from, to}` — o arquivo foi renomeado: as exibições dele seguem o nome novo.
  */
 function applyOp(doc, op, files) {
   const at = nowIso();
@@ -170,6 +174,12 @@ function applyOp(doc, op, files) {
         plays: doc.plays.map((p) =>
           p.file === op.file && p.cycle === doc.cycle && !p.undone ? { ...p, undone: true } : p
         ),
+      };
+    case "rename":
+      if (!doc || typeof op.from !== "string" || typeof op.to !== "string") return null;
+      return {
+        ...doc,
+        plays: doc.plays.map((p) => (p.file === op.from ? { ...p, file: str(op.to, 500) } : p)),
       };
     case "restart":
       if (!doc) return null;

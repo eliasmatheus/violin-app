@@ -561,5 +561,32 @@
     "again": "Presentar de nuevo",
     "save": "Guardar lo que pasó como programa",
     "session_label": "Lo que pasó"
+  },
+  "file_actions": {
+    "rename": "Renombrar",
+    "rename_label": "Nuevo nombre del archivo",
+    "hide": "No mostrar en la biblioteca",
+    "unhide": "Mostrar de nuevo",
+    "hidden_badge": "OCULTO",
+    "hidden_count": "{n} oculto | {n} ocultos",
+    "hide_hidden": "Esconder ocultos",
+    "reveal_mac": "Mostrar en el Finder",
+    "reveal_other": "Mostrar en el Explorador",
+    "trash_menu": "Mover a la Papelera…",
+    "trash_title": "¿Mover a la Papelera?",
+    "trash_text": "va a la Papelera de esta computadora. Se puede recuperar desde allí.",
+    "trash_church": "Está en la carpeta de la iglesia: desaparece también en las otras computadoras que se sincronizan con ella.",
+    "trash_synced": "Está en una carpeta sincronizada: desaparece también en las otras computadoras que se sincronizan con ella.",
+    "trash": "Mover a la Papelera",
+    "trashed": "{name} fue a la Papelera.",
+    "errors": {
+      "invalid_name": "Nombre inválido: sin barras, sin los caracteres : * ? \" < > y sin empezar con punto.",
+      "extension_changed": "Mantenga la extensión del archivo.",
+      "exists": "Ya existe un archivo con ese nombre en esta carpeta.",
+      "not_found": "El archivo ya no está en la carpeta.",
+      "invalid_path": "El archivo ya no está en la carpeta.",
+      "unwritable": "No se pudo renombrar: el archivo puede estar en uso o sin permiso.",
+      "trash_failed": "No se pudo mover a la Papelera."
+    }
   }
 }

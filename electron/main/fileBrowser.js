@@ -9,11 +9,13 @@
  * só caminhos — numa pasta de fotos de anos de culto, isso trava a grade.
  *
  * Arquivos ocultos ficam de fora (`.DS_Store`, `desktop.ini`, `Thumbs.db`):
- * não são conteúdo, só barulho na grade.
+ * não são conteúdo, só barulho na grade. Os que o operador marcou com "não
+ * mostrar" vêm com `hidden: true` — continuam no disco, a grade os esconde.
  */
 
 const fs = require("fs-extra");
 const path = require("path");
+const { readHidden } = require("./fileActions");
 
 const HIDDEN = new Set(["desktop.ini", "thumbs.db"]);
 
@@ -37,6 +39,8 @@ async function listDir(dirPath) {
     return { ok: false, error: e && e.code === "ENOENT" ? "not_found" : "unreadable" };
   }
 
+  // Marcados com "não mostrar" na própria pasta: vêm com `hidden`, a grade decide.
+  const hidden = await readHidden(dirPath);
   const entries = [];
   for (const dirent of dirents) {
     if (isHidden(dirent.name)) continue;
@@ -52,6 +56,7 @@ async function listDir(dirPath) {
         ext: isDir ? "" : path.extname(dirent.name).slice(1).toLowerCase(),
         size: isDir ? 0 : stat.size,
         mtimeMs: stat.mtimeMs,
+        ...(!isDir && hidden.has(dirent.name) ? { hidden: true } : {}),
       });
     } catch {
       // Link quebrado ou arquivo sumindo enquanto lista: não é motivo para falhar a pasta.

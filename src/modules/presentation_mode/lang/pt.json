@@ -561,5 +561,32 @@
     "again": "Apresentar de novo",
     "save": "Guardar o que passou como programa",
     "session_label": "O que passou"
+  },
+  "file_actions": {
+    "rename": "Renomear",
+    "rename_label": "Novo nome do arquivo",
+    "hide": "Não mostrar na biblioteca",
+    "unhide": "Mostrar de novo",
+    "hidden_badge": "OCULTO",
+    "hidden_count": "{n} oculto | {n} ocultos",
+    "hide_hidden": "Esconder ocultos",
+    "reveal_mac": "Mostrar no Finder",
+    "reveal_other": "Mostrar no Explorer",
+    "trash_menu": "Mover para a Lixeira…",
+    "trash_title": "Mover para a Lixeira?",
+    "trash_text": "vai para a Lixeira deste computador. Dá para recuperar de lá.",
+    "trash_church": "Está na pasta da igreja: some também nos outros computadores que sincronizam com ela.",
+    "trash_synced": "Está numa pasta sincronizada: some também nos outros computadores que sincronizam com ela.",
+    "trash": "Mover para a Lixeira",
+    "trashed": "{name} foi para a Lixeira.",
+    "errors": {
+      "invalid_name": "Nome inválido: sem barras, sem os caracteres : * ? \" < > e sem começar com ponto.",
+      "extension_changed": "Mantenha a extensão do arquivo.",
+      "exists": "Já existe um arquivo com esse nome nesta pasta.",
+      "not_found": "O arquivo não está mais na pasta.",
+      "invalid_path": "O arquivo não está mais na pasta.",
+      "unwritable": "Não foi possível renomear: o arquivo pode estar em uso ou sem permissão.",
+      "trash_failed": "Não foi possível mover para a Lixeira."
+    }
   }
 }
