@@ -12,16 +12,8 @@
         :title="view.title"
         @pick="(i: number) => !view.needsMode && emit('play', i)"
       />
-      <footer v-if="!view.needsMode" class="pm-preview__bar">
-        <LjButton
-          variant="primary"
-          :icon="ICONS.PLAYER.PLAY"
-          data-testid="pm-preview-play"
-          @click="emit('play')"
-        >
-          {{ tm("preview.play") }}
-        </LjButton>
-        <LjMenu v-if="view.chooseMode" :items="modeItems" side="top">
+      <footer v-if="!view.needsMode && view.chooseMode" class="pm-preview__bar">
+        <LjMenu :items="modeItems" side="top">
           <template #trigger>
             <LjButton :icon-end="ICONS.UI.CHEVRON_UP" data-testid="pm-preview-play-as">
               {{ tm("music_modes.play_as") }}
@@ -74,17 +66,6 @@
             {{ tm("library.play_on_return") }}
           </LjButton>
         </div>
-        <LjTooltip v-if="view.playable && !view.needsMode" :text="tm('preview.play')">
-          <button
-            type="button"
-            class="pm-preview__play"
-            :aria-label="tm('preview.play')"
-            data-testid="pm-preview-play"
-            @click="emit('play')"
-          >
-            <LjIcon :icon="ICONS.PLAYER.PLAY" :size="34" />
-          </button>
-        </LjTooltip>
       </div>
     </div>
 
@@ -112,7 +93,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { LjButton, LjIcon, LjMenu, LjTooltip, type LjMenuItem } from "@/components/ui";
+import { LjButton, LjIcon, LjMenu, type LjMenuItem } from "@/components/ui";
 import { modesFor, type MusicMode } from "../program/musicModes";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
@@ -126,7 +107,7 @@ import SlideGrid from "./SlideGrid.vue";
 /**
  * Prévia de um item que não está no ar. Nada daqui chega à tela: a música é
  * lida do banco e desenhada na grade; imagem e vídeo abrem direto do disco.
- * O botão ▶ (ou o clique num slide) é que manda ao ar.
+ * "Apresentar ↵" na faixa de baixo (ou o clique num slide) é que manda ao ar.
  */
 
 export interface PreviewView {
@@ -251,7 +232,15 @@ watch(
   container-type: size;
 }
 
+/* Prévia: borda tracejada — o que está aqui ainda não está no ar. */
+.pm-preview[data-kind="song"] {
+  outline: 2px dashed var(--lj-info-light);
+  outline-offset: -4px;
+}
+
 .pm-preview__frame {
+  outline: 2px dashed var(--lj-info-light);
+  outline-offset: 3px;
   position: relative;
   width: min(100cqw, calc(100cqh * 16 / 9));
   aspect-ratio: 16 / 9;
@@ -308,45 +297,11 @@ watch(
   color: var(--lj-white-alpha-50);
 }
 
-/* O ▶ fica sobre a prévia, como no FreeShow: é o "manda ao ar" do item. */
-.pm-preview__play {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 72px;
-  height: 72px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: var(--lj-black-alpha-40);
-  color: var(--lj-white);
-  cursor: pointer;
-  opacity: 0.85;
-  transform: translate(-50%, -50%);
-  transition:
-    opacity 120ms var(--lj-ease),
-    background 120ms var(--lj-ease);
-}
-
 .pm-preview__actions {
   position: absolute;
   right: 10px;
   bottom: 10px;
   display: flex;
   gap: 6px;
-}
-
-.pm-preview__play:hover,
-.pm-preview__play:focus-visible {
-  opacity: 1;
-  background: var(--lj-black-alpha-75);
-}
-
-.pm-preview__play:focus-visible {
-  outline: none;
-  box-shadow: var(--lj-ui-focus);
 }
 </style>

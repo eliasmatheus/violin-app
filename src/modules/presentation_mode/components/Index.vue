@@ -85,15 +85,6 @@
           <span v-if="stageMeta" class="pm-bar__meta">{{ stageMeta }}</span>
           <div class="pm-bar__tools">
             <LjButton
-              v-if="stagePreview && onAir"
-              size="sm"
-              :icon="ICONS.PROJECTION.START"
-              data-testid="pm-stage-show-live"
-              @click="focusLive"
-            >
-              {{ tm("stage.show_live") }}
-            </LjButton>
-            <LjButton
               size="sm"
               icon-only
               :icon="expanded ? ICONS.PLAYER.FULLSCREEN_EXIT : ICONS.PLAYER.FULLSCREEN"
@@ -103,32 +94,50 @@
             />
           </div>
         </header>
-        <!-- Momento em prévia: os arquivos dele em grade; clicar manda ao ar. -->
-        <MomentStage
-          v-if="momentPreview"
-          :item="momentPreview"
-          :live-child-id="null"
-          :locked="outputLocked"
-          @pick="
-            (childId: string) => dispatch({ type: 'child', itemId: momentPreview!.id, childId })
-          "
-        />
-        <StagePreview
-          v-else-if="stagePreview && previewView"
-          :view="previewView"
-          @play="playPreview"
-          @play-return="playPreviewOnReturn"
-          @play-muted="stage.preview.value && dispatch(stage.preview.value, { muted: true })"
-        />
-        <!-- Música e PDF: a grade de hoje. Pasta e momento no ar não repetem os arquivos aqui. -->
-        <StageSlides v-else-if="showSlideGrid" :locked="outputLocked" />
-        <PdfStage v-else-if="pdfDeck.active.value" :locked="outputLocked" />
-        <StageVisor v-else-if="audioLive" :audio-title="audioTitle" />
-        <!-- Vídeo, imagem, versículo, anúncio: o visor mostra o que está na tela. -->
-        <StageVisor v-else-if="liveKind" />
-        <div v-else class="pm-stage__body">
-          <p class="pm-stage__empty">{{ tm("empty.stage") }}</p>
+        <div class="pm-stage__main">
+          <!-- Prévia: o que está no ar fica em miniatura no canto; clicar volta para ele. -->
+          <LivePip
+            v-if="stagePreview && onAir"
+            :title="liveTitle"
+            :audio-only="audioLive"
+            :progress="livePipProgress"
+            @focus="focusLive"
+          />
+          <!-- Momento em prévia: os arquivos dele em grade; clicar manda ao ar. -->
+          <MomentStage
+            v-if="momentPreview"
+            :item="momentPreview"
+            :live-child-id="null"
+            :locked="outputLocked"
+            @pick="
+              (childId: string) => dispatch({ type: 'child', itemId: momentPreview!.id, childId })
+            "
+          />
+          <StagePreview
+            v-else-if="stagePreview && previewView"
+            :view="previewView"
+            @play="playPreview"
+            @play-return="playPreviewOnReturn"
+            @play-muted="stage.preview.value && dispatch(stage.preview.value, { muted: true })"
+          />
+          <!-- Música e PDF: a grade de hoje. Pasta e momento no ar não repetem os arquivos aqui. -->
+          <StageSlides v-else-if="showSlideGrid" :locked="outputLocked" />
+          <PdfStage v-else-if="pdfDeck.active.value" :locked="outputLocked" />
+          <StageVisor v-else-if="audioLive" :audio-title="audioTitle" />
+          <!-- Vídeo, imagem, versículo, anúncio: o visor mostra o que está na tela. -->
+          <StageVisor v-else-if="liveKind" />
+          <div v-else class="pm-stage__body">
+            <p class="pm-stage__empty">{{ tm("empty.stage") }}</p>
+          </div>
         </div>
+        <PreviewBand
+          v-if="stagePreview"
+          :title="stageTitle"
+          :can-present="canPresentPreview"
+          :needs-mode="!!previewView?.needsMode"
+          @discard="focusLive"
+          @present="presentPreview"
+        />
         <!-- Vídeo só no retorno: o player dele fica no palco enquanto toca. -->
         <ReturnPlayerBar @close="onShowOnReturn(null)" />
         <!-- Vídeo dentro de uma pasta ou momento: a barra anda pelos arquivos; o tempo dele fica aqui. -->
@@ -225,6 +234,8 @@ import OutputsPanel from "./OutputsPanel.vue";
 import StageSlides from "./StageSlides.vue";
 import StageVisor from "./StageVisor.vue";
 import ControlBar from "./ControlBar.vue";
+import PreviewBand from "./PreviewBand.vue";
+import LivePip from "./LivePip.vue";
 import LiveVideoBar from "./LiveVideoBar.vue";
 import StagePreview from "./StagePreview.vue";
 import MomentStage from "./MomentStage.vue";
@@ -531,6 +542,21 @@ async function onShowOnReturn(target: Playable | null): Promise<void> {
   await showOnReturn(override);
 }
 
+/** "Apresentar ↵" da faixa da prévia: o item de momento manda o primeiro arquivo. */
+const canPresentPreview = computed(
+  () => !!momentPreview.value || (!!previewView.value?.playable && !previewView.value.needsMode)
+);
+
+function presentPreview(): void {
+  if (canPresentPreview.value) playPreview();
+}
+
+/** Enter: com prévia, apresenta a prévia; sem prévia, envia o próximo item do programa. */
+function onEnter(): void {
+  if (stagePreview.value) presentPreview();
+  else sendUpNext();
+}
+
 function playPreviewOnReturn(): void {
   if (stage.preview.value) void onShowOnReturn(stage.preview.value);
 }
@@ -652,11 +678,15 @@ const transport = useLiveTransport({
   locked: outputLocked,
 });
 const liveTitle = computed(() => (audioLive.value ? audioTitle.value : live.title.value));
+const livePipProgress = computed(() => {
+  const d = transport.duration.value;
+  return transport.timed.value && d ? Math.min(100, (transport.currentTime.value / d) * 100) : null;
+});
 
 useClicker({
   navigate,
   toggleBlack: () => setCleared(!cleared.value),
-  send: sendUpNext,
+  send: onEnter,
   togglePlay: transport.togglePlay,
   toggleMute: transport.toggleMute,
 });
@@ -949,6 +979,14 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
   min-height: 0;
   overflow: auto;
   padding: var(--lj-space-4);
+}
+
+.pm-stage__main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .pm-stage__body {

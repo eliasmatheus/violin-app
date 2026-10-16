@@ -259,7 +259,6 @@
     "no_results": "Nenhuma música encontrada."
   },
   "preview": {
-    "play": "Reproduzir",
     "song_failed": "Não foi possível carregar a letra desta música.",
     "song_hint": "Clique num slide para começar a música a partir dele."
   },
@@ -544,5 +543,13 @@
     "audio_note": "{time} · não aparece nas telas",
     "auto_on": "passa sozinho a cada {s}s",
     "end_note": "fim · Enter envia {title}"
+  },
+  "preview_band": {
+    "title": "Prévia: {title}",
+    "hint": "Só você está vendo. A barra de baixo continua controlando o que está no ar.",
+    "needs_mode": "Escolha a versão da música abaixo para apresentar.",
+    "discard": "Descartar prévia",
+    "present": "Apresentar ↵",
+    "present_title": "Apresentar a prévia (Enter)"
   }
 }

@@ -1470,7 +1470,7 @@
     "presentation_next": "Modo apresentação: próximo (passador)",
     "presentation_prev": "Modo apresentação: anterior (passador)",
     "presentation_black": "Modo apresentação: tela preta / voltar",
-    "presentation_send": "Modo apresentação: enviar o próximo item do programa",
+    "presentation_send": "Modo apresentação: apresentar a prévia ou enviar o próximo item",
     "presentation_play": "Modo apresentação: reproduzir / pausar o que está no ar",
     "presentation_mute": "Modo apresentação: silenciar"
   },
