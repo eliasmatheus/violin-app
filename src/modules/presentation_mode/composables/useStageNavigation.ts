@@ -94,7 +94,7 @@ export function useStageNavigation(deps: {
         step: (to) => library.stepQueue(to),
         send: (entry) => {
           claimScreen(kindFromPath(entry.path) === "video" ? "video" : "other");
-        deps.projectPath(entry.path, entry.name);
+          deps.projectPath(entry.path, entry.name);
           // Na pasta do programa, o item continua sendo o que está no ar.
           const sent = stage.sent.value?.playable;
           markSent(sent?.type === "folderFile" ? { ...sent, entry } : { type: "file", entry });
@@ -109,6 +109,6 @@ export function useStageNavigation(deps: {
     deps.outputLocked,
     deps.onEnd
   );
-  const { canNavigate, navigate } = navigation;
-  return { canNavigate, navigate, onlineQueue, pdfDeck };
+  const { canNavigate, navigate, position } = navigation;
+  return { canNavigate, navigate, position, onlineQueue, pdfDeck };
 }

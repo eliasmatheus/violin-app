@@ -151,12 +151,9 @@
     "stage_return": "Retorno de escenario",
     "monitor": "Monitor {n}",
     "no_monitor": "sin monitor",
-    "previous": "Anterior",
-    "next": "Siguiente",
     "prepared": "En cola — sale al aire al desbloquear",
     "nothing_next": "Fin del programa.",
     "return_only": "SOLO EN EL RETORNO",
-    "take_off": "Quitar del aire",
     "take_off_title": "Quita de la pantalla solo lo que se está mostrando (canción, versículo, foto, video). La presentación sigue abierta.",
     "missing_main": "La pantalla principal se cerró — reabrir",
     "missing_stage": "se cerró — reabrir",
@@ -241,9 +238,7 @@
     "volume": "Volumen",
     "mute": "Cortar el audio",
     "unmute": "Devolver el audio",
-    "stop": "Detener el video",
     "audio_only": "Audio — no va a las pantallas",
-    "remaining_title": "Cuánto falta para terminar y la hora en que termina",
     "ends_at": "termina {time}"
   },
   "music": {
@@ -356,9 +351,6 @@
     "new_moment": "Nuevo momento con este archivo",
     "added": "Agregado a \"{name}\".",
     "grid_hint": "Clic para enviar al aire · Siguiente/Anterior y el control recorren la lista"
-  },
-  "pdf": {
-    "hint": "Clic para ir a la diapositiva · Siguiente/Anterior y el control pasan la página"
   },
   "pptx": {
     "converting": "Convirtiendo \"{name}\" con PowerPoint…",
@@ -527,5 +519,30 @@
     "send_title": "Enviar el siguiente ítem del programa (Enter)",
     "lock": "Bloquear salida: lo que envíe espera en la cola",
     "unlock": "Desbloquear salida y enviar lo que está en la cola"
+  },
+  "control": {
+    "first": "Primera parte",
+    "previous": "Parte anterior (← PgUp)",
+    "next": "Siguiente parte (→ PgDn Espacio)",
+    "last": "Última parte",
+    "unit": {
+      "slide": "Diapositiva",
+      "page": "Página",
+      "file": "Archivo",
+      "video": "Video",
+      "verse": "Versículo",
+      "audio": "Audio",
+      "image": "Imagen",
+      "announcement": "Anuncio"
+    },
+    "on_air_for": "al aire hace",
+    "take_off": "Quitar del aire",
+    "auto_start": "Pasar solo (K)",
+    "auto_stop": "Dejar de pasar solo (K)",
+    "no_play": "Sin reproducción",
+    "nothing": "Nada al aire",
+    "audio_note": "{time} · no aparece en las pantallas",
+    "auto_on": "pasa solo cada {s}s",
+    "end_note": "fin · Enter envía {title}"
   }
 }

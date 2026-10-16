@@ -40,7 +40,8 @@ function install(): void {
   const live = useLiveContent();
 
   watch(
-    () => (live.current.value === "file" && live.file.value?.type === "pdf" ? live.file.value.url : null),
+    () =>
+      live.current.value === "file" && live.file.value?.type === "pdf" ? live.file.value.url : null,
     async (next) => {
       if (next === url.value) return;
       const seq = ++loadSeq;
@@ -117,12 +118,29 @@ export function usePdfDeck() {
   const source: NavigableSource = {
     active: () => active.value,
     canStep: () => total.value > 1,
-    counter: () => (active.value ? `${page.value}/${total.value}` : undefined),
+    position: () =>
+      active.value ? { unit: "page", index: page.value - 1, total: total.value } : undefined,
     step(to) {
-      const target = to === "first" ? 1 : to === "last" ? total.value : to === "next" ? page.value + 1 : page.value - 1;
+      const target =
+        to === "first"
+          ? 1
+          : to === "last"
+            ? total.value
+            : to === "next"
+              ? page.value + 1
+              : page.value - 1;
       return goTo(target);
     },
   };
 
-  return { active, page, total, thumbs, thumbOf, goTo, source, openNextAtEnd: () => (startAtEnd = true) };
+  return {
+    active,
+    page,
+    total,
+    thumbs,
+    thumbOf,
+    goTo,
+    source,
+    openNextAtEnd: () => (startAtEnd = true),
+  };
 }

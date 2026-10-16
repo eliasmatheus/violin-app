@@ -5,7 +5,7 @@ import Media from "@/composables/useMedia";
 import type { ProgramItem } from "@/types/Presentation";
 import type { Playable } from "../program/playable";
 import { useOnlineLibrary, type OnlineEntry } from "./useOnlineLibrary";
-import { queueCounter, type NavigableSource } from "./useLiveNavigation";
+import { queuePosition, type NavigableSource } from "./useLiveNavigation";
 
 /**
  * Vídeos do YouTube no palco: como um vídeo da aba vira um Playable, como ele
@@ -31,7 +31,10 @@ export function itemVideoId(item: ProgramItem | null | undefined): string | null
  * A fila da playlist ou do canal de onde saiu o vídeo enviado ao ar: o
  * Anterior/Próximo anda por ela, e o vídeo seguinte fica preparado.
  */
-export function useOnlineQueue(deps: { sent: () => Playable | null; onSent: (playable: Playable) => void }) {
+export function useOnlineQueue(deps: {
+  sent: () => Playable | null;
+  onSent: (playable: Playable) => void;
+}) {
   const lib = useOnlineLibrary();
 
   const live = () => {
@@ -48,7 +51,7 @@ export function useOnlineQueue(deps: { sent: () => Playable | null; onSent: (pla
   const source: NavigableSource = {
     active: live,
     canStep: () => (lib.queue.value?.entries.length ?? 0) > 1,
-    counter: () => queueCounter(lib.queue.value),
+    position: () => queuePosition(lib.queue.value, "video"),
     step(to) {
       // Sem `dispatch`: ele recomeçaria a fila pela lista aberta agora.
       const video = lib.stepQueue(to);

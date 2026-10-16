@@ -93,36 +93,6 @@
             >
               {{ tm("stage.show_live") }}
             </LjButton>
-            <!-- Passar as partes do que está no ar; a barra de controle única chega na fase 2. -->
-            <template v-if="!stagePreview && canNavigate">
-              <LjButton
-                size="sm"
-                icon-only
-                :icon="ICONS.ACTIONS.PREVIOUS"
-                :title="tm('outputs.previous')"
-                data-testid="pm-stage-prev"
-                @click="navigate('prev')"
-              />
-              <LjButton
-                size="sm"
-                icon-only
-                :icon="ICONS.ACTIONS.NEXT"
-                :title="tm('outputs.next')"
-                data-testid="pm-stage-next"
-                @click="navigate('next')"
-              />
-            </template>
-            <LjButton
-              v-if="!stagePreview && canTakeOff"
-              class="pm-bar__take-off"
-              size="sm"
-              :icon="ICONS.PLAYER.STOP_CIRCLE"
-              :title="tm('outputs.take_off_title')"
-              data-testid="pm-stage-take-off"
-              @click="takeOff"
-            >
-              {{ tm("outputs.take_off") }}
-            </LjButton>
             <LjButton
               size="sm"
               icon-only
@@ -149,37 +119,31 @@
           @play="playPreview"
           @play-return="playPreviewOnReturn"
         />
-        <!-- Arquivo de um momento no ar: vídeo com controles e a faixa dos outros; foto, a grade. -->
-        <template v-else-if="liveMoment">
-          <StageVideo v-if="showVideoStage" :locked="outputLocked" />
-          <PdfStage v-else-if="pdfDeck.active.value" :locked="outputLocked" />
-          <MomentStage
-            :item="liveMoment"
-            :live-child-id="liveOrigin?.type === 'child' ? liveOrigin.childId : null"
-            :locked="outputLocked"
-            :strip="showVideoStage || pdfDeck.active.value"
-            @pick="
-              (childId: string) => dispatch({ type: 'child', itemId: liveMoment!.id, childId })
-            "
-          />
-        </template>
-        <StageSlides
-          v-else-if="showSlideGrid"
-          :subtitle="liveProgramItem?.kind === 'music' ? liveProgramItem.subtitle : undefined"
-          :locked="outputLocked"
-        />
-        <StageVideo v-else-if="showVideoStage" :locked="outputLocked" />
+        <!-- Música e PDF: a grade de hoje. Pasta e momento no ar não repetem os arquivos aqui. -->
+        <StageSlides v-else-if="showSlideGrid" :locked="outputLocked" />
         <PdfStage v-else-if="pdfDeck.active.value" :locked="outputLocked" />
-        <StageVideo v-else-if="audioLive" :locked="outputLocked" :audio-title="audioTitle" />
-        <!-- Imagem, versículo, anúncio: o palco mostra o que está na tela. -->
-        <div v-else-if="liveKind" class="pm-stage__preview" data-testid="pm-stage-preview">
-          <div class="pm-stage__frame"><LiveMirror :cleared="false" /></div>
-        </div>
+        <StageVisor v-else-if="audioLive" :audio-title="audioTitle" />
+        <!-- Vídeo, imagem, versículo, anúncio: o visor mostra o que está na tela. -->
+        <StageVisor v-else-if="liveKind" />
         <div v-else class="pm-stage__body">
           <p class="pm-stage__empty">{{ tm("empty.stage") }}</p>
         </div>
         <!-- Vídeo só no retorno: o player dele fica no palco enquanto toca. -->
         <ReturnPlayerBar @close="onShowOnReturn(null)" />
+        <!-- Uma barra para tudo o que vai ao ar: controla sempre o que está no ar, nunca a prévia. -->
+        <ControlBar
+          :transport="transport"
+          :live-kind="liveKind"
+          :audio-live="audioLive"
+          :live-title="liveTitle"
+          :position="position"
+          :can-navigate="canNavigate"
+          :locked="outputLocked"
+          :can-take-off="canTakeOff"
+          :up-next-title="upNextItem?.title ?? null"
+          @navigate="navigate"
+          @take-off="takeOff"
+        />
       </section>
 
       <LibraryPanel
@@ -251,7 +215,8 @@ import ProgramSessionDialog from "./ProgramSessionDialog.vue";
 import ProgramSettingsDialog from "./ProgramSettingsDialog.vue";
 import OutputsPanel from "./OutputsPanel.vue";
 import StageSlides from "./StageSlides.vue";
-import StageVideo from "./StageVideo.vue";
+import StageVisor from "./StageVisor.vue";
+import ControlBar from "./ControlBar.vue";
 import StagePreview from "./StagePreview.vue";
 import MomentStage from "./MomentStage.vue";
 import SeriesDialog from "./SeriesDialog.vue";
@@ -280,7 +245,6 @@ import {
   type PlayOptions,
 } from "../program/playable";
 import LibraryPanel, { LIBRARY_TABS, type LibraryTab } from "./LibraryPanel.vue";
-import LiveMirror from "./LiveMirror.vue";
 import $appdata from "@/helpers/AppData";
 import $userdata from "@/helpers/UserData";
 import { KEYS } from "@/constants/UserDataKeys";
@@ -311,6 +275,7 @@ import { itemVideoId, openOnline } from "../composables/useOnlinePlayback";
 import { useOnlinePrefetch } from "../composables/useOnlinePrefetch";
 import { useSeriesRecorder } from "../composables/useSeries";
 import { useClicker } from "../composables/useClicker";
+import { useLiveTransport } from "../composables/useLiveTransport";
 import { previewViewOf } from "../program/previewView";
 import { useLibraryLayout } from "../composables/useLibraryLayout";
 import { useColumnLayout } from "../composables/useColumnLayout";
@@ -573,14 +538,6 @@ function focusLive(): void {
 /** A grade aparece para qualquer música no ar — do programa ou tocada de outro módulo. */
 const showSlideGrid = computed(() => liveKind.value === "music" && slides.totalSlides.value > 0);
 
-/** Vídeo no ar — arquivo local ou on-line — ganha o palco com controles. */
-const showVideoStage = computed(
-  () =>
-    liveKind.value === "online_video" ||
-    (liveKind.value === "file" && live.file.value?.type === "video")
-);
-
-/** O item do programa no ar — o próprio, ou o momento do filho que está no ar. */
 /** Momento (ou anúncios) em prévia: o palco mostra a grade dos arquivos dele. */
 const momentPreview = computed(() => {
   const t = stage.preview.value;
@@ -618,11 +575,6 @@ function fromProgramFolder(p: Playable): Playable {
   const inFolder = folders.filesOf(item.folder)?.some((e) => e.path === p.entry.path);
   return inFolder ? { type: "folderFile", itemId: item.id, entry: p.entry } : p;
 }
-
-/** O momento cujo arquivo está no ar. */
-const liveMoment = computed(() =>
-  liveOrigin.value?.type === "child" ? liveProgramItem.value : null
-);
 
 const liveProgramItem = computed(() => {
   const origin = liveOrigin.value;
@@ -673,7 +625,7 @@ const { on: upNextFlash, trigger: flashUpNext } = useFlash(700);
 
 /* ─── Anterior/Próximo ─── */
 
-const { canNavigate, navigate, onlineQueue, pdfDeck } = useStageNavigation({
+const { canNavigate, navigate, position, onlineQueue, pdfDeck } = useStageNavigation({
   liveKind,
   findItem,
   dispatch,
@@ -683,7 +635,22 @@ const { canNavigate, navigate, onlineQueue, pdfDeck } = useStageNavigation({
 });
 
 // Passador e teclado: o mesmo Anterior/Próximo das saídas; "B" e "." alternam a tela preta.
-useClicker({ navigate, toggleBlack: () => setCleared(!cleared.value), send: sendUpNext });
+const transport = useLiveTransport({
+  liveKind,
+  audioLive,
+  position,
+  navigate,
+  locked: outputLocked,
+});
+const liveTitle = computed(() => (audioLive.value ? audioTitle.value : live.title.value));
+
+useClicker({
+  navigate,
+  toggleBlack: () => setCleared(!cleared.value),
+  send: sendUpNext,
+  togglePlay: transport.togglePlay,
+  toggleMute: transport.toggleMute,
+});
 
 const pathOf = (p: Playable | null) => filePathOf(p, itemOf(p));
 
@@ -981,22 +948,6 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-/* O palco é escuro em qualquer tema; o texto não pode seguir o tema. */
-.pm-stage__preview {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
-  container-type: size;
-}
-
-/* O maior 16:9 que cabe no palco, sem sobrepor a biblioteca. */
-.pm-stage__frame {
-  width: min(100cqw, calc(100cqh * 16 / 9));
 }
 
 .pm-stage__empty {

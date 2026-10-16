@@ -21,20 +21,11 @@
         <span class="pm-pdf__n">{{ n }}</span>
       </button>
     </div>
-    <footer class="pm-pdf__bar">
-      <LjIcon :icon="ICONS.UI.FILE_PDF" :size="14" />
-      <span class="pm-pdf__counter" data-testid="pm-pdf-counter">
-        {{ deck.page.value }} / {{ deck.total.value }}
-      </span>
-      <span class="pm-pdf__hint">{{ tm("pdf.hint") }}</span>
-    </footer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { nextTick, ref, watch, type Directive } from "vue";
-import { LjIcon } from "@/components/ui";
-import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import { usePdfDeck } from "../composables/usePdfDeck";
@@ -155,26 +146,5 @@ watch(deck.page, async (n) => {
 .pm-pdf__page--live .pm-pdf__n {
   color: var(--lj-orange);
   font-weight: 700;
-}
-
-.pm-pdf__bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 30px;
-  padding: 0 10px;
-  flex-shrink: 0;
-  border-top: 1px solid var(--lj-white-alpha-10);
-  color: var(--lj-white-alpha-50);
-  font-size: 11px;
-}
-
-.pm-pdf__counter {
-  font-family: var(--lj-font-mono);
-  color: var(--lj-white);
-}
-
-.pm-pdf__hint {
-  margin-left: auto;
 }
 </style>

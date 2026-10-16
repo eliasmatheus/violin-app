@@ -151,12 +151,9 @@
     "stage_return": "Retorno de palco",
     "monitor": "Monitor {n}",
     "no_monitor": "sem monitor",
-    "previous": "Anterior",
-    "next": "Próximo",
     "prepared": "Na fila — vai ao ar ao destravar",
     "nothing_next": "Fim do programa.",
     "return_only": "SÓ NO RETORNO",
-    "take_off": "Tirar do ar",
     "take_off_title": "Tira da tela só o que está passando (música, versículo, foto, vídeo). A apresentação continua aberta.",
     "missing_main": "A tela principal fechou — reabrir",
     "missing_stage": "fechou — reabrir",
@@ -241,9 +238,7 @@
     "volume": "Volume",
     "mute": "Cortar o áudio",
     "unmute": "Devolver o áudio",
-    "stop": "Parar o vídeo",
     "audio_only": "Áudio — não vai para as telas",
-    "remaining_title": "Quanto falta para acabar e o horário em que acaba",
     "ends_at": "acaba {time}"
   },
   "music": {
@@ -356,9 +351,6 @@
     "new_moment": "Novo momento com este arquivo",
     "added": "Adicionado a \"{name}\".",
     "grid_hint": "Clique para mandar ao ar · Próximo/Anterior e o passador andam pela lista"
-  },
-  "pdf": {
-    "hint": "Clique para ir ao slide · Próximo/Anterior e o passador viram a página"
   },
   "pptx": {
     "converting": "Convertendo \"{name}\" pelo PowerPoint…",
@@ -527,5 +519,30 @@
     "send_title": "Enviar o próximo item do programa (Enter)",
     "lock": "Travar saída: o que você enviar espera na fila",
     "unlock": "Destravar saída e enviar o que está na fila"
+  },
+  "control": {
+    "first": "Primeira parte",
+    "previous": "Parte anterior (← PgUp)",
+    "next": "Próxima parte (→ PgDn Espaço)",
+    "last": "Última parte",
+    "unit": {
+      "slide": "Slide",
+      "page": "Página",
+      "file": "Arquivo",
+      "video": "Vídeo",
+      "verse": "Versículo",
+      "audio": "Áudio",
+      "image": "Imagem",
+      "announcement": "Anúncio"
+    },
+    "on_air_for": "no ar há",
+    "take_off": "Tirar do ar",
+    "auto_start": "Passar sozinho (K)",
+    "auto_stop": "Parar de passar sozinho (K)",
+    "no_play": "Sem reprodução",
+    "nothing": "Nada no ar",
+    "audio_note": "{time} · não aparece nas telas",
+    "auto_on": "passa sozinho a cada {s}s",
+    "end_note": "fim · Enter envia {title}"
   }
 }

@@ -9,6 +9,16 @@ import type { LibraryEntry } from "./useFileLibrary";
 
 export type Step = "first" | "prev" | "next" | "last";
 
+/** O que é cada parte: o texto da posição na barra ("Slide 4 / 12"). */
+export type PartUnit = "slide" | "page" | "file" | "video";
+
+/** Onde o que está no ar está, entre as partes dele (índice a partir de 0). */
+export interface PartPosition {
+  unit: PartUnit;
+  index: number;
+  total: number;
+}
+
 /**
  * Algo no ar que tem partes para percorrer: os slides da música, a pasta de
  * onde saiu o arquivo, a lista de onde saiu o vídeo, o capítulo do versículo.
@@ -18,8 +28,8 @@ export interface NavigableSource {
   active: () => boolean;
   /** Há para onde andar. */
   canStep: () => boolean;
-  /** Posição para o retorno de palco: "3/12". */
-  counter?: () => string | undefined;
+  /** Em qual parte está, para a barra de controle. */
+  position?: () => PartPosition | undefined;
   /** Anda uma parte; false quando não há para onde ir. */
   step: (to: Step) => boolean | Promise<boolean>;
 }
@@ -32,10 +42,21 @@ export interface NavigableSource {
  * na última, o momento passa ao arquivo seguinte. Quando nenhuma anda, o
  * Próximo não pula de item: chama `onEnd` (destaca "A seguir").
  */
-export function useLiveNavigation(sources: NavigableSource[], locked: Ref<boolean>, onEnd: () => void) {
+export function useLiveNavigation(
+  sources: NavigableSource[],
+  locked: Ref<boolean>,
+  onEnd: () => void
+) {
   const activeSources = () => sources.filter((s) => s.active());
   const canNavigate = computed(() => !locked.value && activeSources().some((s) => s.canStep()));
-  const counter = computed(() => activeSources()[0]?.counter?.());
+  /** A posição da primeira fonte que sabe dizer — o PDF de um momento conta páginas, não arquivos. */
+  const position = computed<PartPosition | null>(() => {
+    for (const source of activeSources()) {
+      const p = source.position?.();
+      if (p) return p;
+    }
+    return null;
+  });
 
   let queue: Promise<void> = Promise.resolve();
   function navigate(to: Step): void {
@@ -52,11 +73,14 @@ export function useLiveNavigation(sources: NavigableSource[], locked: Ref<boolea
       });
   }
 
-  return { canNavigate, counter, navigate };
+  return { canNavigate, position, navigate };
 }
 
-export function queueCounter(q: { index: number; entries: unknown[] } | null): string | undefined {
-  return q ? `${q.index + 1}/${q.entries.length}` : undefined;
+export function queuePosition(
+  q: { index: number; entries: unknown[] } | null,
+  unit: PartUnit
+): PartPosition | undefined {
+  return q ? { unit, index: q.index, total: q.entries.length } : undefined;
 }
 
 /** Os slides da música no ar — de onde ela tiver vindo. */
@@ -68,6 +92,7 @@ export function slidesSource(deps: {
   return {
     active: () => deps.isMusic() && deps.total() > 0,
     canStep: () => true,
+    position: () => ({ unit: "slide", index: deps.index(), total: deps.total() }),
     step(to) {
       if (to === "next" && deps.index() >= deps.total() - 1) return false;
       if (to === "first") Media.firstSlide();
@@ -96,7 +121,7 @@ export function fileQueueSource(deps: {
   return {
     active: live,
     canStep: () => (deps.queue()?.entries.length ?? 0) > 1,
-    counter: () => queueCounter(deps.queue()),
+    position: () => queuePosition(deps.queue(), "file"),
     step(to) {
       const entry = deps.step(to);
       if (entry) deps.send(entry);
@@ -125,7 +150,6 @@ export function bibleSource(deps: {
   };
 }
 
-
 /** O momento do programa de onde saiu o arquivo (ou anúncio) no ar: anda entre os filhos dele. */
 export function momentSource(deps: {
   sent: () => { itemId: string; childId: string } | null;
@@ -140,10 +164,12 @@ export function momentSource(deps: {
   return {
     active: () => !!current(),
     canStep: () => (current()?.item.children?.length ?? 0) > 1,
-    counter: () => {
+    position: () => {
       const c = current();
       const i = c ? childIndex(c.item, c.childId) : -1;
-      return c && i >= 0 ? `${i + 1}/${c.item.children?.length ?? 0}` : undefined;
+      return c && i >= 0
+        ? { unit: "file", index: i, total: c.item.children?.length ?? 0 }
+        : undefined;
     },
     step(to) {
       const c = current();
