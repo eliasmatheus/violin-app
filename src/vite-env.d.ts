@@ -99,6 +99,9 @@ declare global {
       setMediaActive: (active: boolean) => void;
     };
     telemetry?: {
+      systemInfo?: () => Promise<
+        import("./types/TelemetryEnvironment").DesktopSystemInfo | undefined
+      >;
       log: (payload: {
         level: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
         message: string;
@@ -362,7 +365,7 @@ declare global {
     displays: {
       list: () => Promise<unknown[]>;
       getPreferred: (feature: string) => Promise<{ id: number; bounds: unknown } | null>;
-      setPreferred: (feature: string, displayId: number | string | null) => Promise<void>;
+      setPreferred: (feature: string, displayId: number | string | null | undefined) => Promise<void>;
       getPrefs: () => Promise<Record<string, number | string | null>>;
       getRoles: () => Promise<
         {
@@ -442,6 +445,11 @@ declare global {
       cachedPdfs: () => Promise<Record<string, number>>;
       /** Apaga o PDF e o meta de um design, a pedido do operador. */
       clearCachedPdf: (designId: string) => Promise<CanvaResult>;
+      /**
+       * Apaga o cache inteiro — o que trocar a qualidade do export provoca.
+       * `removidos` conta os PDFs que eram cache de verdade (meta órfão não).
+       */
+      clearCachedPdfs: () => Promise<CanvaResult & { removidos?: number }>;
       /**
        * A projeção parou numa tela de login do Canva (a sessão do site caiu).
        * Devolve a função de cleanup — é um evento, não um invoke.
@@ -554,6 +562,11 @@ declare global {
   }
 
   interface Window {
+    __ljPwaRecovery?: {
+      ready: Promise<boolean>;
+      markMounted: () => void;
+      drainDiagnostics: () => Array<Record<string, unknown>>;
+    };
     louvorjaApi?: LouvorjaApi;
     vlibras?: VLibrasWidget;
     VLibras?: {

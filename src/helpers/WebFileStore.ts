@@ -4,17 +4,23 @@
  *
  * No Electron o main process baixa os arquivos para a pasta de dados; aqui eles
  * vão para o Cache Storage, nos mesmos caches que o service worker consulta
- * (`louvorja-audio` e `louvorja-images`, ver `vite.config.js`). Como a URL
- * pedida pelo player é a mesma que foi gravada, tocar offline não exige mudança
- * em nenhum consumidor. Com isso `useSyncManager` e a tela Sincronizar servem
+ * (`louvorja-audio` e `louvorja-images`, ver `vite.config.js`). O player consulta
+ * a cópia local pelos endereços atual e legado, mesmo sem service worker ativo.
+ * Com isso `useSyncManager` e a tela Sincronizar servem
  * às duas plataformas com a mesma lógica.
  *
  * @category helper-puro — Sem APIs Vue; usa Cache Storage e fetch.
  */
 import { createAdaptiveConcurrency } from "@root/electron/main/download/adaptiveConcurrency.mjs";
-import { API_URL } from "@/config/Api";
+import { API_URL, API_URL_FILES, LEGACY_MEDIA_PREFIXES, MEDIA_URL } from "@/config/Api";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
-import { resolveMediaReference } from "@/helpers/MediaUrl";
+import { currentUrlOfLegacyMedia, resolveMediaReference } from "@/helpers/MediaUrl";
+import {
+  failureDetails,
+  reportReliabilityEvent,
+  reportReliabilityFailure,
+} from "@/helpers/ReliabilityDiagnostics";
+import { KEYS_LS } from "@/constants/LocalStorageKeys";
 
 export const AUDIO_CACHE = "louvorja-audio";
 export const IMAGE_CACHE = "louvorja-images";
@@ -35,7 +41,10 @@ export function webConcurrencyBounds(nav: Navigator | undefined = globalThis.nav
   if (conn?.saveData || /^(slow-)?2g$/.test(conn?.effectiveType ?? "")) return { start: 2, max: 2 };
   if (conn?.effectiveType === "3g") return { start: 2, max: 3 };
   const weak = (memory !== undefined && memory <= 2) || cores <= 2;
-  return weak ? { start: 3, max: 4 } : { start: 4, max: 8 };
+  // O armazenamento fala HTTP/2: vários arquivos dividem uma conexão, então o
+  // teto pode ser maior que o limite de seis conexões por host do HTTP/1.1. O
+  // controlador só sobe enquanto a vazão melhora.
+  return weak ? { start: 3, max: 4 } : { start: 4, max: 16 };
 }
 
 export interface WebFileEntry {
@@ -77,6 +86,50 @@ function urlFor(remote: string): string | null {
   return resolveMediaReference(remote)?.url ?? null;
 }
 
+/** O download recebe a URL do catálogo; o scan e a remoção recebem o caminho relativo. */
+function cacheUrlsFor(remote: string): string[] {
+  const ref = resolveMediaReference(remote);
+  if (!ref) return [];
+  const roots = [MEDIA_URL, API_URL_FILES, ...LEGACY_MEDIA_PREFIXES]
+    .filter(Boolean)
+    .map((root) => root.replace(/\/+$/, ""));
+  const known =
+    !/^https?:\/\//i.test(remote) || roots.some((root) => ref.url.startsWith(`${root}/`));
+  if (!known) return [ref.url];
+  const query = new URL(ref.url).search;
+  return [
+    ...new Set([
+      ref.url,
+      ...roots.map((root) => new URL(`${root}${ref.relativePath}${query}`).href),
+    ]),
+  ];
+}
+
+async function cachedResponse(
+  remote: string,
+  store: Record<string, Cache>
+): Promise<Response | undefined> {
+  for (const url of cacheUrlsFor(remote)) {
+    const response = await store[cacheNameFor(url)].match(url, { ignoreVary: true });
+    if (response) return response;
+  }
+  return undefined;
+}
+
+/** A reprodução usa as mesmas chaves que o scan, mesmo sem um SW controlador. */
+export async function readDownloadedAudio(remote: string): Promise<Blob | null> {
+  if (!isWebFileStoreSupported() || cacheNameFor(remote) !== AUDIO_CACHE) return null;
+  const response = await cachedResponse(remote, await openCaches());
+  if (!response) return null;
+  if (response.status !== 200) {
+    discardResponseBody(response);
+    throw new Error(`Áudio local incompleto: HTTP ${response.status}`);
+  }
+  const blob = await response.blob();
+  if (!blob.size) throw new Error("O arquivo de áudio salvo está vazio");
+  return blob;
+}
+
 async function openCaches(): Promise<Record<string, Cache>> {
   const [audio, images] = await Promise.all([caches.open(AUDIO_CACHE), caches.open(IMAGE_CACHE)]);
   return { [AUDIO_CACHE]: audio, [IMAGE_CACHE]: images };
@@ -91,7 +144,7 @@ function discardResponseBody(response: Response | null | undefined): void {
 }
 
 async function isCached(url: string, store: Record<string, Cache>): Promise<boolean> {
-  const response = await store[cacheNameFor(url)].match(url, { ignoreVary: true });
+  const response = await cachedResponse(url, store);
   discardResponseBody(response);
   return Boolean(response);
 }
@@ -129,6 +182,18 @@ const onQueueCancelled = emitter<Record<string, never>>();
 
 let controller: AbortController | null = null;
 
+class WebDownloadFailure extends Error {
+  constructor(
+    error: unknown,
+    readonly stage: "download" | "persist",
+    readonly status?: number
+  ) {
+    const details = failureDetails(error);
+    super(details.error_message, { cause: error });
+    this.name = details.error_name;
+  }
+}
+
 async function downloadOne(
   remote: string,
   url: string,
@@ -137,20 +202,29 @@ async function downloadOne(
 ): Promise<number> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
+    let stage: "download" | "persist" = "download";
+    let status: number | undefined;
     try {
       const response = await fetchWithTimeout(url, {
         timeout: NET_TIMEOUT.MEDIA,
         source: "web-download",
         signal,
+        // O armazenamento só devolve a permissão de CORS quando o pedido leva a
+        // origem, e um <img> não leva. A capa já exibida fica guardada pelo
+        // navegador sem a permissão; reaproveitá-la aqui derruba o download.
+        cache: "no-store",
       });
       // Só 200 inteiro: um 206 gravado como arquivo completo tocaria cortado.
+      status = response.status;
       if (response.status !== 200) throw new Error(`HTTP ${response.status}`);
       const bytes = Number(response.headers.get("content-length")) || 0;
+      stage = "persist";
       await store[cacheNameFor(url)].put(url, response);
       return bytes;
     } catch (e) {
-      lastError = e;
+      lastError = new WebDownloadFailure(e, stage, status);
       if (signal.aborted) throw e;
+      if (failureDetails(e).reason === "storage_full") break;
     }
   }
   throw lastError instanceof Error ? lastError : new Error(`Falha ao baixar ${remote}`);
@@ -160,6 +234,7 @@ type QueueItem = { remote: string; url: string; netFailures: number };
 
 /** Falha de transporte (rede caiu, página suspensa), não resposta ruim do servidor. */
 function isNetworkFailure(e: unknown): boolean {
+  if (e instanceof WebDownloadFailure) return e.stage === "download" && isNetworkFailure(e.cause);
   return e instanceof TypeError || (e instanceof DOMException && e.name === "TimeoutError");
 }
 
@@ -199,8 +274,10 @@ async function runQueue(
   let pauses = 0;
   let paused: Promise<void> | null = null;
   let gaveUp = false;
+  let stoppedReason = "Sem conexão";
+  const failures = new Set<string>();
   const { start, max } = webConcurrencyBounds();
-  const adaptive = createAdaptiveConcurrency({ min: 2, start, max });
+  const adaptive = createAdaptiveConcurrency({ min: 2, start, max, ramp: "geometric" });
   let peakLimit = adaptive.limit();
 
   const fail = (item: QueueItem, message: string) => {
@@ -262,6 +339,20 @@ async function runQueue(
           if (++consecutiveNetwork >= PAUSE_AFTER_NETWORK_FAILURES) pauseForNetwork();
         } else {
           console.warn("[WebFileStore] falhou:", item.remote, e);
+          const details = failureDetails(e);
+          if (!failures.has(details.reason) && failures.size < 5) {
+            failures.add(details.reason);
+            reportReliabilityFailure("web_download_file_failed", e, {
+              stage: e instanceof WebDownloadFailure ? e.stage : "download",
+              http_status: e instanceof WebDownloadFailure ? e.status : undefined,
+              media_kind: cacheNameFor(item.url) === AUDIO_CACHE ? "audio" : "image",
+              media_host: new URL(item.url).host,
+            });
+          }
+          if (details.reason === "storage_full") {
+            gaveUp = true;
+            stoppedReason = details.error_message;
+          }
           fail(item, (e as Error).message);
         }
       } finally {
@@ -274,7 +365,32 @@ async function runQueue(
     onQueueCancelled.emit({});
     return;
   }
-  for (const item of [...retry, ...unstarted]) fail(item, "Sem conexão");
+  for (const item of [...retry, ...unstarted]) fail(item, stoppedReason);
+  // Confere as chaves efetivamente gravadas antes de declarar a fila concluída.
+  try {
+    const currentStore = await openCaches();
+    const keys = new Set(
+      (await Promise.all(Object.values(currentStore).map((cache) => cache.keys())))
+        .flat()
+        .map((request) => request.url)
+    );
+    const missing = pending.filter(
+      (item) => !cacheUrlsFor(item.url).some((url) => keys.has(url))
+    ).length;
+    reportReliabilityEvent("web_download_storage_verified", {
+      requested: pending.length,
+      missing,
+      downloaded,
+      failed,
+    });
+    if (missing > failed) {
+      failed = missing;
+      downloaded = pending.length - missing;
+    }
+  } catch (error) {
+    reportReliabilityFailure("web_download_verify_failed", error, { stage: "verify" });
+  }
+  void auditWebStorage("download_finished");
   void import("@/helpers/Telemetry")
     .then(({ default: Telemetry }) => {
       Telemetry.track("web_download_queue_finished", {
@@ -291,6 +407,34 @@ async function runQueue(
     })
     .catch(() => {});
   onQueueDone.emit({ downloaded, failed });
+}
+
+/**
+ * Os arquivos baixados antes do catálogo passar a apontar para o armazenamento
+ * ficaram guardados com a URL do `/file` da API. O player e o service worker
+ * agora pedem a URL nova; sem mudar a chave, tocar offline deixaria de achar o
+ * que já estava baixado. Copia para a chave nova e apaga a antiga.
+ */
+export async function migrateLegacyMediaKeys(): Promise<number> {
+  if (!isWebFileStoreSupported()) return 0;
+  let moved = 0;
+  for (const name of [AUDIO_CACHE, IMAGE_CACHE]) {
+    const cache = await caches.open(name);
+    for (const request of await cache.keys()) {
+      const target = currentUrlOfLegacyMedia(request.url);
+      if (!target) continue;
+      const response = await cache.match(request.url, { ignoreVary: true });
+      if (!response) continue;
+      if (await cache.match(target, { ignoreVary: true })) {
+        discardResponseBody(response);
+      } else {
+        await cache.put(target, response);
+      }
+      await cache.delete(request.url, { ignoreVary: true });
+      moved += 1;
+    }
+  }
+  return moved;
 }
 
 export const webDownload = {
@@ -357,8 +501,11 @@ export const webDownload = {
 export async function requestPersistence(): Promise<boolean> {
   try {
     if (!navigator.storage?.persist) return false;
-    return (await navigator.storage.persisted?.()) || (await navigator.storage.persist());
-  } catch {
+    const granted = (await navigator.storage.persisted?.()) || (await navigator.storage.persist());
+    reportReliabilityEvent("web_storage_persistence", { granted });
+    return granted;
+  } catch (error) {
+    reportReliabilityFailure("web_storage_persistence_failed", error, { stage: "persist_request" });
     return false;
   }
 }
@@ -376,6 +523,41 @@ export async function webStorageUsage(): Promise<WebStorageUsage> {
   const estimate = (await navigator.storage?.estimate?.().catch(() => null)) ?? {};
   const persisted = (await navigator.storage?.persisted?.().catch(() => false)) ?? false;
   return { usage: estimate.usage ?? 0, quota: estimate.quota ?? 0, persisted };
+}
+
+/** Só contagens, sem URLs ou conteúdo. Uma queda não prova a causa da remoção. */
+export async function auditWebStorage(
+  source: "boot" | "download_finished" | "user_remove" | "user_clear"
+): Promise<void> {
+  try {
+    const store = await openCaches();
+    const [audio, images, usage] = await Promise.all([
+      store[AUDIO_CACHE].keys(),
+      store[IMAGE_CACHE].keys(),
+      webStorageUsage(),
+    ]);
+    const current = { audio_count: audio.length, image_count: images.length };
+    let previous: { audio_count?: unknown; image_count?: unknown } | null = null;
+    try {
+      previous = JSON.parse(localStorage.getItem(KEYS_LS.WEB_STORAGE_AUDIT) || "null");
+      localStorage.setItem(KEYS_LS.WEB_STORAGE_AUDIT, JSON.stringify(current));
+    } catch {
+      /* Sem marcador, informa somente o estado atual. */
+    }
+    const decreased =
+      typeof previous?.audio_count === "number" &&
+      typeof previous?.image_count === "number" &&
+      (current.audio_count < previous.audio_count || current.image_count < previous.image_count);
+    reportReliabilityEvent("web_storage_checked", {
+      source,
+      ...current,
+      ...usage,
+      decreased,
+      intentional: source === "user_remove" || source === "user_clear",
+    });
+  } catch (error) {
+    reportReliabilityFailure("web_storage_check_failed", error, { stage: source });
+  }
 }
 
 export const webStorage = {
@@ -405,15 +587,20 @@ export const webStorage = {
       await Promise.all(
         remotes.slice(i, i + STORAGE_BATCH).map(async (remote) => {
           const url = urlFor(remote);
-          if (url) await store[cacheNameFor(url)].delete(url, { ignoreVary: true });
+          if (url)
+            for (const candidate of cacheUrlsFor(url)) {
+              await store[cacheNameFor(candidate)].delete(candidate, { ignoreVary: true });
+            }
         })
       );
     }
+    void auditWebStorage("user_remove");
   },
 
   /** Apaga todo o áudio e as imagens baixados; o catálogo (IndexedDB) fica. */
   async clearFiles(): Promise<void> {
     await Promise.all([AUDIO_CACHE, IMAGE_CACHE].map((name) => caches.delete(name)));
+    void auditWebStorage("user_clear");
   },
 
   async sizeOfPaths(remotes: string[]): Promise<{ bytes: number; count: number }> {
@@ -422,7 +609,7 @@ export const webStorage = {
     let count = 0;
     for (const remote of remotes) {
       const url = urlFor(remote);
-      const hit = url ? await store[cacheNameFor(url)].match(url, { ignoreVary: true }) : null;
+      const hit = url ? await cachedResponse(url, store) : null;
       if (!hit) continue;
       count++;
       bytes += await responseSize(hit);

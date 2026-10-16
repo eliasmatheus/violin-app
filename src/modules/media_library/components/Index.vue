@@ -130,7 +130,7 @@
                 v-for="file in filteredFiles"
                 :key="file.id"
                 class="media-grid-item"
-                @click="addToPlaylist(file)"
+                @click="tocarDaBiblioteca(file)"
               >
                 <img
                   v-if="file.thumb"
@@ -138,6 +138,7 @@
                   class="media-grid-item-thumb"
                   alt=""
                   loading="lazy"
+                  @error="thumbNaoCarregou(file)"
                 />
                 <div v-else class="media-grid-item-thumb media-grid-item-thumb--icon">
                   <LjIcon :icon="fileTypeIcon(file.type)" :size="28" />
@@ -146,7 +147,22 @@
                 <div v-if="categoryName(file.categoryId)" class="media-grid-item-category">
                   {{ categoryName(file.categoryId) }}
                 </div>
+                <!--
+                  Ações do card. O "+" vem primeiro porque enfileirar é a ação
+                  de rotina: o clique do card projeta o arquivo avulso, e é este
+                  botão que o coloca na playlist para percorrer depois com as
+                  setas.
+                -->
                 <div class="media-grid-item-actions">
+                  <LjButton
+                    size="sm"
+                    variant="ghost"
+                    icon-only
+                    :icon="ICONS.ACTIONS.ADD"
+                    :title="tm('add_to_playlist')"
+                    :aria-label="tm('add_to_playlist')"
+                    @click.stop="adicionarItem(file)"
+                  />
                   <LjButton
                     size="sm"
                     variant="ghost"
@@ -363,13 +379,15 @@ import CanvaTab from "./CanvaTab.vue";
 import $broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
-import { closeProjectionWindows } from "@/helpers/ProjectionWindows";
+import { closeProjectionWindows, openSiteWindow } from "@/helpers/ProjectionWindows";
 import $media from "@/composables/useMedia";
 import $appdata from "@/helpers/AppData";
 import $userdata from "@/helpers/UserData";
 import Platform from "@/helpers/Platform";
 import $path from "@/helpers/Path";
 import $alert from "@/helpers/Alert";
+import { reportLocalFileFailure } from "@/helpers/LocalFailureNotice";
+import { localPathOf } from "@/helpers/FilePath";
 import $snackbar from "@/helpers/Snackbar";
 import { ICONS } from "@/config/Icons";
 import $idb from "@/helpers/IndexedDB";
@@ -409,7 +427,7 @@ interface PlaylistItem {
   id: string;
   name: string;
   path: string;
-  type: "image" | "video" | "pdf";
+  type: "image" | "video" | "pdf" | "site";
   typeIcon: string;
 }
 
@@ -417,9 +435,11 @@ interface PlaylistItem {
 type LibraryFilter = "all" | MediaFile["type"] | "canva";
 
 /** Ícone que representa o tipo do arquivo — na grade e na playlist. */
-function fileTypeIcon(type: MediaFile["type"]): string {
+function fileTypeIcon(type: MediaFile["type"] | "site"): string {
   if (type === "image") return ICONS.MEDIA.IMAGE;
   if (type === "pdf") return ICONS.UI.FILE_PDF;
+  // Item de URL do Canva (modo site): link, não arquivo.
+  if (type === "site") return ICONS.UI.LINK;
   return ICONS.MEDIA.VIDEO_FILE;
 }
 
@@ -571,6 +591,18 @@ async function handleDeleteCategory(id: string): Promise<void> {
 }
 const playlist = ref<PlaylistItem[]>([]);
 const currentIndex = ref(-1);
+
+/**
+ * O que as setas fazem enquanto um item da lista está no ar.
+ *
+ * Indireção em vez de referência direta a `next`/`prev`: são funções
+ * declaradas depois, e o registro precisa ser um objeto estável — assim o
+ * `unregister` do `stop` casa com o que o `playIndex` registrou.
+ */
+const _navigationDelegado = {
+  next: () => next(),
+  prev: () => prev(),
+};
 // Fonte única com quem desliga a projeção de fora (fechar a janela pelo ESC).
 // Um ref local aqui deixava a barra do player acesa com o projetor apagado.
 const isPlaying = computed<boolean, boolean>({
@@ -629,8 +661,18 @@ async function readFileData(file: File): Promise<{ data: ArrayBuffer; mime: stri
 /*  Video thumbnail generation                                         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Tempo máximo por miniatura.
+ *
+ * Sem isto, um vídeo que nunca carrega (caminho movido, rede presa) deixa o
+ * `<video>` esperando para sempre. Como a fila é serial, isso travaria todas as
+ * miniaturas seguintes.
+ */
+const MINIATURA_TIMEOUT_MS = 10_000;
+
 function generateVideoThumbnail(videoUrl: string): Promise<string | undefined> {
   return new Promise((resolve) => {
+    let encerrado = false;
     const video = document.createElement("video");
     video.crossOrigin = "anonymous";
     video.preload = "metadata";
@@ -639,10 +681,15 @@ function generateVideoThumbnail(videoUrl: string): Promise<string | undefined> {
     let cleanup: (() => void) | null = null;
 
     const done = (thumb?: string) => {
+      if (encerrado) return;
+      encerrado = true;
+      clearTimeout(timer);
       if (cleanup) cleanup();
       video.remove();
       resolve(thumb);
     };
+
+    const timer = setTimeout(() => done(), MINIATURA_TIMEOUT_MS);
 
     cleanup = () => {
       video.onloadeddata = null;
@@ -683,6 +730,63 @@ async function generateAndStoreThumb(file: MediaFile): Promise<void> {
     file.thumb = thumb;
     await saveFile(file);
   }
+}
+
+/*
+ * Fila das miniaturas de vídeo.
+ *
+ * Abrir o módulo não pode disparar um `<video>` por arquivo: cada um é um
+ * Range em `louvorja://local` que o próprio seek cancela pela metade, e uma
+ * biblioteca com hundreds de vídeos viraria hundreds de carregamentos e
+ * decodificadores ao mesmo tempo. Um por vez, com fila cancelável: as
+ * miniaturas aparecem aos poucos e somem com o módulo.
+ */
+let _filaMiniaturas: MediaFile[] = [];
+let _miniaturasDrenando = false;
+let _filaMiniaturasCancelada = false;
+
+async function _enfileirarMiniaturas(alvos: MediaFile[]): Promise<void> {
+  _filaMiniaturas.push(...alvos.filter((f) => f.type === "video" && !f.thumb));
+  if (_miniaturasDrenando) return;
+  _miniaturasDrenando = true;
+  try {
+    while (_filaMiniaturas.length && !_filaMiniaturasCancelada) {
+      const file = _filaMiniaturas.shift();
+      if (!file) continue;
+      try {
+        await generateAndStoreThumb(file);
+      } catch {
+        /* Miniatura é cortesia: uma falha não para a fila nem o módulo. */
+      }
+    }
+  } finally {
+    _miniaturasDrenando = false;
+  }
+}
+
+/**
+ * Miniatura que não carregou é refeita.
+ *
+ * Um `thumb` pode vir envenenado por duas vias: o mount punha o caminho do
+ * VÍDEO no lugar dele (MP4 num `<img>`), e um renomear depois disso grava esse
+ * caminho no IndexedDB, porque `confirmRename` salva o objeto em memória. Sem
+ * esta cura, o card fica com o ícone quebrado para sempre.
+ *
+ * Não há trava de repetição: o `<img>` só existe enquanto houver `thumb`, e uma
+ * regeneração que falha deixa o campo vazio — o ciclo se encerra sozinho e o
+ * card volta ao ícone do tipo de arquivo.
+ */
+function thumbNaoCarregou(file: MediaFile): void {
+  file.thumb = undefined;
+  /* Imagem com caminho quebrado (arquivo movido) vira o ícone do tipo: não há
+     como gerar miniatura de um arquivo que não existe mais. */
+  if (file.type !== "video") return;
+  void _enfileirarMiniaturas([file]);
+}
+
+function _cancelarFilaMiniaturas(): void {
+  _filaMiniaturasCancelada = true;
+  _filaMiniaturas = [];
 }
 
 /* ------------------------------------------------------------------ */
@@ -743,7 +847,7 @@ async function onDrop(e: DragEvent): Promise<void> {
 
 /** Importa um arquivo arrastado (com caminho no desktop ou blob na web). */
 async function importDroppedEntry(f: File, categoryId: string): Promise<void> {
-  const filePath = (f as any).path;
+  const filePath = localPathOf(f);
   if (filePath && !isHeic(f.name, (f as File).type)) {
     const name = f.name;
     const ext = name.split(".").pop()?.toLowerCase() || "";
@@ -975,7 +1079,11 @@ async function selectCategoryForImport(catId: string): Promise<void> {
     const entries = [...pendingDropEntries.value];
     pendingDropEntries.value = [];
     for (const f of entries) {
-      await importDroppedEntry(f, catId);
+      try {
+        await importDroppedEntry(f, catId);
+      } catch (error) {
+        if (!reportLocalFileFailure(error, [f.name])) throw error;
+      }
     }
     selectAllCategoriesAndUncategorized();
     return;
@@ -987,62 +1095,74 @@ async function onFilesSelected(e: Event): Promise<void> {
   const input = e.target as HTMLInputElement;
   if (!input.files?.length) return;
   for (const f of Array.from(input.files)) {
-    const filePath = (f as any).path;
-    if (filePath && !isHeic(f.name, (f as File).type)) {
-      const name = f.name;
-      const ext = name.split(".").pop()?.toLowerCase() || "";
-      const isImage = IMAGE_EXT.includes(ext);
-      const isVideo = VIDEO_EXT.includes(ext);
-      const isPdf = ext === "pdf";
-      if (!isImage && !isVideo && !isPdf) {
-        noteUnsupported();
-        continue;
+    try {
+      const filePath = localPathOf(f);
+      if (filePath && !isHeic(f.name, (f as File).type)) {
+        const name = f.name;
+        const ext = name.split(".").pop()?.toLowerCase() || "";
+        const isImage = IMAGE_EXT.includes(ext);
+        const isVideo = VIDEO_EXT.includes(ext);
+        const isPdf = ext === "pdf";
+        if (!isImage && !isVideo && !isPdf) {
+          noteUnsupported();
+          continue;
+        }
+        const fileType = isPdf
+          ? ("pdf" as const)
+          : isImage
+            ? ("image" as const)
+            : ("video" as const);
+        const file: MediaFile = {
+          id: "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+          name,
+          path: filePath,
+          type: fileType,
+          addedAt: Date.now(),
+          categoryId: pendingCategoryId ?? UNCATEGORIZED_ID,
+        };
+        if (isImage) file.thumb = buildThumbPath(filePath);
+        await saveFile(file);
+        files.value.unshift(file);
+        if (isVideo) generateAndStoreThumb(file);
+      } else {
+        // Sem caminho (web/drag-drop) ou HEIC/HEIF: armazena autocontido com
+        // os bytes convertidos para JPEG — o Chromium não decodifica HEIC.
+        const { blob, name } = await ensureRenderableImage(f.name, f);
+        const isImage =
+          IMAGE_EXT.includes(name.split(".").pop()?.toLowerCase() || "") ||
+          blob.type.startsWith("image/");
+        const isVideo = VIDEO_EXT.includes(f.name.split(".").pop()?.toLowerCase() || "");
+        const isPdf = f.type === "application/pdf" || f.name?.toLowerCase().endsWith(".pdf");
+        if (!isImage && !isVideo && !isPdf) {
+          noteUnsupported();
+          continue;
+        }
+        const fileType = isPdf
+          ? ("pdf" as const)
+          : isImage
+            ? ("image" as const)
+            : ("video" as const);
+        const fileId = "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+        const path = URL.createObjectURL(blob);
+        const { data, mime } = await readFileData(new File([blob], name, { type: blob.type }));
+        const file: MediaFile = {
+          id: fileId,
+          name,
+          path,
+          type: fileType,
+          addedAt: Date.now(),
+          data,
+          mime,
+          categoryId: pendingCategoryId ?? UNCATEGORIZED_ID,
+        };
+        if (isImage) file.thumb = path;
+        createdObjectUrls.set(fileId, path);
+        await saveFile(file);
+        files.value.unshift(file);
+        if (isVideo) generateAndStoreThumb(file);
       }
-      const fileType = isPdf ? ("pdf" as const) : isImage ? ("image" as const) : ("video" as const);
-      const file: MediaFile = {
-        id: "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
-        name,
-        path: filePath,
-        type: fileType,
-        addedAt: Date.now(),
-        categoryId: pendingCategoryId ?? UNCATEGORIZED_ID,
-      };
-      if (isImage) file.thumb = buildThumbPath(filePath);
-      await saveFile(file);
-      files.value.unshift(file);
-      if (isVideo) generateAndStoreThumb(file);
-    } else {
-      // Sem caminho (web/drag-drop) ou HEIC/HEIF: armazena autocontido com
-      // os bytes convertidos para JPEG — o Chromium não decodifica HEIC.
-      const { blob, name } = await ensureRenderableImage(f.name, f);
-      const isImage =
-        IMAGE_EXT.includes(name.split(".").pop()?.toLowerCase() || "") ||
-        blob.type.startsWith("image/");
-      const isVideo = VIDEO_EXT.includes(f.name.split(".").pop()?.toLowerCase() || "");
-      const isPdf = f.type === "application/pdf" || f.name?.toLowerCase().endsWith(".pdf");
-      if (!isImage && !isVideo && !isPdf) {
-        noteUnsupported();
-        continue;
-      }
-      const fileType = isPdf ? ("pdf" as const) : isImage ? ("image" as const) : ("video" as const);
-      const fileId = "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
-      const path = URL.createObjectURL(blob);
-      const { data, mime } = await readFileData(new File([blob], name, { type: blob.type }));
-      const file: MediaFile = {
-        id: fileId,
-        name,
-        path,
-        type: fileType,
-        addedAt: Date.now(),
-        data,
-        mime,
-        categoryId: pendingCategoryId ?? UNCATEGORIZED_ID,
-      };
-      if (isImage) file.thumb = path;
-      createdObjectUrls.set(fileId, path);
-      await saveFile(file);
-      files.value.unshift(file);
-      if (isVideo) generateAndStoreThumb(file);
+    } catch (error) {
+      if (!reportLocalFileFailure(error, [f.name])) throw error;
     }
   }
   input.value = "";
@@ -1076,15 +1196,34 @@ function loadPlaylist(): void {
   }
 }
 
-function addToPlaylist(file: MediaFile): void {
-  const item: PlaylistItem = {
+/**
+ * O item de projeção que um arquivo da biblioteca gera.
+ *
+ * Playlist e clique no card produzem exatamente o mesmo objeto — a diferença é
+ * só o que se faz com ele depois (enfileirar, ou mandar para o telão).
+ */
+function itemDe(file: MediaFile): PlaylistItem {
+  return {
     id: file.id,
     name: file.name,
     path: file.path,
     type: file.type,
     typeIcon: fileTypeIcon(file.type),
   };
-  playlist.value.push(item);
+}
+
+/** Ícone "+": enfileira o arquivo sem projeta-lo. */
+function adicionarItem(file: MediaFile): void {
+  addToPlaylist(file);
+  /*
+   * O clique no card deixou de adicionar, então a confirmação é a única coisa
+   * que diz que o item entrou na playlist. A chave já existia, sem uso.
+   */
+  $snackbar.show(tm("added_to_playlist"));
+}
+
+function addToPlaylist(file: MediaFile): void {
+  playlist.value.push(itemDe(file));
   savePlaylist();
 }
 
@@ -1140,18 +1279,77 @@ async function playIndex(index: number): Promise<void> {
   const item = playlist.value[index];
   if (!item) return;
   if (currentIndex.value === index && isPlaying.value) return;
-  const generation = ++playIndexGeneration;
   // Direção da navegação para o modo automático de transição da projeção.
   const backward = index < currentIndex.value;
 
   currentIndex.value = index;
   isPlaying.value = true;
+  /*
+   * As setas chegam em `Media.nextSlide()` (registradas uma vez em
+   * `main-shell.js`). Quem responde depende do que está no ar: PDF vira página,
+   * música anda no deck — e a lista da Biblioteca não é nenhum dos dois, ela
+   * toca por `projectFile`. Sem este registro a seta era engolida e nada
+   * acontecia. Delegar para o MESMO `next`/`prev` dos botões da barra é o que
+   * faz seta e botão obedecerem à mesma regra (inclusive: PDF pagina antes de
+   * trocar de item).
+   */
+  $media.registerNavigationDelegate(_navigationDelegado);
   currentPdfPage.value = 1;
   currentPdfTotalPages.value = 0;
   currentPdfPlaybackId = item.type === "pdf" ? newFileProjectionId() : undefined;
   /* Este item é que vai para o telão: um PDF adotado da aba Canva sai de cena. */
   pdfExterno.value = null;
   avisoContagemDado = false;
+
+  await projetarItem(item, backward);
+}
+
+/**
+ * Clique no card da biblioteca: projeta o arquivo AVULSO.
+ *
+ * Não entra na playlist — é a diferença em relação ao clique antigo. Por isso
+ * o estado que é da lista volta ao zero: nenhum item tocando (a barra some) e
+ * as setas voltam a ser do PDF e do deck de música, porque não há lista para
+ * percorrer.
+ *
+ * `stop()` aqui seria errado: `projectFile` já troca o palco, e parar antes
+ * daria um flash com a projeção anterior fechando.
+ */
+async function tocarDaBiblioteca(file: MediaFile): Promise<void> {
+  currentIndex.value = -1;
+  isPlaying.value = false;
+  $media.unregisterNavigationDelegate();
+  currentPdfPage.value = 1;
+  currentPdfTotalPages.value = 0;
+  currentPdfPlaybackId = file.type === "pdf" ? newFileProjectionId() : undefined;
+  pdfExterno.value = null;
+  avisoContagemDado = false;
+
+  await projetarItem(itemDe(file), false);
+}
+
+/**
+ * Manda um arquivo da biblioteca ou um item da playlist para o telão.
+ *
+ * Corpo compartilhado: URL (HEIC é convertido antes), payload, o atalho do
+ * leitor do sistema para vídeo e o `projectFile` propriamente dito. O
+ * `playback_id` do PDF já está em `currentPdfPlaybackId` — quem chama é que
+ * define a geração, e o `generation` protege contra uma projeção lenta que
+ * perde o posto para a seguinte.
+ */
+async function projetarItem(item: PlaylistItem, backward: boolean): Promise<void> {
+  const generation = ++playIndexGeneration;
+
+  /*
+   * Item de URL (Canva em modo site): não é arquivo — a projeção é a janela de
+   * site, com a mesma exclusão mútua do modo "ao vivo" da aba Canva.
+   */
+  if (item.type === "site") {
+    await $media.close(true);
+    await $media.closeProjectionStage();
+    await openSiteWindow(item.path, "canva");
+    return;
+  }
 
   const url = isHeic(item.name) ? await resolveRenderableUrl(item) : resolvePath(item.path);
   if (generation !== playIndexGeneration) return;
@@ -1186,6 +1384,8 @@ async function playIndex(index: number): Promise<void> {
       });
       $media.close(true);
       isPlaying.value = false;
+      /* Saiu do ar: as setas voltam a ser do PDF e do deck de música. */
+      $media.unregisterNavigationDelegate();
       return;
     }
     Telemetry.track("media_library_external_open_failed", {
@@ -1200,7 +1400,10 @@ async function playIndex(index: number): Promise<void> {
     { stopExistingAudio: true }
   );
   if (!projected) {
-    if (generation === playIndexGeneration) isPlaying.value = false;
+    if (generation === playIndexGeneration) {
+      isPlaying.value = false;
+      $media.unregisterNavigationDelegate();
+    }
   } else if (
     generation === playIndexGeneration &&
     item.type === "pdf" &&
@@ -1297,6 +1500,7 @@ function stop(): void {
   avisoContagemDado = false;
   isPlaying.value = false;
   currentIndex.value = -1;
+  $media.unregisterNavigationDelegate();
   localStorage.removeItem(KEYS.PROJECTION.LJ_FILE_PROJECTION);
   $broadcast.send(BROADCAST_TYPE.MEDIA_CLOSE, {});
   closeProjectionWindows();
@@ -1317,6 +1521,11 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
       break;
     case "clear":
       clearPlaylist();
+      break;
+    case "playlist-changed":
+      // O controle remoto mexeu na playlist (add/remove/clear): a lista da
+      // tela é estado em memória — recarrega do userData para espelhar.
+      loadPlaylist();
       break;
     case "manage_categories":
       showManageDialog.value = true;
@@ -1422,23 +1631,30 @@ onMounted(async () => {
       }
       continue;
     }
-    if (
-      Platform.isDesktop &&
-      (f.type === "image" || f.type === "video") &&
-      f.path.startsWith("/")
-    ) {
+    /*
+     * Só imagem. Para vídeo, "miniatura" era o próprio arquivo: um MP4 no `src`
+     * de um `<img>` dá ícone quebrado — e, como o campo ficava preenchido, o
+     * vídeo nunca entrava na fila que gera a miniatura de verdade (o importo já
+     * gerava e guardava uma de verdade; ao reabrir, ela era sobrescrita aqui).
+     *
+     * Para imagem a troca de um data URL antigo pelo caminho `louvorja://`
+     * continua: é o que impede de embutir a imagem inteira no banco.
+     */
+    if (Platform.isDesktop && f.type === "image" && f.path.startsWith("/")) {
       if (!f.thumb || !f.thumb.startsWith("louvorja://")) {
         f.thumb = buildThumbPath(f.path);
       }
     }
     if (f.type === "video" && !f.thumb) {
-      generateAndStoreThumb(f);
+      _filaMiniaturas.push(f);
     }
   }
+  void _enfileirarMiniaturas([]);
   loadPlaylist();
 });
 
 onBeforeUnmount(() => {
+  _cancelarFilaMiniaturas();
   for (const url of createdObjectUrls.values()) {
     URL.revokeObjectURL(url);
   }

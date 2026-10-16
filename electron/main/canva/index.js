@@ -323,6 +323,26 @@ async function exportDesign(payload, opts = {}) {
 }
 
 /**
+ * Exporta o design como JPG — a imagem INTEIRA.
+ *
+ * A API do Canva não serve o binário do design (só thumbnail ~595 px e export);
+ * para a Biblioteca de Mídia projetar uma imagem do Canva sem ser a thumbnail,
+ * o caminho é o mesmo job de export, no formato `jpg`.
+ *
+ * @param {{designId?: unknown}} payload
+ * @returns {Promise<{ok: true, path: string, cached: boolean, formato: "jpg",
+ *                    title: string} | {ok: false, code?: string, message: string}>}
+ */
+async function exportDesignImg(payload) {
+  try {
+    const designId = payload && typeof payload === "object" ? payload.designId : undefined;
+    return await exporter.exportarImg(designId);
+  } catch (err) {
+    return wrap(err);
+  }
+}
+
+/**
  * PDFs já guardados no disco: designId → `updated_at` do meta.
  *
  * É o que a aba Canva precisa para acender o selo de cache e, mais importante,
@@ -355,6 +375,23 @@ async function clearCachedPdf(payload) {
   }
 }
 
+/**
+ * Apaga TODO o cache de PDF.
+ *
+ * É o efeito colateral que o operador aceita ao trocar a qualidade do export
+ * em Integrações: sem isso o card continuaria selado e o clique serviria um PDF
+ * da qualidade anterior. Nada de id entra aqui — não há o que validar.
+ *
+ * @returns {Promise<{ok: true, removidos: number} | {ok: false, code: string, message: string}>}
+ */
+async function clearCachedPdfs() {
+  try {
+    return await exporter.limparTodoCachePdf();
+  } catch (err) {
+    return wrap(err);
+  }
+}
+
 module.exports = {
   PROFILE_PATH,
   WEB_SESSION_PATH,
@@ -369,7 +406,9 @@ module.exports = {
   items,
   designUrl,
   exportDesign,
+  exportDesignImg,
   cachedPdfs,
   clearCachedPdf,
+  clearCachedPdfs,
   tentarApresentar,
 };

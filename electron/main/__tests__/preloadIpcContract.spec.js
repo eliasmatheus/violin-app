@@ -60,6 +60,8 @@ describe("preload IPC contract", () => {
     await api.userdata.fetch();
     await api.userdata.patch({ path: "options.theme", value: "dark", _src: "test" });
     await api.app.info();
+    // Nenhum argumento do renderer pode virar caminho de arquivo ou canal IPC.
+    await api.telemetry.systemInfo("/private/file");
     await api.dev.setLogForwarding(true);
     await api.dev.reloadAll();
     await api.dev.openDevTools();
@@ -71,6 +73,7 @@ describe("preload IPC contract", () => {
         args: [{ path: "options.theme", value: "dark", _src: "test" }],
       },
       { channel: "app:info", args: [] },
+      { channel: "telemetry:system-info", args: [] },
       { channel: "dev:setLogForwarding", args: [true] },
       { channel: "dev:reloadAll", args: [] },
       { channel: "dev:openDevTools", args: [] },
@@ -147,6 +150,18 @@ describe("preload IPC contract", () => {
   // (online-videos e custom-music): a resposta era descartada em silêncio e a
   // rota respondia TIMEOUT sem nenhuma pista no renderer. Este teste varre os
   // prefixos conhecidos para o próximo esquecimento falhar aqui.
+  it("aceita o prefixo media-library na resposta", () => {
+    const seen = loadPreload();
+    const api = seen.exposed;
+    const requestId = "media-library:00000000-0000-4000-8000-000000000005";
+    const payload = { status: "ok", items: [] };
+
+    expect(api.httpServer.respond(requestId, payload)).toBe(true);
+    expect(seen.sent).toEqual([
+      { channel: RENDERER_RESPONSE_CHANNEL, payload: { requestId, payload } },
+    ]);
+  });
+
   it("todos os prefixos conhecidos passam pelo regex da respond", () => {
     const seen = loadPreload();
     const api = seen.exposed;
@@ -160,6 +175,7 @@ describe("preload IPC contract", () => {
       "custom-music",
       "background-sound",
       "volume",
+      "media-library",
     ]) {
       expect(
         api.httpServer.respond(`${prefixo}:${uuid}`, { status: "ok" }),

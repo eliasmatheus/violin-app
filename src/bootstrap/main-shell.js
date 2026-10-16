@@ -22,7 +22,11 @@ import Platform from "@/helpers/Platform";
 import $alert from "@/helpers/Alert";
 import WakeLock from "@/helpers/WakeLock";
 import { installFileDrop } from "@/helpers/FileDrop";
-import { requestPersistence } from "@/helpers/WebFileStore";
+import {
+  auditWebStorage,
+  migrateLegacyMediaKeys,
+  requestPersistence,
+} from "@/helpers/WebFileStore";
 import { initAppInstall } from "@/composables/useAppInstall";
 import {
   API_URL,
@@ -935,6 +939,546 @@ $storage.hydrate().then(async () => {
       }
     }
 
+    /** Ponteiro da playlist que o REMOTO está tocando (o módulo tem o seu). */
+    let remoteMediaPlaylistIndex = -1;
+
+    /** Chave da playlist do módulo — literal, espelhada de media_library/Index.vue. */
+    const MEDIA_LIBRARY_PLAYLIST_KEY = "modules.media_library.playlist";
+
+    /**
+     * Resolve um registro da biblioteca para URL reproduzível — mesma regra
+     * do executor de liturgia (`biblioteca-midia`): HEIC/web guarda os bytes
+     * no IDB e o `blob:` é reconstruído na hora; path absoluto vira
+     * `louvorja://local`.
+     */
+    function mediaLibraryItemUrl(rec) {
+      const raw = typeof rec?.path === "string" ? rec.path : "";
+      if (!raw) return "";
+      if (raw.startsWith("blob:")) {
+        if (rec.data && rec.mime)
+          return URL.createObjectURL(new Blob([rec.data], { type: rec.mime }));
+        console.warn("[http:media-library] blob URL sem dados IDB", rec.path);
+        return "";
+      }
+      if (/^(http|https|data):/i.test(raw)) return raw;
+      return Platform.isDesktop ? Path.local(raw) : Path.file(raw);
+    }
+
+    /** Miniatura que o cliente remoto consegue carregar (caminho, não bytes). */
+    function mediaLibraryRemoteThumb(item) {
+      const thumb = typeof item?.thumb === "string" ? item.thumb : "";
+      if (/^https?:\/\//i.test(thumb) || thumb.startsWith("louvorja://"))
+        return thumb.slice(0, 4096);
+      const path = typeof item?.path === "string" ? item.path : "";
+      if (item?.type === "image" && path && !/^(blob|data):/i.test(path) && Platform.isDesktop) {
+        return Path.local(path).slice(0, 4096);
+      }
+      // Thumb em dataURL/blob fica de fora: estouraria o orçamento do payload —
+      // o card remoto mostra o ícone do tipo.
+      return null;
+    }
+
+    /**
+     * Biblioteca de Mídia pelo controle remoto (HTTP).
+     *
+     * A biblioteca vive no IndexedDB do renderer e a projeção é renderer-local
+     * (`Media.projectFile`), então tudo passa por aqui. Canva usa a mesma API
+     * da aba do módulo (`window.louvorjaApi.canva`), no modo que o operador
+     * escolheu em Opções → Integrações.
+     */
+    async function handleMediaLibraryHttp(data) {
+      const requestId = data?.requestId;
+      const respond = (payload) => {
+        if (requestId && Platform.httpServer?.respond) {
+          const sent = Platform.httpServer.respond(requestId, payload);
+          if (!sent) {
+            console.warn("[http:media-library] resposta descartada pelo preload", requestId);
+          }
+        }
+      };
+      const fail = (message) => {
+        console.warn("[http:media-library]", message);
+        respond({
+          status: "error",
+          error: String(message || "Falha na biblioteca de mídia").slice(0, 300),
+        });
+      };
+      const clip = (value, max) => String(value ?? "").slice(0, max);
+      const canvaApi = () =>
+        typeof window !== "undefined" ? window.louvorjaApi?.canva : undefined;
+
+      try {
+        switch (data?.action) {
+          case "library": {
+            const [items, categories] = await Promise.all([
+              safeIdbAll(DB_TABLE.MEDIA_LIBRARY),
+              safeIdbAll(DB_TABLE.MEDIA_LIBRARY_CATEGORY),
+            ]);
+            respond({
+              status: "ok",
+              items: items
+                .map((item) => ({
+                  id: clip(item.id, 256),
+                  name: clip(item.name || item.path, 500),
+                  type: clip(item.type, 32) || "image",
+                  thumb: mediaLibraryRemoteThumb(item),
+                  categoryId:
+                    typeof item.categoryId === "string" ? item.categoryId.slice(0, 256) : null,
+                  addedAt: Number.isFinite(item.addedAt) ? item.addedAt : null,
+                }))
+                .slice(0, 5000),
+              categories: categories
+                .map((category) => ({
+                  id: clip(category.id, 256),
+                  name: clip(category.name, 200),
+                  color: typeof category.color === "string" ? category.color : null,
+                }))
+                .slice(0, 2000),
+            });
+            break;
+          }
+
+          case "canva": {
+            const api = canvaApi();
+            if (!api) {
+              respond({
+                status: "ok",
+                items: [],
+                continuation: null,
+                cached: {},
+                available: false,
+              });
+              break;
+            }
+            // Mesma regra do CanvaTab: sem pedido explícito de "designs", a
+            // vista é a PASTA (raiz). Já queimamos com isso — o remoto pedia
+            // `view: "designs"` (/designs) e a conta sem aquele escopo devolvia
+            // vazio, enquanto o desktop listaria os itens por /folders.
+            const folderId = clip(data.folderId, 256);
+            const payload =
+              clip(data.view, 32) === "designs"
+                ? {
+                    view: "designs",
+                    ownership: clip(data.ownership, 16) || "any",
+                    continuation: clip(data.continuation, 512) || null,
+                  }
+                : {
+                    folderId: folderId || "root",
+                    continuation: clip(data.continuation, 512) || null,
+                  };
+            const [resultado, cached] = await Promise.all([
+              api.items(payload),
+              Promise.resolve(api.cachedPdfs()).catch(() => ({})),
+            ]);
+            if (!resultado?.ok) {
+              respond({
+                status: "error",
+                error: clip(resultado?.message, 300) || "Falha ao listar o Canva",
+              });
+              break;
+            }
+            respond({
+              status: "ok",
+              available: true,
+              items: (resultado.items || [])
+                .map((item) => ({
+                  type: item.type === "folder" || item.type === "image" ? item.type : "design",
+                  id: clip(item.id, 256),
+                  name: clip(item.name, 1000),
+                  thumb: typeof item.thumb === "string" ? item.thumb.slice(0, 4096) : null,
+                  url: typeof item.url === "string" ? item.url.slice(0, 4096) : null,
+                  pageCount: Number.isInteger(item.pageCount) ? item.pageCount : null,
+                  updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : null,
+                }))
+                .slice(0, 2000),
+              continuation:
+                typeof resultado.continuation === "string"
+                  ? resultado.continuation.slice(0, 512)
+                  : null,
+              cached: cached && typeof cached === "object" ? cached : {},
+            });
+            break;
+          }
+
+          case "image": {
+            // Bytes da miniatura: o renderer busca pela URL `louvorja://local`
+            // (protocolo do próprio app) — o main não serve path arbitrário.
+            // Qualquer falha (arquivo sumiu, protocolo) vira `data: null`:
+            // responder `{status:"error"}` aqui faria o validador da rota
+            // recusar o payload e o card morrer com 502 em vez de 404.
+            const url = clip(data.url, 4096);
+            if (!url) {
+              respond({ status: "ok", mime: "", data: null });
+              break;
+            }
+            try {
+              const response = await fetchWithTimeout(url, {
+                timeout: NET_TIMEOUT.MEDIA,
+                source: "media-library-thumb",
+              });
+              if (!response.ok) {
+                respond({ status: "ok", mime: "", data: null });
+                break;
+              }
+              const blob = await response.blob();
+              respond({
+                status: "ok",
+                mime: blob.type || "image/jpeg",
+                data: await blob.arrayBuffer(),
+              });
+            } catch (error) {
+              console.warn("[http:media-library] thumb falhou:", error?.message || error);
+              respond({ status: "ok", mime: "", data: null });
+            }
+            break;
+          }
+
+          case "project": {
+            const id = clip(data.id, 256);
+            if (!id) {
+              fail("id é obrigatório");
+              break;
+            }
+            const rec = await $idb.get(DB_TABLE.MEDIA_LIBRARY, id);
+            if (!rec) {
+              fail("Item não encontrado na biblioteca");
+              break;
+            }
+            const url = mediaLibraryItemUrl(rec);
+            if (!url) {
+              fail("Arquivo indisponível para projeção");
+              break;
+            }
+            await Media.projectFile({
+              url,
+              type: rec.type || "image",
+              title: clip(rec.name, 500),
+              libRef: { table: DB_TABLE.MEDIA_LIBRARY, id: String(rec.id) },
+            });
+            respond({ status: "ok" });
+            break;
+          }
+
+          case "canva-project": {
+            const designId = clip(data.designId, 256);
+            const url = clip(data.url, 4096);
+            if (url) {
+              // Imagem do Canva (ou link colado): mesma exclusão mútua do modo
+              // site do módulo — fecha o palço e abre a janela de URL.
+              await Media.close(true);
+              await Media.closeProjectionStage();
+              await ProjectionWindows.openSiteWindow(url, "canva");
+              break;
+            }
+            const api = canvaApi();
+            if (!designId || !api) break;
+            // Modo lido NO COMANDO (igual ao clique na aba): trocar em
+            // Integrações vale para o próximo, sem estado pendurado aqui.
+            const mode =
+              UserData.get(KEYS.OPTIONS.INTEGRATIONS.CANVA.PROJECT_AS, "pdf") === "site"
+                ? "site"
+                : "pdf";
+            if (mode === "site") {
+              const r = await api.designUrl(designId);
+              if (r?.ok && r.url) {
+                await Media.close(true);
+                await Media.closeProjectionStage();
+                await ProjectionWindows.openSiteWindow(r.url, "canva");
+              }
+              break;
+            }
+            /*
+             * Modo PDF: imagem do Canva entra como JPG — a API não serve o
+             * binário do design (só thumbnail ~595 px e export), então a
+             * imagem INTEIRA só chega exportando. Design segue em PDF.
+             */
+            const image = clip(data.kind, 16) === "image";
+            const r = image ? await api.exportImg(designId) : await api.exportPdf(designId);
+            if (r?.ok && r.path) {
+              await Media.projectFile({
+                url: Path.local(r.path),
+                type: image ? "image" : "pdf",
+                title: clip(r.title, 500),
+                ...(Number.isInteger(r.pageCount) ? { pageCount: r.pageCount } : {}),
+              });
+            }
+            break;
+          }
+
+          case "canva-export": {
+            // Exporta sem projetar — o pedido do botão do card. O formato vem
+            // do cliente: JPG para imagem do Canva, PDF para design.
+            const designId = clip(data.designId, 256);
+            const api = canvaApi();
+            if (!designId || !api) {
+              respond({ status: "error", error: "Canva indisponível" });
+              break;
+            }
+            const image = clip(data.format, 16) === "jpg";
+            const r = image ? await api.exportImg(designId) : await api.exportPdf(designId);
+            if (!r?.ok) {
+              respond({ status: "error", error: clip(r?.message, 300) || "Falha ao exportar" });
+              break;
+            }
+            respond({
+              status: "ok",
+              cached: r.cached === true,
+              title: clip(r.title, 500),
+              ...(Number.isInteger(r.pageCount) ? { pageCount: r.pageCount } : {}),
+            });
+            break;
+          }
+
+          case "canva-clear-cache": {
+            // Elimina o PDF/JPG guardado daquele design (confirmação no cliente).
+            const designId = clip(data.designId, 256);
+            const api = canvaApi();
+            if (!designId || !api) {
+              respond({ status: "error", error: "Canva indisponível" });
+              break;
+            }
+            const r = await api.clearCachedPdf(designId);
+            if (!r?.ok) {
+              respond({
+                status: "error",
+                error: clip(r?.message, 300) || "Falha ao limpar o cache",
+              });
+              break;
+            }
+            respond({ status: "ok" });
+            break;
+          }
+
+          case "playlist": {
+            const command = data.command;
+            const lerPlaylist = () => {
+              const list = UserData.get(MEDIA_LIBRARY_PLAYLIST_KEY, []);
+              return Array.isArray(list) ? list : [];
+            };
+            // Grava e avisa o módulo (quando aberto) para recarregar: a lista
+            // dele é estado em memória — o userData é só a persistência.
+            const gravarPlaylist = (itens) => {
+              UserData.set(MEDIA_LIBRARY_PLAYLIST_KEY, itens);
+              Broadcast.send(BROADCAST_TYPE.MODULE_RIBBON_ACTION, {
+                module: "media_library",
+                action: "playlist-changed",
+              });
+            };
+
+            if (command === "add") {
+              const id = clip(data.id, 256);
+              if (!id) break;
+              const itens = lerPlaylist();
+              if (itens.some((item) => String(item?.id) === id)) break;
+              // IDB é a fonte da verdade (path/name/type atuais).
+              const rec = await $idb.get(DB_TABLE.MEDIA_LIBRARY, id);
+              if (!rec?.path) break;
+              itens.push({
+                id: String(rec.id),
+                name: String(rec.name || "").slice(0, 500),
+                path: rec.path,
+                type: rec.type || "image",
+              });
+              gravarPlaylist(itens);
+              break;
+            }
+
+            if (command === "remove") {
+              const index = Number.isInteger(data.index) ? data.index : -1;
+              const itens = lerPlaylist();
+              if (index < 0 || index >= itens.length) break;
+              itens.splice(index, 1);
+              // Mantém o ponteiro coerente com a lista nova.
+              if (index === remoteMediaPlaylistIndex) {
+                remoteMediaPlaylistIndex = itens.length ? Math.min(index, itens.length - 1) : -1;
+              } else if (index < remoteMediaPlaylistIndex) {
+                remoteMediaPlaylistIndex--;
+              }
+              gravarPlaylist(itens);
+              break;
+            }
+
+            if (command === "clear") {
+              remoteMediaPlaylistIndex = -1;
+              gravarPlaylist([]);
+              break;
+            }
+
+            if (command === "add-canva") {
+              /*
+               * Canva → playlist. A API do Canva não dá arquivo: só thumbnail
+               * (~595 px) e export. No modo PDF exportamos o arquivo de verdade
+               * (JPG para imagem, PDF para design); no modo site guardamos a
+               * URL de visualização — que expira, e aí o item falha com o
+               * motivo no log.
+               */
+              const designId = clip(data.designId, 256);
+              const api = canvaApi();
+              if (!designId || !api) {
+                respond({ status: "error", error: "Canva indisponível" });
+                break;
+              }
+              const image = clip(data.kind, 16) === "image";
+              const mode =
+                UserData.get(KEYS.OPTIONS.INTEGRATIONS.CANVA.PROJECT_AS, "pdf") === "site"
+                  ? "site"
+                  : "pdf";
+              let item;
+              if (mode === "site") {
+                const r = await api.designUrl(designId);
+                if (!r?.ok || !r.url) {
+                  respond({
+                    status: "error",
+                    error: clip(r?.message, 300) || "Falha ao buscar o link do Canva",
+                  });
+                  break;
+                }
+                item = {
+                  id: `canva:${designId}`,
+                  name: clip(data.name || designId, 500),
+                  path: r.url,
+                  type: "site",
+                  canva: true,
+                };
+              } else {
+                const r = image ? await api.exportImg(designId) : await api.exportPdf(designId);
+                if (!r?.ok || !r.path) {
+                  respond({
+                    status: "error",
+                    error: clip(r?.message, 300) || "Falha ao exportar o design",
+                  });
+                  break;
+                }
+                item = {
+                  id: `canva:${designId}`,
+                  name: clip(r.title || data.name || designId, 500),
+                  path: r.path,
+                  type: image ? "image" : "pdf",
+                  canva: true,
+                };
+              }
+              const itens = lerPlaylist();
+              if (!itens.some((existente) => String(existente?.id) === item.id)) {
+                itens.push(item);
+                gravarPlaylist(itens);
+              }
+              respond({ status: "ok", item });
+              break;
+            }
+
+            const playlist = lerPlaylist();
+
+            if (command === "next" || command === "prev") {
+              /*
+               * PDF no telão manda: próximo/anterior é PÁGINA, não item da
+               * playlist. `Media.nextSlide/prevSlide` é o mesmo caminho do
+               * teclado — com o módulo da Biblioteca aberto ele delega para a
+               * lista do próprio módulo (que trata a última página), e com ele
+               * fechado vira a página do documento.
+               */
+              const noPalco = localStorage.getItem(KEYS.PROJECTION.LJ_FILE_PROJECTION);
+              let palco = null;
+              try {
+                palco = noPalco ? JSON.parse(noPalco) : null;
+              } catch {
+                palco = null;
+              }
+              if (palco?.type === "pdf") {
+                await (command === "next" ? Media.nextSlide() : Media.prevSlide());
+                break;
+              }
+            }
+
+            if (command === "stop") {
+              remoteMediaPlaylistIndex = -1;
+              localStorage.removeItem(KEYS.PROJECTION.LJ_FILE_PROJECTION);
+              Broadcast.send(BROADCAST_TYPE.MEDIA_CLOSE, {});
+              AppData.set("modules.media.config.video_file", false);
+              await Media.close(true);
+              break;
+            }
+            if (!playlist.length) {
+              // Playlist vazia: o remoto recebe 200 mesmo assim (comando é
+              // fire-and-forget) — o log é o que sobra para diagnosticar.
+              console.warn("[http:media-library] playlist vazia, comando ignorado:", command);
+              break;
+            }
+            let target = remoteMediaPlaylistIndex;
+            if (command === "goto") {
+              // "Tocar a partir dali": entra no índice escolhido e segue
+              // next/prev daí.
+              target = Number.isInteger(data.index) ? data.index : 0;
+              target = Math.max(0, Math.min(target, playlist.length - 1));
+            } else if (command === "play") {
+              target = remoteMediaPlaylistIndex >= 0 ? remoteMediaPlaylistIndex : 0;
+            } else if (command === "next") {
+              target = Math.min(remoteMediaPlaylistIndex + 1, playlist.length - 1);
+            } else if (command === "prev") {
+              target = Math.max(remoteMediaPlaylistIndex - 1, 0);
+            } else {
+              break;
+            }
+            const item = playlist[target];
+            const url = mediaLibraryItemUrl(item);
+            if (url) {
+              if (item.type === "site") {
+                // Item de URL (Canva em modo site): mesma exclusão mútua do
+                // `canva-project` — fecha o palco e abre a janela de site.
+                await Media.close(true);
+                await Media.closeProjectionStage();
+                await ProjectionWindows.openSiteWindow(url, "canva");
+                remoteMediaPlaylistIndex = target;
+                break;
+              }
+              await Media.projectFile({
+                url,
+                type: item.type || "image",
+                title: clip(item.name, 500),
+                // Canva não tem registro no IndexedDB — libRef só para os
+                // itens que vieram da biblioteca.
+                libRef:
+                  item.id && !item.canva
+                    ? { table: DB_TABLE.MEDIA_LIBRARY, id: String(item.id) }
+                    : undefined,
+              });
+              remoteMediaPlaylistIndex = target;
+            }
+            break;
+          }
+
+          case "saved": {
+            // Upload do remoto: o main gravou os bytes em disco e delegou o
+            // registro (metadado + thumb) para o renderer. A confirmação volta
+            // pela porta do requestId — a rota só responde 201 depois daqui.
+            const record = data.record;
+            if (!record?.path) {
+              respond({ status: "error", error: "Registro inválido" });
+              break;
+            }
+            try {
+              await $idb.put(DB_TABLE.MEDIA_LIBRARY, {
+                ...record,
+                ...(record.type === "image" && Platform.isDesktop
+                  ? { thumb: Path.local(record.path) }
+                  : {}),
+              });
+              console.log("[http:media-library] upload registrado:", record.id);
+              respond({ status: "ok" });
+            } catch (error) {
+              console.warn("[http:media-library] upload não registrou:", error?.message || error);
+              respond({ status: "error", error: "Falha ao registrar na biblioteca" });
+            }
+            break;
+          }
+
+          default:
+            fail("ação inválida");
+        }
+      } catch (error) {
+        fail(error?.message || error);
+      }
+    }
+
     Platform.onHttpEvent(async (eventType, data) => {
       const action = data?.action;
       const bibleRequest =
@@ -1592,6 +2136,9 @@ $storage.hydrate().then(async () => {
         case "http:online-videos":
           await handleOnlineVideosRequest(data, action);
           break;
+        case "http:media-library":
+          await handleMediaLibraryHttp(data);
+          break;
         case "http:background-sound": {
           // Som de fundo: o player é single (useBackgroundSound), então o
           // controle remoto funciona sem o módulo aberto.
@@ -1832,6 +2379,7 @@ $storage.hydrate().then(async () => {
     watchStaleVersion();
 
     app.mount("#app");
+    window.__ljPwaRecovery?.markMounted();
     _bootStage("mounted");
 
     // Estado atual, não a ação de alternar: sem isto, saber "quantos usuários
@@ -1967,6 +2515,32 @@ $storage.hydrate().then(async () => {
       // abriria um aviso de permissão no meio do boot.
       if (window.matchMedia?.("(display-mode: standalone)").matches) void requestPersistence();
       initAppInstall();
+      setTimeout(() => {
+        void auditWebStorage("boot");
+      }, 10_000);
+
+      // Mídia baixada com o endereço antigo da API passa para a chave nova, uma
+      // vez, fora do caminho crítico do boot.
+      const MIGRATION_FLAG = "lj:media-keys:v1";
+      let migrated = false;
+      try {
+        migrated = window.localStorage.getItem(MIGRATION_FLAG) === "1";
+      } catch {
+        migrated = false;
+      }
+      if (!migrated) {
+        setTimeout(() => {
+          migrateLegacyMediaKeys()
+            .then(() => {
+              try {
+                window.localStorage.setItem(MIGRATION_FLAG, "1");
+              } catch {
+                /* sem armazenamento: roda de novo no próximo boot */
+              }
+            })
+            .catch((e) => console.warn("[WebFileStore] migração de chaves falhou:", e));
+        }, 8000);
+      }
     }
 
     // Observabilidade de uso e diagnóstico. Não bloqueia o boot e é no-op em

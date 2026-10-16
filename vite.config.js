@@ -4,15 +4,16 @@ import { VitePWA } from "vite-plugin-pwa";
 import posthogRollupPlugin from "@posthog/rollup-plugin";
 import path from "path";
 import { createRequire } from "module";
+import { randomUUID, createHash } from "node:crypto";
+import { KEYS_LS } from "./src/constants/LocalStorageKeys";
 import { normalizeAppVersion } from "./src/helpers/AppVersion.js";
 
 const require_ = createRequire(import.meta.url);
 const { version: packageVersion } = require_("./package.json");
 const { version: posthogSdkPackageVersion } = require_("posthog-js/package.json");
 
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+const { escapeRegex, dbCachePattern } = require_("./config/swDbRoute.cjs");
+const { installPwaRecovery } = require_("./config/pwaRecovery.cjs");
 
 // https://vitejs.dev/config/
 export default async ({ mode }) => {
@@ -43,6 +44,14 @@ export default async ({ mode }) => {
 
   // Detectar target: "desktop" (Electron) ou "web" (padrão PWA)
   const isDesktop = process.env.VITE_TARGET === "desktop";
+  const webBuildId = isDesktop ? null : randomUUID();
+  const recoveryScript = `(${installPwaRecovery.toString()})(${JSON.stringify({
+    scope: process.env.VITE_BASE_URL || "/",
+    build: webBuildId,
+    storageKey: KEYS_LS.PWA_RECOVERY_STATE,
+    startupWaitMs: 2500,
+  })});`;
+  const recoveryHash = createHash("sha256").update(recoveryScript).digest("base64");
   const posthogApiKey = process.env.POSTHOG_API_KEY;
   const posthogProjectId = process.env.POSTHOG_PROJECT_ID;
 
@@ -60,7 +69,7 @@ export default async ({ mode }) => {
     return (
       `<meta http-equiv="Content-Security-Policy" content="` +
       `default-src 'self';` +
-      ` script-src 'self' blob: ${DOMAINS_CSP.SCRIPT} 'wasm-unsafe-eval';` +
+      ` script-src 'self' blob: ${DOMAINS_CSP.SCRIPT} 'wasm-unsafe-eval' 'sha256-${recoveryHash}';` +
       ` style-src 'self' 'unsafe-inline' ${DOMAINS_CSP.STYLE};` +
       ` font-src 'self' data: ${DOMAINS_CSP.FONT};` +
       ` img-src 'self' blob: data: ${cspApi} ${DOMAINS_CSP.IMG};` +
@@ -87,7 +96,17 @@ export default async ({ mode }) => {
             name: "louvorja-csp-prod",
             apply: "build",
             transformIndexHtml(html) {
-              return html.replace("<!--CSP_PROD-->", cspMeta);
+              return html.replace(
+                "<!--CSP_PROD-->",
+                `${cspMeta}<meta name="louvorja-build" content="${webBuildId}"><script>${recoveryScript}</script>`
+              );
+            },
+            generateBundle() {
+              this.emitFile({
+                type: "asset",
+                fileName: "app-build.json",
+                source: JSON.stringify({ version: 1, id: webBuildId }),
+              });
             },
           },
         ]),
@@ -134,15 +153,19 @@ export default async ({ mode }) => {
       ? `${process.env.VITE_URL_API}${process.env.VITE_PATH_FILES || "/file"}`
       : (process.env.VITE_URL_FILES ?? "");
 
+    // O catálogo aponta a mídia para a API ou direto para o armazenamento: as
+    // duas origens são o mesmo acervo e caem nas mesmas rotas de cache.
+    const mediaOrigins = [filesUrl, ...DOMAINS.FILES].map(escapeRegex).join("|");
+
     // Runtime caching: DB JSONs (stale-while-revalidate) + mídia (cache-first 30 dias).
     // Quando VITE_URL_* está definido, usa padrão preciso de URL; caso contrário, cai
     // em padrão por extensão (amplo mas seguro para este app de apresentação).
     const runtimeCaching = [
-      // JSONs do banco — serve do cache enquanto atualiza em background
+      // JSONs do banco — serve do cache enquanto atualiza em background (menos o `config`)
       ...(dbUrl
         ? [
             {
-              urlPattern: new RegExp(`^${escapeRegex(dbUrl)}`),
+              urlPattern: dbCachePattern(dbUrl),
               handler: "StaleWhileRevalidate",
               options: {
                 cacheName: "louvorja-db",
@@ -165,10 +188,7 @@ export default async ({ mode }) => {
       // Android não consegue tocar nem pular dentro do áudio offline.
       {
         urlPattern: filesUrl
-          ? new RegExp(
-              `^${escapeRegex(filesUrl)}.*\\.(mp3|ogg|opus|m4a|aac|wav|flac)(\\?.*)?$`,
-              "i"
-            )
+          ? new RegExp(`^(?:${mediaOrigins}).*\\.(mp3|ogg|opus|m4a|aac|wav|flac)(\\?.*)?$`, "i")
           : /\.(mp3|ogg|opus|m4a|aac|wav|flac)(\?.*)?$/i,
         handler: "CacheFirst",
         options: {
@@ -181,7 +201,7 @@ export default async ({ mode }) => {
       // Imagens externas — cache-first (sem expiração, pelo mesmo motivo do áudio)
       {
         urlPattern: filesUrl
-          ? new RegExp(`^${escapeRegex(filesUrl)}.*\\.(jpg|jpeg|png|webp|gif)(\\?.*)?$`, "i")
+          ? new RegExp(`^(?:${mediaOrigins}).*\\.(jpg|jpeg|png|webp|gif)(\\?.*)?$`, "i")
           : /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i,
         handler: "CacheFirst",
         options: {
@@ -217,12 +237,17 @@ export default async ({ mode }) => {
 
     plugins.push(
       VitePWA({
+        // Ativa o SW também para clientes legados. O documento só recarrega
+        // pela ação do operador em PwaUpdates; não importar o client virtual.
         registerType: "autoUpdate",
+        injectRegister: false,
         devOptions: {
           enabled: true,
         },
         workbox: {
-          globPatterns: ["**/*.{html,js,css,svg,png,woff,woff2}"],
+          skipWaiting: true,
+          clientsClaim: true,
+          globPatterns: ["**/*.{html,js,css,svg,png,woff,woff2}", "app-build.json"],
           // O conversor de HEIC passa dos 2MiB que o workbox aceita precachear,
           // e o build falha por isso em vez de apenas avisar. Subir o limite
           // seria a correção errada: ele empurraria 3MB para o primeiro acesso

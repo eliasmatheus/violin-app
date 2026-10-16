@@ -38,19 +38,42 @@ export function closingOnPurpose(feature: string): void {
   _closingOnPurpose.set(feature, Date.now() + ON_PURPOSE_MS);
 }
 
-async function desligar(feature: string): Promise<void> {
+/**
+ * O registro de janelas só conhece as que o app abriu. Uma projeção aberta por
+ * fora (outro navegador, fonte do OBS) some do registro enquanto recarrega, e
+ * numa máquina lenta a página volta depois da conferência acima: o estado era
+ * apagado e a janela recarregada subia vazia. Quem recarrega avisa que voltou
+ * (`PROJECTION_OPENED`); esperamos esse aviso antes de desistir dela. O ESC não
+ * espera — ali a janela fecha de verdade.
+ */
+const REABERTURA_MS = 1500;
+
+async function desligar(
+  feature: string,
+  definitivo: boolean,
+  reabertaEm: Map<string, number>
+): Promise<void> {
   if (!feature) return;
   if ((_closingOnPurpose.get(feature) ?? 0) > Date.now()) return;
 
+  const avisadoEm = Date.now();
+  const voltou = (): boolean => (reabertaEm.get(feature) ?? 0) >= avisadoEm;
+
   await new Promise((resolve) => setTimeout(resolve, CONFIRMACAO_MS));
   if (await isProjectionOpen(feature)) return;
+  if (!definitivo) {
+    await new Promise((resolve) => setTimeout(resolve, REABERTURA_MS));
+    if (await isProjectionOpen(feature)) return;
+  }
+  if (voltou()) return;
 
   switch (feature) {
     case PROJECTION_TYPE.BACKGROUND:
       $userdata.set(KEYS.MODULES.BACKGROUND_PROJECTION.IS_PLAYING, false);
       localStorage.removeItem(KEYS.PROJECTION.LJ_BACKGROUND_PROJECTION);
       Broadcast.send(BROADCAST_TYPE.BACKGROUND_PROJECTION, {
-        active: false, epoch: nextBackgroundEpoch(),
+        active: false,
+        epoch: nextBackgroundEpoch(),
       });
       await closeProjection(PROJECTION_TYPE.BACKGROUND_RETURN);
       break;
@@ -96,8 +119,13 @@ async function desligar(feature: string): Promise<void> {
 }
 
 export function useProjectionShutdown(): void {
-  useBroadcastListener(BROADCAST_TYPE.PROJECTION_CLOSED, (payload) => {
+  const reabertaEm = new Map<string, number>();
+  useBroadcastListener(BROADCAST_TYPE.PROJECTION_OPENED, (payload) => {
     const feature = (payload as { feature?: string } | null)?.feature;
-    if (feature) void desligar(feature);
+    if (feature) reabertaEm.set(feature, Date.now());
+  });
+  useBroadcastListener(BROADCAST_TYPE.PROJECTION_CLOSED, (payload) => {
+    const data = payload as { feature?: string; definitive?: boolean } | null;
+    if (data?.feature) void desligar(data.feature, data.definitive === true, reabertaEm);
   });
 }

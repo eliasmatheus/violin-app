@@ -125,9 +125,16 @@
               <span class="bg-task__detail">
                 {{ formatTaskDetail(task.detail) || `${Math.round(task.progress)}%` }}
               </span>
+              <span v-if="task.etaSeconds != null" class="bg-task__detail bg-task__eta">
+                {{ t("shell.background_tasks.eta", { time: formatEta(task.etaSeconds) }) }}
+              </span>
             </template>
             <span v-else class="bg-task__detail">
-              {{ t(`shell.background_tasks.${task.status}`) }}
+              {{
+                task.status === "error" && task.detail
+                  ? task.detail
+                  : t(`shell.background_tasks.${task.status}`)
+              }}
             </span>
           </div>
 
@@ -260,6 +267,7 @@ import { useAppTheme } from "@/composables/useAppTheme";
 import { backgroundTaskLabel, formatBackgroundTaskDetail } from "@/helpers/BackgroundTaskDetail";
 import { LjButton, LjIcon, LjPopover, LjProgress, LjTooltip } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
+import { formatEta } from "@/helpers/Eta";
 import { COLORS } from "@constants/Colors";
 
 const { t, te, locale } = useI18n();

@@ -18,6 +18,8 @@ import Broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE, type TelemetrySessionPayload } from "@/helpers/BroadcastTypes";
 import Platform from "@/helpers/Platform";
 import { normalizeAppVersion } from "@/helpers/AppVersion.js";
+import { collectEnvironment, desktopRuntime } from "@/helpers/TelemetryEnvironment";
+import type { EnvironmentProperties } from "@/types/TelemetryEnvironment";
 import { normalizeOwnProtocolExceptionFrames } from "@/helpers/ExceptionFrames";
 import { cpuProfileLogSummary } from "@/helpers/CpuProfileDiagnostic";
 import {
@@ -29,6 +31,8 @@ import $userdata from "@/helpers/UserData";
 import { setNetworkTimingReporter } from "@/helpers/Http";
 import { setDatabaseTimingReporter } from "@/helpers/Database";
 import { KEYS } from "@/constants/UserDataKeys";
+import { classifyLocalEnvironmentError } from "@/helpers/LocalEnvironmentErrors";
+import { failureDetails } from "@/helpers/ReliabilityDiagnostics";
 import packageJson from "@root/package.json";
 
 const KEY = import.meta.env.VITE_POSTHOG_KEY ?? "";
@@ -40,6 +44,7 @@ let _ph: PostHog | null = null;
 let _appVersion = normalizeAppVersion(packageJson.version) || "unknown";
 let _appVersionSource = "package_json_fallback";
 let _sdkVersion = BUILD_SDK_VERSION || "unknown";
+let _environmentContext: EnvironmentProperties = {};
 let _installed = false;
 let _nativeAutocaptureActive = false;
 let _responsivenessCleanup: (() => void) | null = null;
@@ -199,6 +204,16 @@ export function isBenignException(properties: Record<string, unknown> | undefine
   });
 }
 
+function localEnvironmentKindOf(properties: Record<string, unknown> | undefined) {
+  const list = properties?.$exception_list;
+  if (!Array.isArray(list) || list.length === 0) return null;
+  const kinds = list.map((item) => {
+    const { type, value } = (item ?? {}) as { type?: unknown; value?: unknown };
+    return classifyLocalEnvironmentError({ name: type, message: value });
+  });
+  return kinds.every(Boolean) ? kinds[0] : null;
+}
+
 function serializableValue(value: unknown, depth = 0): unknown {
   if (value === undefined) return undefined;
   if (value == null || ["string", "number", "boolean"].includes(typeof value)) {
@@ -313,9 +328,8 @@ function runtimeContext(): Record<string, unknown> {
     target: Platform.isDesktop ? "electron" : "web",
     app_platform: appPlatform(),
     os: osName(),
-    electron_version: api?.runtime?.electron || Platform.electronVersion || undefined,
-    chromium_version: api?.runtime?.chrome || undefined,
-    node_version: api?.runtime?.node || undefined,
+    ...(Platform.isDesktop ? desktopRuntime(api) : {}),
+    ..._environmentContext,
     is_dev: Platform.isDev,
   };
 }
@@ -387,6 +401,10 @@ function captureResultDetails(result: CaptureResult | undefined): Record<string,
 function baseContext(): Record<string, unknown> {
   return {
     app_version: _appVersion,
+    app_build:
+      typeof document !== "undefined"
+        ? document.querySelector<HTMLMetaElement>('meta[name="louvorja-build"]')?.content
+        : undefined,
     app_version_source: _appVersionSource,
     sdk_version: _sdkVersion,
     ...runtimeContext(),
@@ -612,14 +630,9 @@ async function importPostHogWithTransportDiagnostics(): Promise<typeof import("p
  * processo principal.
  */
 function safeError(error: unknown): Error {
-  let message = "Erro não identificado";
-  try {
-    message = error instanceof Error ? error.message : String(error);
-  } catch {
-    message = "Erro não serializável";
-  }
-
-  const safe = new Error(sanitizeString(message));
+  const details = failureDetails(error);
+  const safe = new Error(sanitizeString(details.error_message));
+  safe.name = sanitizeString(details.error_name);
   if (error instanceof Error) {
     safe.name = sanitizeString(error.name || "Error");
     if (error.stack) safe.stack = sanitizeString(error.stack);
@@ -661,6 +674,20 @@ export function captureException(error: unknown, properties: Record<string, unkn
     _explicitErrors.set(error, now);
   }
   const sanitized = safeError(error);
+  const localKind = classifyLocalEnvironmentError(error);
+  if (localKind) {
+    track("local_storage_failed", {
+      ...properties,
+      ...failureDetails(error),
+      local_environment_error: localKind,
+    });
+    log("warn", sanitized.message, {
+      ...serializableProperties(properties),
+      error_name: sanitized.name,
+      local_environment_error: localKind,
+    });
+    return;
+  }
   const enriched = {
     ...baseContext(),
     ...errorProperties(sanitized),
@@ -1559,6 +1586,7 @@ export function setEnabled(enabled: boolean): void {
   if (_ph) {
     _ph.opt_in_capturing({ captureEventName: false });
     _ph.register({
+      ..._environmentContext,
       app_version: _appVersion,
       app_version_source: _appVersionSource,
       sdk_version: _sdkVersion,
@@ -1582,6 +1610,7 @@ export function resetId(): void {
   if (isEnabled()) _ph.opt_in_capturing({ captureEventName: false });
   else _ph.opt_out_capturing();
   _ph.register({
+    ..._environmentContext,
     app_version: _appVersion,
     app_version_source: _appVersionSource,
     sdk_version: _sdkVersion,
@@ -1632,6 +1661,16 @@ export async function init(): Promise<void> {
 async function _init(): Promise<void> {
   const { default: posthog } = await importPostHogWithTransportDiagnostics();
   const version = (await appVersion()) || "unknown";
+  // A leitura só começa com telemetria habilitada. IPC/Client Hints têm prazo
+  // limitado e a preferência é conferida novamente após a espera.
+  if (!isEnabled()) return;
+  _environmentContext = await collectEnvironment({
+    desktop: Platform.isDesktop,
+    platform: Platform.platform,
+    api: typeof window !== "undefined" ? window.louvorjaApi : undefined,
+    navigatorInfo: typeof navigator !== "undefined" ? navigator : undefined,
+  });
+  if (!isEnabled()) return;
   _appVersion = version;
   const sdkVersion =
     typeof (posthog as PostHog & { LIB_VERSION?: unknown }).LIB_VERSION === "string"
@@ -1766,6 +1805,24 @@ async function _init(): Promise<void> {
       if (!capture) return null;
       if (capture.event === "$exception") {
         if (isBenignException(capture.properties)) return null;
+        const localKind = localEnvironmentKindOf(capture.properties);
+        if (localKind) {
+          const first = (
+            capture.properties?.$exception_list as { type?: string; value?: string }[]
+          )[0];
+          track("local_storage_failed", {
+            source: "sdk.autocapture",
+            error_name: first?.type,
+            error_message: first?.value,
+            local_environment_error: localKind,
+          });
+          log("warn", String(first?.value ?? "Falha do ambiente local"), {
+            source: "sdk.autocapture",
+            error_name: first?.type,
+            local_environment_error: localKind,
+          });
+          return null;
+        }
         normalizeOwnProtocolExceptionFrames(capture.properties);
         onRealException(isMainWindow, capture);
       }
@@ -1803,6 +1860,7 @@ async function _init(): Promise<void> {
   // opção ficaria sem telemetria para sempre, com o toggle marcado.
   posthog.opt_in_capturing({ captureEventName: false });
   posthog.register({
+    ..._environmentContext,
     app_version: version,
     app_version_source: _appVersionSource,
     sdk_version: sdkVersion,
@@ -1852,6 +1910,9 @@ async function _init(): Promise<void> {
   }
 
   const pendingEvents = _pendingEvents.splice(0);
+  for (const diagnostic of window.__ljPwaRecovery?.drainDiagnostics() ?? []) {
+    track("pwa_boot_recovered", diagnostic);
+  }
   for (const pending of pendingEvents) posthog.capture(pending.event, pending.properties);
   if (pendingEvents.length > 0) {
     diagnostic("debug", "eventos pendentes enviados após init", { count: pendingEvents.length });
@@ -1885,6 +1946,7 @@ async function _init(): Promise<void> {
       platform: Platform.isDesktop ? "desktop" : "web",
       app_platform: appPlatform(),
       os: osName(),
+      ..._environmentContext,
       app_version: version,
       app_version_source: _appVersionSource,
       // Explícito em vez de depender só do `register()` acima: o evento

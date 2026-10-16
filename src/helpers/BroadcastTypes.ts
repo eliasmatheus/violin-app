@@ -98,6 +98,16 @@ export const BROADCAST_TYPE = Object.freeze({
    *  com noopener não devolve referência para o Projection.close() fechar. */
   MODULE_PROJECTION_CLOSE: "module_projection_close",
 
+  /** A projeção de um módulo foi LIGADA.
+   *  Payload: { module: string }
+   *  Emitido por: `Screen.vue`, quando o operador clica em "Projetar" e há
+   *  Projeção de Fundo aberta — aí não há janela, e era a existência dela que
+   *  dizia "isto está no ar". Emitido por: `BackgroundProjection.vue`.
+   *  Sem isto, qualquer VALOR emitido pelo módulo (o contador andando, o relógio
+   *  dando a hora) apareceria no telão sozinho: o fluxo de valor não é estado
+   *  de projeção. */
+  MODULE_PROJECTION_OPEN: "module_projection_open",
+
   /** Uma janela de projeção sumiu — por ESC, pelo X ou pelo sistema.
    *  Payload: { feature: string } (PROJECTION_TYPE.* ou id do módulo)
    *  Emitido por: as views de projeção (useProjectionCloseNotice). Recebido por:
@@ -136,6 +146,12 @@ export const BROADCAST_TYPE = Object.freeze({
    *  Emitido por: FileProjection e FileProjectionReturn. Recebido por:
    *  presentation_mode, que avisa nas miniaturas quando a tela diverge do player. */
   SCREEN_VIDEO_REPORT: "screen_video_report",
+
+  /** Uma janela de projeção acabou de montar — a primeira vez ou depois de um F5.
+   *  Payload: { feature: string }. Emitido por: as views de projeção
+   *  (useProjectionCloseNotice). Recebido por: Shell, que cancela o desligamento
+   *  pendente de uma janela que só recarregou. */
+  PROJECTION_OPENED: "projection_opened",
 
   /** Texto do painel de recados. Emitido por message_board/Index.vue.
    *  Recebido por: (recepção futura). */

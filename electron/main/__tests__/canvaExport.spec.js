@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "module";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join, sep } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -21,6 +21,8 @@ const store = require("../canva/store.js");
 const exporter = require("../canva/export.js");
 
 const RAPIDO = { pollMs: 1, maxTentativas: 5 };
+/** Escreve arquivo solto dentro de <base>/canva (a pasta já existe). */
+const fsWrite = (arquivo, conteudo) => writeFileSync(arquivo, conteudo);
 const PDF = "%PDF-1.7\n%%EOF";
 const HTML = "<html><body>erro</body></html>";
 const URL_DOWNLOAD = "https://export-download.canva.com/x.pdf";
@@ -56,17 +58,19 @@ function stubApi({ design, job, download } = {}) {
       );
     }
     chamadas.push({ kind: "design", url });
-    return Promise.resolve(
-      Response.json(
-        design ?? { design: { id: "D1", title: "Deck", updated_at: 111, page_count: 6 } }
-      )
-    );
+    /* `design` como função deixa o caso responder com o id que foi pedido —
+       é o que dois designs distintos no mesmo teste precisam. */
+    const payload =
+      typeof design === "function"
+        ? design(url)
+        : (design ?? { design: { id: "D1", title: "Deck", updated_at: 111, page_count: 6 } });
+    return Promise.resolve(Response.json(payload));
   });
   return chamadas;
 }
 
 const PDF_ESPERADO = join(base, "canva", "D1.pdf");
-const META_ESPERADO = join(base, "canva", "D1.json");
+const META_ESPERADO = join(base, "canva", "D1.pdf.json");
 
 beforeEach(async () => {
   /* Cache entre casos: sem limpar, todo o resto leria o PDF do primeiro teste. */
@@ -183,10 +187,10 @@ describe("exportarPdf — o caminho do FreeShow adaptado", () => {
 describe("alvos do design", () => {
   it("sanitiza o id antes de virar nome de arquivo", () => {
     const alvos = exporter.alvosDoDesign("../../etc/passwd");
-    const nome = alvos.pdf.split("/").pop();
+    const nome = basename(alvos.arquivo);
     expect(nome).toBe("______etc_passwd.pdf");
     expect(nome).not.toContain("/");
-    expect(alvos.pdf.startsWith(join(base, "canva"))).toBe(true);
+    expect(alvos.arquivo.startsWith(join(base, "canva"))).toBe(true);
   });
 });
 
@@ -457,9 +461,124 @@ describe("cache de PDF (selo da lista)", () => {
      */
     const alvos = exporter.alvosDoDesign("../outra-pasta");
 
-    expect(alvos.pdf.startsWith(exporter.pastaCanva() + sep)).toBe(true);
-    expect(basename(alvos.pdf)).not.toContain("..");
+    expect(alvos.arquivo.startsWith(exporter.pastaCanva() + sep)).toBe(true);
+    expect(basename(alvos.arquivo)).not.toContain("..");
 
     await expect(exporter.limparCachePdf("../outra-pasta")).resolves.toEqual({ ok: true });
+  });
+});
+
+describe("limpar todo o cache", () => {
+  /* O id do design ecoa a URL: `/v1/designs/D2` devolve o design D2. */
+  const design = (url) => ({
+    design: { id: url.split("/").pop(), title: "Deck", updated_at: 111, page_count: 6 },
+  });
+
+  it("some com os PDFs e os metas, e conta quantos eram cache", async () => {
+    stubApi({ design });
+    await exporter.exportarPdf("D1", RAPIDO);
+    await exporter.exportarPdf("D2", RAPIDO);
+    expect(Object.keys(await exporter.listarCachePdf())).toEqual(["D1", "D2"]);
+
+    const r = await exporter.limparTodoCachePdf();
+
+    /* Conta o PDF, não o arquivo: meta é metade de um cache só. */
+    expect(r).toEqual({ ok: true, removidos: 2 });
+    expect(await exporter.listarCachePdf()).toEqual({});
+    expect(existsSync(PDF_ESPERADO)).toBe(false);
+    expect(existsSync(META_ESPERADO)).toBe(false);
+  });
+
+  it("meta órfão também sai — não é cache, mas não fica para ninguém", async () => {
+    stubApi();
+    await exporter.exportarPdf("D1", RAPIDO);
+    rmSync(PDF_ESPERADO, { force: true });
+
+    await expect(exporter.limparTodoCachePdf()).resolves.toEqual({ ok: true, removidos: 0 });
+
+    expect(existsSync(META_ESPERADO)).toBe(false);
+  });
+
+  it("pasta que não existe é cache vazio, não erro", async () => {
+    rmSync(join(base, "canva"), { recursive: true, force: true });
+
+    await expect(exporter.limparTodoCachePdf()).resolves.toEqual({ ok: true, removidos: 0 });
+  });
+
+  it("arquivo de fora do cache fica onde está — só .pdf e .json saem", async () => {
+    mkdirSync(join(base, "canva"), { recursive: true });
+    const alheio = join(base, "canva", "notas.txt");
+    fsWrite(alheio, "não me apaga");
+
+    await expect(exporter.limparTodoCachePdf()).resolves.toEqual({ ok: true, removidos: 0 });
+
+    expect(existsSync(alheio)).toBe(true);
+  });
+});
+
+describe("exportarImg — a imagem inteira do design", () => {
+  /* Bytes de verdade: string com \xff viraria UTF-8 (2 bytes) no Response. */
+  const JPG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x4a, 0x46, 0x49, 0x46]);
+  const JPG_ESPERADO = join(base, "canva", "D1.jpg");
+  const META_JPG = join(base, "canva", "D1.jpg.json");
+
+  beforeEach(() => {
+    rmSync(JPG_ESPERADO, { force: true });
+    rmSync(META_JPG, { force: true });
+  });
+
+  it("pede jpg ao Canva e grava o .jpg com o meta do formato", async () => {
+    const chamadas = stubApi({ download: JPG });
+
+    const r = await exporter.exportarImg("D1", RAPIDO);
+
+    expect(r.path).toBe(JPG_ESPERADO);
+    expect(r.formato).toBe("jpg");
+    expect([...readFileSync(JPG_ESPERADO)]).toEqual([...JPG]);
+    expect(JSON.parse(readFileSync(META_JPG, "utf8"))).toMatchObject({
+      updatedAt: 111,
+      formato: "jpg",
+    });
+    // O corpo do job é o que garante o formato: sem `export_quality` (só PDF).
+    expect(chamadas[1].body).toEqual({ design_id: "D1", format: { type: "jpg" } });
+  });
+
+  it("cache por formato: PDF e JPG do mesmo design convivem", async () => {
+    stubApi({ download: PDF });
+    await exporter.exportarPdf("D1", RAPIDO);
+
+    stubApi({ download: JPG });
+    await exporter.exportarImg("D1", RAPIDO);
+
+    expect(existsSync(PDF_ESPERADO)).toBe(true);
+    expect(existsSync(JPG_ESPERADO)).toBe(true);
+    // O selo é do PDF — o JPG não acende o mapa.
+    expect(await exporter.listarCachePdf()).toEqual({ D1: 111 });
+
+    // Segundo export do JPG é cache: nenhum job novo.
+    const chamadas = stubApi({ download: JPG });
+    const segunda = await exporter.exportarImg("D1", RAPIDO);
+    expect(segunda.cached).toBe(true);
+    expect(chamadas.filter((c) => c.kind === "criar")).toHaveLength(0);
+  });
+
+  it("HTML no lugar da imagem é recusado — nada de gravar página de erro", async () => {
+    stubApi({ download: "<html>erro</html>" });
+
+    await expect(exporter.exportarImg("D1", RAPIDO)).rejects.toMatchObject({
+      code: "download_not_jpg",
+    });
+    expect(existsSync(JPG_ESPERADO)).toBe(false);
+  });
+
+  it("limpar o cache apaga o JPG também", async () => {
+    stubApi({ download: JPG });
+    await exporter.exportarImg("D1", RAPIDO);
+    expect(existsSync(JPG_ESPERADO)).toBe(true);
+
+    await exporter.limparCachePdf("D1");
+
+    expect(existsSync(JPG_ESPERADO)).toBe(false);
+    expect(existsSync(META_JPG)).toBe(false);
   });
 });

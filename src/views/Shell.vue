@@ -10,6 +10,8 @@
     <!-- PageControl interno (tabs dos módulos abertos) -->
     <OpenModulesTabs v-show="!isShellExpanded" />
 
+    <PwaUpdateNotice v-if="!Platform.isDesktop" />
+
     <main class="shell-main">
       <div class="shell-grid" :class="{ 'shell-grid--with-sidebar': showLiturgySidebar }">
         <Transition name="chat-drawer-slide">
@@ -84,6 +86,7 @@ const MusicSpotlight = defineAsyncComponent(() => import("@components/MusicSpotl
 const BibleSpotlight = defineAsyncComponent(() => import("@components/BibleSpotlight.vue"));
 import RibbonBar from "@/layout/shell/RibbonBar.vue";
 import OpenModulesTabs from "@/layout/shell/OpenModulesTabs.vue";
+import PwaUpdateNotice from "@/layout/shell/PwaUpdateNotice.vue";
 import ShellLiturgyPanel from "@/layout/shell/ShellLiturgyPanel.vue";
 import { liturgySidebarDefault } from "@/helpers/LiturgySidebar";
 const HotkeysCheatsheet = defineAsyncComponent(
@@ -164,6 +167,8 @@ const shellOnline = () => $appdata.get<boolean>(KEYS.SHELL.IS_ONLINE, true) !== 
 
 function autoInstallCatalog(): void {
   if (!catalogAutoInstallArmed) return;
+  // Atualizou o app: renova o catálogo guardado (em qualquer plataforma).
+  if (shellOnline()) void sync.refreshCatalogAfterUpdate();
   const context = {
     desktop: Platform.isDesktop,
     installed: appInstalled.value,
@@ -173,6 +178,12 @@ function autoInstallCatalog(): void {
 }
 
 watch([shellOnline, appInstalled], autoInstallCatalog);
+// Um app que ficou aberto/offline por dias também verifica ao voltar ao uso.
+const checkCatalogOnForeground = () => {
+  if (document.visibilityState === "visible") autoInstallCatalog();
+};
+onMounted(() => document.addEventListener("visibilitychange", checkCatalogOnForeground));
+onBeforeUnmount(() => document.removeEventListener("visibilitychange", checkCatalogOnForeground));
 
 const showDesktopDownload = computed(() => {
   return (
@@ -833,6 +844,23 @@ onBeforeUnmount(() => {
 
 .shell-sidebar {
   flex-shrink: 0;
+}
+
+/* Em telas baixas o aviso de atualização não pode reduzir a lista a zero.
+   Mantém o aviso visível e permite alcançar o conteúdo rolando a janela. */
+@media (max-height: 650px) {
+  .shell-root--web:has(> .pwa-update-notice) {
+    overflow-y: auto;
+  }
+
+  .shell-root--web:has(> .pwa-update-notice) .shell-main {
+    flex-shrink: 0;
+    min-height: max(320px, 100dvh);
+  }
+
+  .shell-root--web:has(> .pwa-update-notice) :deep(.footer) {
+    position: fixed;
+  }
 }
 
 @media (max-width: 700px) {

@@ -10,6 +10,8 @@ import $path from "@/helpers/Path";
 import $alert from "@/helpers/Alert";
 import $snackbar from "@/helpers/Snackbar";
 import { NET_TIMEOUT, fetchWithTimeout, ehRemota } from "@/helpers/Http";
+import { isWebFileStoreSupported, readDownloadedAudio } from "@/helpers/WebFileStore";
+import { reportReliabilityFailure } from "@/helpers/ReliabilityDiagnostics";
 import { reportNetworkResult } from "@/composables/useConnectivity";
 import { i18nAtual } from "@/i18n";
 import $modules from "@/helpers/Modules";
@@ -47,10 +49,20 @@ import * as OnlineVideo from "@/helpers/OnlineVideo";
 import { useBackgroundTasks } from "@/composables/useBackgroundTasks";
 import { useOnlineVideoDownloads } from "@/composables/useOnlineVideoDownloads";
 import { VideoStateRevisionCounter } from "@/helpers/VideoStateVersion";
-import { createVideoPlaybackSnapshot, shouldRespondToVideoStateRequest } from "@/helpers/VideoPlaybackSnapshot";
+import {
+  createVideoPlaybackSnapshot,
+  shouldRespondToVideoStateRequest,
+} from "@/helpers/VideoPlaybackSnapshot";
 import { nextFileProjectionEpoch } from "@/presentation/FileProjectionActivation";
 import { audioFailure } from "@/helpers/AudioFailure";
-import { mediaSourceDetails, mediaElementDetails, mediaFormatDetails, mediaDiagnosticMessage, mediaBlobDetails, mediaDiagnosticLog } from "@/helpers/MediaDiagnostics";
+import {
+  mediaSourceDetails,
+  mediaElementDetails,
+  mediaFormatDetails,
+  mediaDiagnosticMessage,
+  mediaBlobDetails,
+  mediaDiagnosticLog,
+} from "@/helpers/MediaDiagnostics";
 
 const _audio = useAudioPlayback();
 const _slides = useSlides();
@@ -61,6 +73,42 @@ function _closeAlbumForPresentation(): void {
 }
 let _loadingId: string | number | null = null;
 let _playlistOnEnd: (() => boolean) | null = null;
+
+/**
+ * Quem tem a lista no ar AGORA — setas de avançar/retroceder.
+ *
+ * As setas são registradas uma única vez, em `main-shell.js`, e chegam aqui.
+ * Quem responde depende do que está no telão:
+ *
+ * - PDF projetado → `_pdfPageStep`, que vira a página;
+ * - lista de MÓDULO (a Biblioteca de Mídia toca por `projectFile`, não pelo
+ *   deck de música) → o dono registrado aqui;
+ * - música → `_slides`.
+ *
+ * Sem o delegado, a seta de uma imagem da Biblioteca caía no deck de música,
+ * que não tem essa lista: o evento era consumido e nada acontecia.
+ */
+interface NavigationDelegate {
+  next: () => void | Promise<void>;
+  prev: () => void | Promise<void>;
+}
+
+let _navigationDelegate: NavigationDelegate | null = null;
+
+/**
+ * Há MÚSICA tocando agora?
+ *
+ * É o desempate entre o dono registrado e o deck: se a música voltou ao palco,
+ * quem responde às setas é ela. E é confiável porque a Biblioteca sempre projeta
+ * com `stopExistingAudio: true` — `projectFile` zera `IS_PLAYING` nesse caminho,
+ * então item de biblioteca no telão e música tocando nunca coexistem.
+ *
+ * Proteger aqui também é autocorreção: se algum módulo esquecer de devolver as
+ * setas, a música as recupera sozinha quando assume o palco.
+ */
+function _musicaNoAr(): boolean {
+  return Boolean($appdata.get(KEYS.MODULES.MEDIA.IS_PLAYING));
+}
 // Database pode tentar dois hosts, cada um com NET_TIMEOUT.DEFAULT até os
 // headers. A margem cobre leitura do cache e JSON sem deixar um corpo travado
 // manter a abertura pendurada. Esse orçamento só vale para metadata musical.
@@ -73,6 +121,7 @@ let _cancelMusicMetadataWait: (() => void) | null = null;
 // o early-return pelo _loadingId já as ignore, a request continuava
 // drenando bytes da rede e ocupando handlers).
 let _audioXhr: XMLHttpRequest | null = null;
+let _audioLoadEpoch = 0;
 // Troca de modo em andamento: a faixa antiga segue tocando até a nova assumir,
 // e chegar ao fim dela não é motivo para encerrar a música.
 let _switchingMode = false;
@@ -112,7 +161,9 @@ let _mediaActivitySent = false;
 const _videoStateRevisions = new VideoStateRevisionCounter();
 
 // typeof null === "object": sem tratar null aqui, open(null) estourava lendo params.mode.
-function _openParams(params: MediaOpenParams | string | number | null | undefined): MediaOpenParams {
+function _openParams(
+  params: MediaOpenParams | string | number | null | undefined
+): MediaOpenParams {
   return params != null && typeof params === "object" ? params : { id_music: params ?? undefined };
 }
 
@@ -166,7 +217,11 @@ function _setPlaybackContext(context: AudioTelemetryContext | null): void {
   const active = context !== null;
   if (active !== _mediaActivitySent) {
     _mediaActivitySent = active;
-    try { Platform.presentation?.setMediaActive(active); } catch { /* diagnóstico não afeta projeção */ }
+    try {
+      Platform.presentation?.setMediaActive(active);
+    } catch {
+      /* diagnóstico não afeta projeção */
+    }
   }
   if (!context) _videoStateRevisions.reset();
   Telemetry.setRuntimeContext({
@@ -181,7 +236,8 @@ let _ytUnlisten: (() => void) | null = null;
 let _ytWatchdog: ReturnType<typeof setTimeout> | null = null;
 let _ytLastState: number | null = null;
 let _ytStateReceived = false;
-let _youtubePlaybackSample: { currentTime: number; duration: number; isPaused: boolean } | null = null;
+let _youtubePlaybackSample: { currentTime: number; duration: number; isPaused: boolean } | null =
+  null;
 let _ytLastSampledAt = 0;
 
 function _broadcastYoutubeStateForRequest(): void {
@@ -192,15 +248,19 @@ function _broadcastYoutubeStateForRequest(): void {
   const version = _videoStateRevisions.next(_activePlayback?.playback_id);
   if (!version) return;
   const sampledAt = Date.now();
-  const snapshot = createVideoPlaybackSnapshot({
-    ...version,
-    currentTime: sample.currentTime,
-    isPaused: sample.isPaused,
-    rate: 1,
-  }, sampledAt);
+  const snapshot = createVideoPlaybackSnapshot(
+    {
+      ...version,
+      currentTime: sample.currentTime,
+      isPaused: sample.isPaused,
+      rate: 1,
+    },
+    sampledAt
+  );
   if (!snapshot) return;
   $broadcast.send(BROADCAST_TYPE.VIDEO_STATE, {
-    ...version, ...snapshot,
+    ...version,
+    ...snapshot,
     currentTime: sample.currentTime,
     duration: sample.duration,
     isPaused: sample.isPaused,
@@ -213,15 +273,19 @@ function _broadcastVideoState(currentTime?: number, isPaused?: boolean): void {
   const version = _videoStateRevisions.next(_activePlayback?.playback_id);
   if (!version) return;
   const el = _audio.getElement();
-  const position = currentTime ?? (Number.isFinite(el.currentTime) ? el.currentTime : _audio.currentTime.value);
+  const position =
+    currentTime ?? (Number.isFinite(el.currentTime) ? el.currentTime : _audio.currentTime.value);
   const paused = isPaused ?? el.paused;
   const sampledAt = Date.now();
-  const snapshot = createVideoPlaybackSnapshot({
-    ...version,
-    currentTime: position,
-    isPaused: paused,
-    rate: el.playbackRate,
-  }, sampledAt);
+  const snapshot = createVideoPlaybackSnapshot(
+    {
+      ...version,
+      currentTime: position,
+      isPaused: paused,
+      rate: el.playbackRate,
+    },
+    sampledAt
+  );
   if (!snapshot) return;
   $broadcast.send(BROADCAST_TYPE.VIDEO_STATE, {
     currentTime: position,
@@ -248,7 +312,8 @@ function _publishVideoProjectionIdentity(playbackId: string, projectionUrl: stri
     const versionedPayload = { ...payload, playback_id: playbackId };
     mediaDiagnosticLog("debug", "media projection identity linked", {
       playback_id: playbackId,
-      previous_playback_id: typeof payload.playback_id === "string" ? payload.playback_id.slice(0, 128) : null,
+      previous_playback_id:
+        typeof payload.playback_id === "string" ? payload.playback_id.slice(0, 128) : null,
       projection_epoch: payload.stage_epoch,
       requested_source: mediaSourceDetails(projectionUrl),
     });
@@ -273,7 +338,8 @@ type DownloadedOutcome = "playing" | "stopped" | "embed";
 
 let _ytPrepareSeq = 0;
 let _ytFallbackDiagnostics: Record<string, unknown> | null = null;
-let _ytPreparation: { id: string; promise: Promise<DownloadedOutcome>; owns: boolean } | null = null;
+let _ytPreparation: { id: string; promise: Promise<DownloadedOutcome>; owns: boolean } | null =
+  null;
 // Vídeo que ainda está sendo baixado (some assim que o download termina).
 let _ytDownloading: string | null = null;
 // Esse download nasceu deste pedido de tocar. Se o operador o pediu de propósito antes (botão de
@@ -319,14 +385,20 @@ function _clearFileProjectionCache(): void {
   try {
     localStorage.removeItem(KEYS.PROJECTION.LJ_FILE_PROJECTION);
     localStorage.removeItem(KEYS.PROJECTION.LJ_YOUTUBE_PROJECTION);
-  } catch { /* armazenamento indisponível */ }
+  } catch {
+    /* armazenamento indisponível */
+  }
 }
 
 function _hasFileProjectionCache(): boolean {
   try {
-    return Boolean(localStorage.getItem(KEYS.PROJECTION.LJ_FILE_PROJECTION) ||
-      localStorage.getItem(KEYS.PROJECTION.LJ_YOUTUBE_PROJECTION));
-  } catch { return false; }
+    return Boolean(
+      localStorage.getItem(KEYS.PROJECTION.LJ_FILE_PROJECTION) ||
+      localStorage.getItem(KEYS.PROJECTION.LJ_YOUTUBE_PROJECTION)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function _queueStageWindows(stageEpoch: number, action: () => Promise<void>): Promise<void> {
@@ -338,7 +410,10 @@ function _queueStageWindows(stageEpoch: number, action: () => Promise<void>): Pr
 }
 
 /** Wait for older close operations without making a native window open block later stage changes. */
-async function _afterStageWindowCloses(stageEpoch: number, action: () => Promise<void>): Promise<void> {
+async function _afterStageWindowCloses(
+  stageEpoch: number,
+  action: () => Promise<void>
+): Promise<void> {
   await _stageWindowTransition;
   if (stageEpoch === _stageEpoch) await action();
 }
@@ -356,11 +431,15 @@ async function _waitForPreviousVideoWindows(stageEpoch: number): Promise<void> {
   if (!_videoWindowOpenings.size) return;
   const finished = Promise.allSettled([..._videoWindowOpenings]);
   let settled = false;
-  const done = finished.then(() => { settled = true; });
+  const done = finished.then(() => {
+    settled = true;
+  });
   let timer: ReturnType<typeof setTimeout> | undefined;
   await Promise.race([
     done,
-    new Promise<void>((resolve) => { timer = setTimeout(resolve, VIDEO_WINDOW_RELEASE_WAIT_MS); }),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, VIDEO_WINDOW_RELEASE_WAIT_MS);
+    }),
   ]);
   if (timer) clearTimeout(timer);
   if (!settled) {
@@ -375,9 +454,16 @@ async function _waitForPreviousVideoWindows(stageEpoch: number): Promise<void> {
 }
 
 /** Encerra o palco de arquivo/vídeo antes de um novo slide musical ou do editor. */
-async function _releaseFileVideoStage(stageEpoch: number, wasVisibleAlready = false): Promise<void> {
-  const wasVisible = _isYouTube() || _keepVideoProjectionOnLoadError() ||
-    _hasFileProjectionCache() || _videoWindowOpenings.size > 0 || wasVisibleAlready;
+async function _releaseFileVideoStage(
+  stageEpoch: number,
+  wasVisibleAlready = false
+): Promise<void> {
+  const wasVisible =
+    _isYouTube() ||
+    _keepVideoProjectionOnLoadError() ||
+    _hasFileProjectionCache() ||
+    _videoWindowOpenings.size > 0 ||
+    wasVisibleAlready;
   if (!wasVisible) return;
   if (_ytUnlisten) {
     _ytUnlisten();
@@ -397,15 +483,21 @@ async function _releaseFileVideoStage(stageEpoch: number, wasVisibleAlready = fa
 async function _openTrackedVideoWindows(): Promise<void> {
   const opening = openVideoProjectionWindows();
   _videoWindowOpenings.add(opening);
-  try { await opening; }
-  finally { _videoWindowOpenings.delete(opening); }
+  try {
+    await opening;
+  } finally {
+    _videoWindowOpenings.delete(opening);
+  }
 }
 
 async function _openTrackedFileWindows(): Promise<void> {
   const opening = openFileProjectionWindows();
   _videoWindowOpenings.add(opening);
-  try { await opening; }
-  finally { _videoWindowOpenings.delete(opening); }
+  try {
+    await opening;
+  } finally {
+    _videoWindowOpenings.delete(opening);
+  }
 }
 
 async function _claimVideoWindows(stageEpoch: number): Promise<boolean> {
@@ -479,9 +571,17 @@ async function _runDownloadedYouTube(
   mediaDiagnosticLog(res.ok ? "debug" : "warn", "youtube download resolution", {
     ...diagnosticContext,
     phase: "download_resolution",
-    ...(res.ok ? { cached: res.cached, source: mediaSourceDetails(res.url), formats: mediaFormatDetails(res.meta) }
-      : { reason: res.error.kind, message: mediaDiagnosticMessage(res.error.message),
-        fallback_action: OnlineVideo.actionForFailure(res.error.kind) }),
+    ...(res.ok
+      ? {
+          cached: res.cached,
+          source: mediaSourceDetails(res.url),
+          formats: mediaFormatDetails(res.meta),
+        }
+      : {
+          reason: res.error.kind,
+          message: mediaDiagnosticMessage(res.error.message),
+          fallback_action: OnlineVideo.actionForFailure(res.error.kind),
+        }),
   });
   if (_ytDownloading === id) _ytDownloading = null;
   // Baixou de verdade: o cartão passa a mostrar "baixado" sem piscar "não baixado" no meio.
@@ -516,8 +616,12 @@ async function _runDownloadedYouTube(
     return "stopped";
   }
   $snackbar.warning(text, { key: `ov-fallback-${id}`, timeout: 8000 });
-  _ytFallbackDiagnostics = { from_stage_epoch: diagnosticContext.media_stage_epoch,
-    prepare_sequence: seq, from_phase: "download_resolution", reason: kind };
+  _ytFallbackDiagnostics = {
+    from_stage_epoch: diagnosticContext.media_stage_epoch,
+    prepare_sequence: seq,
+    from_phase: "download_resolution",
+    reason: kind,
+  };
   return "embed";
 }
 
@@ -564,14 +668,17 @@ async function _openVideoFileProjection(
   $broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, payload);
   // As janelas levam um instante para abrir; se o operador pediu outra coisa nesse
   // meio-tempo, este vídeo já não é o do telão.
-  await _self.openAudio({
-    url: audioUrl,
-    title,
-    mediaType: "video",
-    playback_id: playbackId,
-    // Imagem e som em arquivos diferentes: o player do app mostra a imagem por conta própria.
-    ...(audioUrl !== url ? { videoUrl: url } : {}),
-  }, true);
+  await _self.openAudio(
+    {
+      url: audioUrl,
+      title,
+      mediaType: "video",
+      playback_id: playbackId,
+      // Imagem e som em arquivos diferentes: o player do app mostra a imagem por conta própria.
+      ...(audioUrl !== url ? { videoUrl: url } : {}),
+    },
+    true
+  );
   return true;
 }
 
@@ -622,12 +729,22 @@ async function _runStreamedYouTube(
     _ytDownloading = id; // até os links chegarem, cancelar ou abrir outra coisa desiste do pedido
     const res = await OnlineVideo.stream(id);
     mediaDiagnosticLog(res.ok ? "debug" : "warn", "youtube stream resolution", {
-      ...diagnosticContext, phase: "stream_resolution",
-      ...(res.ok ? { muxed: res.muxed, cached: res.cached ?? false,
-        video_source: mediaSourceDetails(res.video.url), audio_source: mediaSourceDetails(res.audio.url),
-        video_format: mediaFormatDetails(res.video), audio_format: mediaFormatDetails(res.audio) }
-        : { reason: res.error.kind, message: mediaDiagnosticMessage(res.error.message),
-          fallback_action: OnlineVideo.actionForFailure(res.error.kind) }),
+      ...diagnosticContext,
+      phase: "stream_resolution",
+      ...(res.ok
+        ? {
+            muxed: res.muxed,
+            cached: res.cached ?? false,
+            video_source: mediaSourceDetails(res.video.url),
+            audio_source: mediaSourceDetails(res.audio.url),
+            video_format: mediaFormatDetails(res.video),
+            audio_format: mediaFormatDetails(res.audio),
+          }
+        : {
+            reason: res.error.kind,
+            message: mediaDiagnosticMessage(res.error.message),
+            fallback_action: OnlineVideo.actionForFailure(res.error.kind),
+          }),
     });
     resolutionMs = _mediaElapsedMs(phaseStartedAt);
     if (_ytDownloading === id) _ytDownloading = null;
@@ -638,7 +755,11 @@ async function _runStreamedYouTube(
 
     if (!res.ok) {
       const kind = res.error.kind;
-      console.warn("[OnlineVideo] abrir direto falhou:", { id, kind, message: mediaDiagnosticMessage(res.error.message) });
+      console.warn("[OnlineVideo] abrir direto falhou:", {
+        id,
+        kind,
+        message: mediaDiagnosticMessage(res.error.message),
+      });
       // Já há um download comum em curso para este vídeo (um pré-download, por exemplo): não
       // dá para tocar dele antes de terminar, então o operador o acompanha, com barra.
       if (kind === "busy") {
@@ -667,8 +788,12 @@ async function _runStreamedYouTube(
         });
       }
       outcome = "embed_fallback";
-      _ytFallbackDiagnostics = { from_stage_epoch: diagnosticContext.media_stage_epoch,
-        prepare_sequence: seq, from_phase: "stream_resolution", reason: kind };
+      _ytFallbackDiagnostics = {
+        from_stage_epoch: diagnosticContext.media_stage_epoch,
+        prepare_sequence: seq,
+        from_phase: "stream_resolution",
+        reason: kind,
+      };
       return "embed";
     }
 
@@ -680,8 +805,11 @@ async function _runStreamedYouTube(
     }
     projectionOpenMs = _mediaElapsedMs(phaseStartedAt);
     mediaDiagnosticLog("debug", "youtube stream projection activated", {
-      ...diagnosticContext, phase: "media_ready_wait", playback_id: _activePlayback?.playback_id,
-      video_format: mediaFormatDetails(res.video), audio_format: mediaFormatDetails(res.audio),
+      ...diagnosticContext,
+      phase: "media_ready_wait",
+      playback_id: _activePlayback?.playback_id,
+      video_format: mediaFormatDetails(res.video),
+      audio_format: mediaFormatDetails(res.audio),
     });
     _ytStarting = id;
     phaseStartedAt = _mediaClockMs();
@@ -704,13 +832,20 @@ async function _runStreamedYouTube(
       console.warn("[OnlineVideo] o vídeo aberto direto não chegou a tocar:", { id, ...detail });
       Telemetry.track("online_video_stream_start_failed", { video_id: id, ...detail });
       mediaDiagnosticLog("warn", "youtube stream media not ready", {
-        ...diagnosticContext, phase: "media_ready_wait", playback_id: _activePlayback?.playback_id,
-        elapsed_ms: mediaReadyMs, fallback_action: "embed",
+        ...diagnosticContext,
+        phase: "media_ready_wait",
+        playback_id: _activePlayback?.playback_id,
+        elapsed_ms: mediaReadyMs,
+        fallback_action: "embed",
         ...mediaElementDetails(el),
       });
-      _ytFallbackDiagnostics = { from_stage_epoch: diagnosticContext.media_stage_epoch,
-        prepare_sequence: seq, from_phase: "media_ready_wait", reason: "media_not_ready",
-        playback_id: _activePlayback?.playback_id };
+      _ytFallbackDiagnostics = {
+        from_stage_epoch: diagnosticContext.media_stage_epoch,
+        prepare_sequence: seq,
+        from_phase: "media_ready_wait",
+        reason: "media_not_ready",
+        playback_id: _activePlayback?.playback_id,
+      };
       _self.close(true, true, true, true);
       $snackbar.warning(say(OnlineVideo.messageKeyForStreamFailure("unknown")), {
         key: `ov-fallback-${id}`,
@@ -719,7 +854,11 @@ async function _runStreamedYouTube(
       return "embed";
     }
 
-    void useOnlineVideoDownloads().download(id, title, { keep: false, quiet: true, background: true });
+    void useOnlineVideoDownloads().download(id, title, {
+      keep: false,
+      quiet: true,
+      background: true,
+    });
     outcome = "playing";
     return "playing";
   } finally {
@@ -732,7 +871,9 @@ async function _runStreamedYouTube(
         total_ms: _mediaElapsedMs(startedAt),
         outcome,
       });
-    } catch { /* diagnóstico nunca substitui o resultado da reprodução */ }
+    } catch {
+      /* diagnóstico nunca substitui o resultado da reprodução */
+    }
   }
 }
 
@@ -762,24 +903,39 @@ function _alertAudioFailure(error: unknown, retry?: () => void): void {
   );
 }
 
-function _loadAudioSrc(
+async function _loadAudioSrc(
   audioUrl: string,
   idCheck: string | number | null,
   retryFn: (id: string | number) => void,
-  onSource: (src: string, lazy: boolean, _sourceDetails?: Record<string, unknown>) => void = (src, lazy) => {
+  onSource: (src: string, lazy: boolean, _sourceDetails?: Record<string, unknown>) => void = (
+    src,
+    lazy
+  ) => {
     _audio.setSrc(src, lazy);
     _self.pause(false);
   },
   deferAudioContext = false
-): void {
+): Promise<void> {
+  const loadEpoch = ++_audioLoadEpoch;
+  let cacheStatus = "not_checked";
   // Captura o contexto desta tentativa. Callbacks de XHR podem chegar depois
   // que outra faixa assumiu `_activePlayback`; usar o contexto global nesse
   // ponto misturaria um erro antigo com o playback novo.
   let requestContext: AudioTelemetryContext | null = _activePlayback
-    ? { ..._activePlayback, source_type: _sourceType(audioUrl), original_source: mediaSourceDetails(audioUrl) }
+    ? {
+        ..._activePlayback,
+        source_type: _sourceType(audioUrl),
+        original_source: mediaSourceDetails(audioUrl),
+      }
     : null;
   const requestTelemetry = (extra: Record<string, unknown> = {}): Record<string, unknown> =>
-    requestContext ? _telemetryFor(requestContext, extra) : extra;
+    requestContext
+      ? _telemetryFor(requestContext, { web_cache_status: cacheStatus, ...extra })
+      : extra;
+  const isCurrentLoad = () =>
+    loadEpoch === _audioLoadEpoch &&
+    _loadingId === idCheck &&
+    _activePlayback?.playback_id === requestContext?.playback_id;
   const startedAt = Date.now();
   const requestRetry = (): void => {
     Telemetry.track(
@@ -789,7 +945,11 @@ function _loadAudioSrc(
     if (idCheck != null) retryFn(idCheck);
   };
   if (_activePlayback) {
-    _activePlayback = { ..._activePlayback, source_type: _sourceType(audioUrl), original_source: mediaSourceDetails(audioUrl) };
+    _activePlayback = {
+      ..._activePlayback,
+      source_type: _sourceType(audioUrl),
+      original_source: mediaSourceDetails(audioUrl),
+    };
     if (!deferAudioContext) _audio.setTelemetryContext(_activePlayback);
   }
   Telemetry.track(
@@ -809,7 +969,124 @@ function _loadAudioSrc(
   // traria a trilha inteira antes de tocar, que é justamente a espera que se quer evitar.
   const streamsFromDisk =
     audioUrl.startsWith("louvorja://onlinevideo/") || OnlineVideo.isProgressiveUrl(audioUrl);
+  if (_audioXhr) {
+    const previousRequest = _audioXhr;
+    _audioXhr = null;
+    try {
+      previousRequest.abort();
+    } catch (_) {
+      /* ignore */
+    }
+  }
   const needsOpusDecode = isOpusUrl(audioUrl) && opusNeedsFallback();
+
+  const acceptBlob = (blob: Blob, status: number, responseContentType: string | null): void => {
+    if (!isCurrentLoad()) return;
+    const elapsed = Date.now() - startedAt;
+    $appdata.set(KEYS.MODULES.MEDIA.CONFIG.LAZY, false);
+    $appdata.set(KEYS.MODULES.MEDIA.LOADING, false);
+    const originalSource = {
+      ...mediaSourceDetails(audioUrl),
+      ...mediaBlobDetails(blob, responseContentType),
+    };
+    if (requestContext) requestContext = { ...requestContext, original_source: originalSource };
+    if (_activePlayback?.playback_id === requestContext?.playback_id && _activePlayback) {
+      _activePlayback = { ..._activePlayback, original_source: originalSource };
+      if (!deferAudioContext) _audio.setTelemetryContext(_activePlayback);
+    }
+    Telemetry.histogram("louvorja.music.audio.load.duration", elapsed, {
+      outcome: "completed",
+      source_type: _sourceType(audioUrl),
+    });
+    Telemetry.track(
+      "music_audio_loaded",
+      requestTelemetry({
+        id_music: idCheck,
+        status: status,
+        bytes: blob.size,
+        content_type: blob.type,
+        elapsed_ms: elapsed,
+      })
+    );
+    Telemetry.track(
+      cacheStatus === "hit" ? "music_audio_cache_loaded" : "music_audio_transfer_completed",
+      requestTelemetry({
+        id_music: idCheck,
+        status: status,
+        bytes: blob.size,
+        content_type: blob.type,
+        elapsed_ms: elapsed,
+      })
+    );
+    if (cacheStatus !== "hit" && ehRemota(audioUrl)) reportNetworkResult(true, "media");
+    const finish = (blob: Blob): void => {
+      if (!isCurrentLoad()) return;
+      onSource(URL.createObjectURL(blob), false, requestContext?.original_source);
+    };
+    if (needsOpusDecode) {
+      $appdata.set(KEYS.MODULES.MEDIA.LOADING, true);
+      decodeOpusToWav(blob as Blob).then(
+        (wav) => {
+          if (!isCurrentLoad()) return;
+          $appdata.set(KEYS.MODULES.MEDIA.LOADING, false);
+          finish(wav);
+        },
+        (error) => {
+          Telemetry.captureException(
+            error,
+            requestTelemetry({ operation: "music_opus_decode", id_music: idCheck })
+          );
+          if (!isCurrentLoad()) return;
+          $appdata.set(KEYS.MODULES.MEDIA.LOADING, false);
+          _switchingMode = false;
+          if (!_keepVideoProjectionOnLoadError()) _self.close(true);
+          _alertAudioFailure(error, requestRetry);
+        }
+      );
+    } else {
+      finish(blob as Blob);
+    }
+    console.info("[Media] áudio preparado:", {
+      web_cache_status: cacheStatus,
+      source_type: _sourceType(audioUrl),
+      bytes: blob.size,
+      content_type: blob.type || "unknown",
+      elapsed_ms: elapsed,
+    });
+  };
+  // A mesma cópia que aparece como baixada tem prioridade, inclusive sem SW
+  // controlador, com endereço legado ou com a conexão marcada como disponível.
+  if (!Platform.isDesktop && ehRemota(audioUrl) && isWebFileStoreSupported()) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cached: Blob | null = null;
+    try {
+      cached = await Promise.race([
+        readDownloadedAudio(audioUrl),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new DOMException("Leitura do áudio local demorou demais", "TimeoutError")),
+            10_000
+          );
+        }),
+      ]);
+      cacheStatus = cached ? "hit" : "miss";
+    } catch (error) {
+      cacheStatus = "read_error";
+      reportReliabilityFailure(
+        "music_audio_cache_read_failed",
+        error,
+        requestTelemetry({ stage: "read_local", id_music: idCheck })
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!isCurrentLoad()) return;
+    if (cached) {
+      acceptBlob(cached, 200, cached.type);
+      return;
+    }
+  }
+
   if (
     !needsOpusDecode &&
     (streamsFromDisk ||
@@ -836,15 +1113,6 @@ function _loadAudioSrc(
   }
 
   $appdata.set(KEYS.MODULES.MEDIA.CONFIG.LAZY, false);
-  if (_audioXhr) {
-    const previousRequest = _audioXhr;
-    _audioXhr = null;
-    try {
-      previousRequest.abort();
-    } catch (_) {
-      /* ignore */
-    }
-  }
   const request = new XMLHttpRequest();
   _audioXhr = request;
   try {
@@ -867,7 +1135,7 @@ function _loadAudioSrc(
   request.onload = function (this: XMLHttpRequest) {
     const isCurrentRequest = _audioXhr === request;
     if (isCurrentRequest) _audioXhr = null;
-    if (!isCurrentRequest || _loadingId !== idCheck) return;
+    if (!isCurrentRequest || !isCurrentLoad()) return;
     $appdata.set(KEYS.MODULES.MEDIA.LOADING, false);
     const elapsed = Date.now() - startedAt;
     if (
@@ -877,70 +1145,12 @@ function _loadAudioSrc(
       this.response.size > 0
     ) {
       let responseContentType: string | null = null;
-      try { responseContentType = this.getResponseHeader("Content-Type"); } catch { /* optional metadata */ }
-      const originalSource = { ...mediaSourceDetails(audioUrl), ...mediaBlobDetails(this.response, responseContentType) };
-      if (requestContext) requestContext = { ...requestContext, original_source: originalSource };
-      if (_activePlayback?.playback_id === requestContext?.playback_id && _activePlayback) {
-        _activePlayback = { ..._activePlayback, original_source: originalSource };
-        if (!deferAudioContext) _audio.setTelemetryContext(_activePlayback);
+      try {
+        responseContentType = this.getResponseHeader("Content-Type");
+      } catch {
+        /* optional metadata */
       }
-      Telemetry.histogram("louvorja.music.audio.load.duration", elapsed, {
-        outcome: "completed",
-        source_type: _sourceType(audioUrl),
-      });
-      Telemetry.track(
-        "music_audio_loaded",
-        requestTelemetry({
-          id_music: idCheck,
-          status: this.status,
-          bytes: this.response.size,
-          content_type: this.response.type,
-          elapsed_ms: elapsed,
-        })
-      );
-      Telemetry.track(
-        "music_audio_transfer_completed",
-        requestTelemetry({
-          id_music: idCheck,
-          status: this.status,
-          bytes: this.response.size,
-          content_type: this.response.type,
-          elapsed_ms: elapsed,
-        })
-      );
-      if (ehRemota(audioUrl)) reportNetworkResult(true, "media");
-      const finish = (blob: Blob): void => {
-        if (_loadingId !== idCheck) return;
-        onSource(URL.createObjectURL(blob), false, requestContext?.original_source);
-      };
-      if (needsOpusDecode) {
-        $appdata.set(KEYS.MODULES.MEDIA.LOADING, true);
-        decodeOpusToWav(this.response as Blob).then(
-          (wav) => {
-            $appdata.set(KEYS.MODULES.MEDIA.LOADING, false);
-            finish(wav);
-          },
-          (error) => {
-            $appdata.set(KEYS.MODULES.MEDIA.LOADING, false);
-            Telemetry.captureException(
-              error,
-              requestTelemetry({ operation: "music_opus_decode", id_music: idCheck })
-            );
-            if (_loadingId !== idCheck) return;
-            _switchingMode = false;
-            if (!_keepVideoProjectionOnLoadError()) _self.close(true);
-            _alertAudioFailure(error, requestRetry);
-          }
-        );
-      } else {
-        finish(this.response as Blob);
-      }
-      console.info("[Media] arquivo direto transferido:", {
-        source_type: _sourceType(audioUrl),
-        bytes: this.response.size,
-        content_type: this.response.type || "unknown",
-        elapsed_ms: elapsed,
-      });
+      acceptBlob(this.response, this.status, responseContentType);
     } else {
       Telemetry.histogram("louvorja.music.audio.load.duration", elapsed, {
         outcome: "invalid_response",
@@ -975,7 +1185,7 @@ function _loadAudioSrc(
   const falhaDeRede = function (event?: Event) {
     const isCurrentRequest = _audioXhr === request;
     if (isCurrentRequest) _audioXhr = null;
-    if (!isCurrentRequest || _loadingId !== idCheck) return;
+    if (!isCurrentRequest || !isCurrentLoad()) return;
     _switchingMode = false;
     $appdata.set(KEYS.MODULES.MEDIA.LOADING, false);
     // No desktop o áudio vem por `louvorja://`, que é o protocolo lendo disco:
@@ -983,7 +1193,14 @@ function _loadAudioSrc(
     // o app para offline com a rede intacta.
     if (ehRemota(audioUrl)) reportNetworkResult(false, "media");
     if (!_keepVideoProjectionOnLoadError()) _self.close(true);
-    const reason = event?.type === "timeout" ? "timeout" : "network_error";
+    const reason =
+      event?.type === "timeout"
+        ? "timeout"
+        : cacheStatus === "read_error"
+          ? "cache_read_failed"
+          : cacheStatus === "miss" && navigator.onLine === false
+            ? "offline_cache_miss"
+            : "network_error";
     const elapsed = Date.now() - startedAt;
     Telemetry.histogram("louvorja.music.audio.load.duration", elapsed, {
       outcome: reason,
@@ -1011,7 +1228,15 @@ function _loadAudioSrc(
     // sem rede ele volta a cada música. O aviso leva a repetição no clique.
     const t = i18nAtual()?.global?.t;
     $snackbar.warning(
-      t ? t("modules.media.alerts.not_loaded_offline") : "Não foi possível baixar este áudio.",
+      t
+        ? t(
+            cacheStatus === "read_error"
+              ? "modules.media.alerts.local_read_failed"
+              : cacheStatus === "miss" && navigator.onLine === false
+                ? "modules.media.alerts.offline_not_downloaded"
+                : "modules.media.alerts.not_loaded_offline"
+          )
+        : "Não foi possível carregar este áudio.",
       {
         key: "media-offline",
         timeout: 6000,
@@ -1244,24 +1469,34 @@ const _self = {
 
   /** Responde com o relógio atual, inclusive quando a reprodução está pausada. */
   broadcastVideoStateForRequest(playbackId?: string): void {
-    if (_isYouTube() && shouldRespondToVideoStateRequest(
-      playbackId, _activePlayback?.playback_id, true
-    )) {
+    if (
+      _isYouTube() &&
+      shouldRespondToVideoStateRequest(playbackId, _activePlayback?.playback_id, true)
+    ) {
       _broadcastYoutubeStateForRequest();
       return;
     }
-    if (!shouldRespondToVideoStateRequest(
-      playbackId, _activePlayback?.playback_id,
-      Boolean($appdata.get(KEYS.MODULES.MEDIA.CONFIG.VIDEO_FILE))
-    )) return;
+    if (
+      !shouldRespondToVideoStateRequest(
+        playbackId,
+        _activePlayback?.playback_id,
+        Boolean($appdata.get(KEYS.MODULES.MEDIA.CONFIG.VIDEO_FILE))
+      )
+    )
+      return;
     _broadcastVideoState();
   },
 
   async open(params: MediaOpenParams | string | number): Promise<boolean> {
     params = _openParams(params);
     const requestedId = params.id_music;
-    if (!((typeof requestedId === "string" && requestedId.trim().length > 0) ||
-      (typeof requestedId === "number" && Number.isFinite(requestedId)))) return false;
+    if (
+      !(
+        (typeof requestedId === "string" && requestedId.trim().length > 0) ||
+        (typeof requestedId === "number" && Number.isFinite(requestedId))
+      )
+    )
+      return false;
     _closeAlbumForPresentation();
 
     $dev.write("open media", params);
@@ -1688,7 +1923,10 @@ const _self = {
       custom ? reopen : (id) => _self.open(id),
       (src, lazy, sourceDetails) => {
         _audio
-          .prepare(src, lazy, _audio.currentTime.value, { ...switchContext, original_source: sourceDetails })
+          .prepare(src, lazy, _audio.currentTime.value, {
+            ...switchContext,
+            original_source: sourceDetails,
+          })
           .then((faixa) => {
             // Outra música entrou no ar durante o carregamento: esta não serve
             // mais, e o blob dela só sai da memória se alguém soltar. A música
@@ -1771,7 +2009,11 @@ const _self = {
     { minimized }: { minimized?: boolean } = {}
   ): Promise<boolean> {
     if (mode === MusicActionEnum.INSTRUMENTAL && !song?.playback_token) {
-      Telemetry.track("custom_music_open_failed", { name: song?.nome, mode, reason: "no_playback" });
+      Telemetry.track("custom_music_open_failed", {
+        name: song?.nome,
+        mode,
+        reason: "no_playback",
+      });
       _warnNoTrack(true);
       return false;
     }
@@ -2052,26 +2294,38 @@ const _self = {
 
   /** Reserva a projeção FILE para imagem, PDF ou vídeo vindos da liturgia, acervo ou controle remoto. */
   async projectFile(
-    payload: { url: string; type: "image" | "pdf" | "video"; title?: string; [key: string]: unknown },
+    payload: {
+      url: string;
+      type: "image" | "pdf" | "video";
+      title?: string;
+      [key: string]: unknown;
+    },
     videoAudioUrl?: string,
     { stopExistingAudio = false }: { stopExistingAudio?: boolean } = {}
   ): Promise<boolean> {
-    if (!payload || typeof payload.url !== "string" || !payload.url ||
-      !["image", "pdf", "video"].includes(payload.type)) return false;
+    if (
+      !payload ||
+      typeof payload.url !== "string" ||
+      !payload.url ||
+      !["image", "pdf", "video"].includes(payload.type)
+    )
+      return false;
     const projection = {
       ...payload,
       // Vídeo com som no player: a tela segue o relógio dele e não anda sozinha.
       ...(payload.type === "video" && videoAudioUrl ? { clock: "player" as const } : {}),
       stage_epoch: nextFileProjectionEpoch(),
-      playback_id: typeof payload.playback_id === "string" && payload.playback_id
-        ? payload.playback_id : _newPlaybackId(),
+      playback_id:
+        typeof payload.playback_id === "string" && payload.playback_id
+          ? payload.playback_id
+          : _newPlaybackId(),
     };
     const stageEpoch = ++_stageEpoch;
     _dropPendingDownload();
     _opening.value = null;
     const wasYouTube = _isYouTube();
-    const editorOrYouTube = wasYouTube ||
-      $userdata.get<boolean>(KEYS.MODULES.SLIDE_EDITOR.PROJECTING, false) === true;
+    const editorOrYouTube =
+      wasYouTube || $userdata.get<boolean>(KEYS.MODULES.SLIDE_EDITOR.PROJECTING, false) === true;
     if (_ytUnlisten) {
       _ytUnlisten();
       _ytUnlisten = null;
@@ -2092,7 +2346,9 @@ const _self = {
     try {
       localStorage.setItem(KEYS.PROJECTION.LJ_FILE_PROJECTION, JSON.stringify(projection));
       localStorage.removeItem(KEYS.PROJECTION.LJ_YOUTUBE_PROJECTION);
-    } catch { /* cache de reabertura opcional */ }
+    } catch {
+      /* cache de reabertura opcional */
+    }
     try {
       await _afterStageWindowCloses(stageEpoch, _openTrackedFileWindows);
     } catch (error) {
@@ -2157,9 +2413,10 @@ const _self = {
       $appdata.set(KEYS.MODULES.MEDIA.IS_PLAYING, false);
       $appdata.set(KEYS.MODULES.MEDIA.MINIMIZED, false);
       $broadcast.send(BROADCAST_TYPE.MEDIA_CLOSE);
-      if (!keepProjectionWindows) _queueStageWindows(_stageEpoch, closeProjectionWindows).catch((e) => {
-        console.warn("[Media] closeProjectionWindows falhou:", e);
-      });
+      if (!keepProjectionWindows)
+        _queueStageWindows(_stageEpoch, closeProjectionWindows).catch((e) => {
+          console.warn("[Media] closeProjectionWindows falhou:", e);
+        });
       return;
     }
 
@@ -2201,9 +2458,10 @@ const _self = {
     $broadcast.send(BROADCAST_TYPE.MEDIA_CLOSE);
 
     // Fecha janelas auxiliares (espelha o fmMusica.Close do Delphi).
-    if (!keepProjectionWindows) _queueStageWindows(_stageEpoch, closeProjectionWindows).catch((e) => {
-      console.warn("[Media] closeProjectionWindows falhou:", e);
-    });
+    if (!keepProjectionWindows)
+      _queueStageWindows(_stageEpoch, closeProjectionWindows).catch((e) => {
+        console.warn("[Media] closeProjectionWindows falhou:", e);
+      });
   },
 
   async openLyric(params?: LyricOpenParams | string | number | null): Promise<void> {
@@ -2246,7 +2504,10 @@ const _self = {
     _album.close();
   },
 
-  async openAudio(params: MediaOpenParams | string | number, preserveProjectionStage = false): Promise<void> {
+  async openAudio(
+    params: MediaOpenParams | string | number,
+    preserveProjectionStage = false
+  ): Promise<void> {
     params = _openParams(params);
     _closeAlbumForPresentation();
     const stageEpoch = preserveProjectionStage ? _stageEpoch : ++_stageEpoch;
@@ -2265,7 +2526,9 @@ const _self = {
     }
     // Vídeo já anunciado às telas: a mesma identidade, não uma segunda.
     const playback_id =
-      typeof params.playback_id === "string" && params.playback_id ? params.playback_id : _newPlaybackId();
+      typeof params.playback_id === "string" && params.playback_id
+        ? params.playback_id
+        : _newPlaybackId();
     const audioMode = params.mode || "audio";
     const playbackContext: AudioTelemetryContext = {
       playback_id,
@@ -2448,7 +2711,11 @@ const _self = {
         // anúncio) e o download segue mesmo assim, para as próximas vezes.
         const outcome = await _prepareStreamedYouTube(id, title);
         if (outcome !== "embed") return outcome === "playing";
-        void useOnlineVideoDownloads().download(id, title, { keep: false, quiet: true, background: true });
+        void useOnlineVideoDownloads().download(id, title, {
+          keep: false,
+          quiet: true,
+          background: true,
+        });
       }
       if (stageEpoch !== _stageEpoch) return false;
       await this.openEmbeddedYouTube(url, title, stageEpoch);
@@ -2469,11 +2736,17 @@ const _self = {
     this.close(true);
   },
 
-  async openEmbeddedYouTube(url: string, title: string, expectedStageEpoch?: number): Promise<void> {
+  async openEmbeddedYouTube(
+    url: string,
+    title: string,
+    expectedStageEpoch?: number
+  ): Promise<void> {
     const stageEpoch = expectedStageEpoch ?? ++_stageEpoch;
     if (stageEpoch !== _stageEpoch) return;
-    const fallbackOrigin = expectedStageEpoch !== undefined && _ytFallbackDiagnostics?.from_stage_epoch === stageEpoch
-      ? { ..._ytFallbackDiagnostics } : undefined;
+    const fallbackOrigin =
+      expectedStageEpoch !== undefined && _ytFallbackDiagnostics?.from_stage_epoch === stageEpoch
+        ? { ..._ytFallbackDiagnostics }
+        : undefined;
     const projectionEpoch = nextFileProjectionEpoch();
     if (expectedStageEpoch === undefined) _dropPendingDownload();
     $dev.write("open youtube", { url, title });
@@ -2489,7 +2762,9 @@ const _self = {
     };
     Telemetry.track("music_youtube_requested", { playback_id, title });
     mediaDiagnosticLog("debug", "youtube embed requested", {
-      ...youtubeContext, title: undefined, phase: "embed_requested",
+      ...youtubeContext,
+      title: undefined,
+      phase: "embed_requested",
       requested_source: mediaSourceDetails(url),
     });
 
@@ -2571,7 +2846,11 @@ const _self = {
       stage_epoch: projectionEpoch,
     });
 
-    const stateDiagnostics = { received_messages: 0, mismatched_playback_messages: 0, invalid_sample_messages: 0 };
+    const stateDiagnostics = {
+      received_messages: 0,
+      mismatched_playback_messages: 0,
+      invalid_sample_messages: 0,
+    };
     _ytUnlisten = $broadcast.listen((msg) => {
       if (msg.type !== BROADCAST_TYPE.YOUTUBE_STATE) return;
       stateDiagnostics.received_messages = Math.min(stateDiagnostics.received_messages + 1, 10000);
@@ -2580,20 +2859,37 @@ const _self = {
       // Retorno e operador só acompanham: o relógio é da projeção ou, sem ela, da principal.
       if (p.role === "return" || p.role === "operator") return;
       if (p.playback_id !== playback_id) {
-        stateDiagnostics.mismatched_playback_messages = Math.min(stateDiagnostics.mismatched_playback_messages + 1, 10000);
+        stateDiagnostics.mismatched_playback_messages = Math.min(
+          stateDiagnostics.mismatched_playback_messages + 1,
+          10000
+        );
         return;
       }
-      if (typeof p.sampledAt !== "number" || !Number.isSafeInteger(p.sampledAt) ||
-          p.sampledAt < _ytLastSampledAt) {
-        stateDiagnostics.invalid_sample_messages = Math.min(stateDiagnostics.invalid_sample_messages + 1, 10000);
+      if (
+        typeof p.sampledAt !== "number" ||
+        !Number.isSafeInteger(p.sampledAt) ||
+        p.sampledAt < _ytLastSampledAt
+      ) {
+        stateDiagnostics.invalid_sample_messages = Math.min(
+          stateDiagnostics.invalid_sample_messages + 1,
+          10000
+        );
         return;
       }
       _ytLastSampledAt = p.sampledAt;
-      if (typeof p.currentTime === "number" && Number.isFinite(p.currentTime) && p.currentTime >= 0 &&
-          typeof p.duration === "number" && Number.isFinite(p.duration) && p.duration >= 0 &&
-          typeof p.isPaused === "boolean") {
+      if (
+        typeof p.currentTime === "number" &&
+        Number.isFinite(p.currentTime) &&
+        p.currentTime >= 0 &&
+        typeof p.duration === "number" &&
+        Number.isFinite(p.duration) &&
+        p.duration >= 0 &&
+        typeof p.isPaused === "boolean"
+      ) {
         _youtubePlaybackSample = {
-          currentTime: p.currentTime, duration: p.duration, isPaused: p.isPaused,
+          currentTime: p.currentTime,
+          duration: p.duration,
+          isPaused: p.isPaused,
         };
       }
       _ytStateReceived = true;
@@ -2643,8 +2939,13 @@ const _self = {
     _ytWatchdog = setTimeout(() => {
       if (_isYouTube() && !_ytStateReceived) {
         mediaDiagnosticLog("warn", "youtube player state watchdog", {
-          ...youtubeContext, title: undefined, phase: "state_wait", reason: "no_player_state",
-          timeout_ms: 15000, last_state: _ytLastState, ...stateDiagnostics,
+          ...youtubeContext,
+          title: undefined,
+          phase: "state_wait",
+          reason: "no_player_state",
+          timeout_ms: 15000,
+          last_state: _ytLastState,
+          ...stateDiagnostics,
         });
         Telemetry.track(
           "music_playback_failed",
@@ -2660,6 +2961,7 @@ const _self = {
   },
 
   clearVariables(): void {
+    ++_audioLoadEpoch;
     const cancelMetadataWait = _cancelMusicMetadataWait;
     _cancelMusicMetadataWait = null;
     cancelMetadataWait?.();
@@ -2748,7 +3050,11 @@ const _self = {
 
   goToTime(time: number): void {
     if (_isYouTube()) {
-      $broadcast.send(BROADCAST_TYPE.YOUTUBE_CONTROL, { action: "seekTo", value: time, playback_id: _activePlayback?.playback_id });
+      $broadcast.send(BROADCAST_TYPE.YOUTUBE_CONTROL, {
+        action: "seekTo",
+        value: time,
+        playback_id: _activePlayback?.playback_id,
+      });
     } else {
       _audio.seekTo(time);
       _broadcastVideoState(time);
@@ -2758,7 +3064,11 @@ const _self = {
   advanceTime(time = 10): void {
     if (_isYouTube()) {
       const newTime = Math.max(0, _audio.currentTime.value + time);
-      $broadcast.send(BROADCAST_TYPE.YOUTUBE_CONTROL, { action: "seekTo", value: newTime, playback_id: _activePlayback?.playback_id });
+      $broadcast.send(BROADCAST_TYPE.YOUTUBE_CONTROL, {
+        action: "seekTo",
+        value: newTime,
+        playback_id: _activePlayback?.playback_id,
+      });
     } else if (
       _audio.duration.value > 0 &&
       Number.isFinite(_audio.duration.value) &&
@@ -2776,11 +3086,17 @@ const _self = {
   pause(bool = true, callback?: () => void): void {
     if (_isYouTube()) {
       if (bool) {
-        $broadcast.send(BROADCAST_TYPE.YOUTUBE_CONTROL, { action: "pause", playback_id: _activePlayback?.playback_id });
+        $broadcast.send(BROADCAST_TYPE.YOUTUBE_CONTROL, {
+          action: "pause",
+          playback_id: _activePlayback?.playback_id,
+        });
         $appdata.set(KEYS.MODULES.MEDIA.CONFIG.IS_PAUSED, true);
         _audio.isPaused.value = true;
       } else {
-        $broadcast.send(BROADCAST_TYPE.YOUTUBE_CONTROL, { action: "play", playback_id: _activePlayback?.playback_id });
+        $broadcast.send(BROADCAST_TYPE.YOUTUBE_CONTROL, {
+          action: "play",
+          playback_id: _activePlayback?.playback_id,
+        });
         $appdata.set(KEYS.MODULES.MEDIA.CONFIG.IS_PAUSED, false);
         _audio.isPaused.value = false;
       }
@@ -2813,7 +3129,9 @@ const _self = {
           // reabrir o player por cima de quem a controla.
           _alertAudioFailure(
             e,
-            id != null ? () => self.open({ id_music: id, minimized: self.isMinimized() }) : undefined
+            id != null
+              ? () => self.open({ id_music: id, minimized: self.isMinimized() })
+              : undefined
           );
         },
         () => {
@@ -2838,11 +3156,20 @@ const _self = {
     _slides.goFirst();
   },
   prevSlide(): void {
+    /* Lista de módulo manda: a Biblioteca tem a sua, e o deck não a conhece. */
+    if (_navigationDelegate && !_musicaNoAr()) {
+      void _navigationDelegate.prev();
+      return;
+    }
     /* PDF no telão manda: a página é o documento, não o slide da música. */
     if (_pdfPageStep(-1)) return;
     _slides.goPrev();
   },
   nextSlide(): void {
+    if (_navigationDelegate && !_musicaNoAr()) {
+      void _navigationDelegate.next();
+      return;
+    }
     if (_pdfPageStep(1)) return;
     _slides.goNext();
   },
@@ -2854,7 +3181,11 @@ const _self = {
     _audio.setVolume(val);
     $appdata.set(KEYS.MODULES.MEDIA.CONFIG.VOLUME, val);
     if (_isYouTube()) {
-      $broadcast.send(BROADCAST_TYPE.YOUTUBE_CONTROL, { action: "setVolume", value: val, playback_id: _activePlayback?.playback_id });
+      $broadcast.send(BROADCAST_TYPE.YOUTUBE_CONTROL, {
+        action: "setVolume",
+        value: val,
+        playback_id: _activePlayback?.playback_id,
+      });
     }
   },
 
@@ -2869,6 +3200,20 @@ const _self = {
 
   setAlbumInfo(id_album: string | number | null, module = "media"): void {
     _album.setAlbumInfo(id_album, module);
+  },
+
+  /**
+   * Registra quem responde às setas de avançar/retroceder.
+   *
+   * Só um por vez: quem registra por último é quem está no ar (é o que a
+   * Biblioteca faz ao tocar um item, e desfaz ao parar). `null` devolve as
+   * setas para o PDF e para o deck de música.
+   */
+  registerNavigationDelegate(delegate: NavigationDelegate | null): void {
+    _navigationDelegate = delegate;
+  },
+  unregisterNavigationDelegate(): void {
+    _navigationDelegate = null;
   },
 
   registerPlaylistEndHandler(handler: () => boolean): void {

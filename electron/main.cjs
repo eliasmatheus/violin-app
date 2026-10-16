@@ -100,6 +100,7 @@ for (const stream of [process.stdout, process.stderr]) {
   stream?.on?.("error", () => {});
 }
 const telemetryErrorQueue = require("./main/telemetryErrorQueue.js");
+const { collectSystemInfo } = require("./main/telemetryEnvironment.js");
 const { createRuntimeHealthMonitor } = require("./main/runtimeHealth.js");
 const { createRuntimeWorkDiagnostics } = require("./main/runtimeWorkDiagnostics.js");
 const { createCpuProfileCapture } = require("./main/cpuProfileCapture.js");
@@ -581,7 +582,8 @@ windowFactory.setSiteNavigationListener((_win, { feature, url }) => {
  *   main espera cada uma ficar pronta      ← carregada; no Canva, também
  *                                             apresentada e com controles sumidos
  *   main manda {pronto:true} para OS DOIS loaders ao mesmo tempo
- *   loaders dão fade (CSS, 400 ms) → main fecha os dois (550 ms)
+ *   loaders dão fade (CSS, o `fade_duration` da Projeção de Fundo) → main
+ *     fecha os dois depois que o fade cabe inteiro
  *
  * Duas proteções, porque um loader que não sai deixa a tela presa na frente da
  * congregação: timeout de segurança e o fechamento da projeção (que também
@@ -591,6 +593,21 @@ const SITE_FEATURES = ["site", "site_return"];
 const SITE_LOADER_FEATURES = ["site_loader", "site_loader_return"];
 const LOADER_FECHAR_MS = 550;
 const LOADER_TIMEOUT_MS = 20000;
+
+/**
+ * Quanto tempo o loader fica na tela depois do aviso de saída.
+ *
+ * O loader dá o fade em CSS com o `fade_duration` da Projeção de Fundo, e o
+ * fade_visible tem de caber inteiro antes da janela sumir — senão um fade
+ * configurado em 2 s seria cortado aos 550 ms e o conteúdo de baixo apareceria
+ * no meio. A folga é o que dá para o último quadro ser pintado; o piso mantém
+ * o comportamento antigo quando ninguém mexeu na configuração.
+ */
+function _esperaFechamentoLoaderMs() {
+  const configurado = Number(_walkGet(_userDataMain, "modules.background_projection.fade_duration"));
+  if (!Number.isFinite(configurado) || configurado < 0) return LOADER_FECHAR_MS;
+  return Math.max(LOADER_FECHAR_MS, configurado + 150);
+}
 
 /**
  * Janela de Site pronta desde que ELA NASCEU.
@@ -632,6 +649,45 @@ function _sitePronto(feature) {
 }
 
 /**
+ * Uma janela de Site sumiu no meio da espera — alguém encerrou a projeção.
+ *
+ * Ela não vai mais sinalizar nada, e esperar por ela deixaria o loader cobrindo
+ * a tela até o timeout de 20 s. Some da lista e libera o resto. Também tira a
+ * janela de `_siteProntas`: janela fechada não é "pronta" para o próximo
+ * ciclo, e manter a marca faria a próxima projeção revelar antes de carregar.
+ */
+function _siteSumiu(feature) {
+  if (!SITE_FEATURES.includes(feature)) return;
+  _siteProntas.delete(feature);
+  if (!_loader.esperando.has(feature)) return;
+  _loader.esperando.delete(feature);
+  if (_loader.esperando.size === 0) _loaderAvisar(true);
+}
+
+/**
+ * Ouvinte de `closed` por janela de Site.
+ *
+ * A escuta fica acesa enquanto a janela existir — é ela que tira a janela de
+ * `_siteProntas` quando a projeção acaba — mas `aguardar` é chamado a cada
+ * ciclo. Sem trocar o ouvinte anterior, dez projeções de Site na MESMA janela
+ * (que é REAPROVEITADA) acumulariam dez escutas nela.
+ */
+const _siteFechamento = new Map();
+
+function _escutarFechamento(feature) {
+  const win = windowFactory.getWindow(feature);
+  if (!win || win.isDestroyed()) return;
+  const anterior = _siteFechamento.get(feature);
+  if (anterior) anterior();
+  const ouvir = () => {
+    _siteFechamento.delete(feature);
+    _siteSumiu(feature);
+  };
+  _siteFechamento.set(feature, ouvir);
+  win.once("closed", ouvir);
+}
+
+/**
  * Envia o estado para as duas telas de loading.
  *
  * `false` é o início do ciclo: a janela de loader pode ter sido REUTILIZADA de
@@ -642,6 +698,17 @@ function _loaderAvisar(pronto) {
   if (_loader.timer) {
     clearTimeout(_loader.timer);
     _loader.timer = null;
+  }
+  /*
+   * Um ciclo novo cancela o fechamento que o anterior agendou. Sem isto, o
+   * loader que acabou de subir — janela REAPROVEITADA, ainda com o fade da
+   * projeção anterior — fecharia no meio do ciclo novo, e a projeção apareceria
+   * sem cobertura nenhuma. Precisa vir ANTES do `if (!pronto) return`: quem
+   * abre um ciclo novo manda `false`.
+   */
+  if (_loader.fechamento) {
+    clearTimeout(_loader.fechamento);
+    _loader.fechamento = null;
   }
   for (const feature of SITE_LOADER_FEATURES) {
     const win = windowFactory.getWindow(feature);
@@ -654,11 +721,10 @@ function _loaderAvisar(pronto) {
     }
   }
   if (!pronto) return;
-  if (_loader.fechamento) clearTimeout(_loader.fechamento);
   _loader.fechamento = setTimeout(() => {
     _loader.fechamento = null;
     for (const feature of SITE_LOADER_FEATURES) void windowFactory.close(feature);
-  }, LOADER_FECHAR_MS);
+  }, _esperaFechamentoLoaderMs());
 }
 
 /*
@@ -698,6 +764,16 @@ windowFactory.setSiteReadyListener((win, { feature, url }) => {
 ipcMain.handle("site-loader:aguardar", () => {
   const alvos = SITE_FEATURES.filter((feature) => !!windowFactory.getWindow(feature));
   _loader.esperando = new Set(alvos.filter((feature) => !_siteProntas.has(feature)));
+/*
+   * A saída com fade fecha a janela de Site e só depois avisa que pode esperar:
+   * se ela morrer antes do aviso chegar, o `esperando` ficaria preso nela.
+   *
+   * A escuta vai em TODAS as janelas do ciclo, não só nas pendentes: é ela que
+   * tira a janela de `_siteProntas` quando a projeção acaba, e uma janela que
+   * carregou antes do `aguardar` nunca entra na lista de pendentes — a marca
+   * sobraria e a próxima projeção revelaria antes de carregar.
+   */
+  for (const feature of alvos) _escutarFechamento(feature);
   _loaderAvisar(false);
 
   if (_loader.esperando.size === 0) {
@@ -1106,6 +1182,14 @@ app.whenReady().then(async () => {
   splash.show(_userDataMain);
   await legacyDataMigration;
 
+  // Atualizou o app: tenta renovar os JSONs, mas conserva a cópia offline.
+  // Falha aqui não pode travar o boot.
+  try {
+    await jsonCache.expireOnAppUpdate(app.getVersion());
+  } catch (e) {
+    console.warn("[main] Falha ao expirar o cache de JSON na atualização:", e?.message || e);
+  }
+
   // A identificação de monitores e a limpeza dos caches de desenvolvimento
   // são independentes. Em máquinas lentas não faz sentido somar os dois
   // tempos, e o executável empacotado nem usa Service Worker: sua origem é
@@ -1413,6 +1497,9 @@ ipcMain.on("telemetry:heartbeat", (event, payload) => {
 });
 
 ipcMain.handle("telemetry:pending-main-errors", () => _readPendingMainErrors());
+// Metadados estáveis durante o processo; leitura única, sob demanda e sem argumentos do renderer.
+let systemInfoPromise;
+ipcMain.handle("telemetry:system-info", () => (systemInfoPromise ??= collectSystemInfo()));
 // Qual placa o Chromium escolheu e a taxa de cada monitor: "aceleração ligada"
 // não distingue a placa dedicada da integrada num computador com as duas.
 ipcMain.handle("telemetry:graphics", async () => {
@@ -2382,12 +2469,21 @@ ipcMain.handle("canva:exportPdf", (_event, payload) =>
 );
 
 /**
+ * Exporta o design como JPG (imagem inteira) e devolve o caminho local.
+ * Caminho do controle remoto: a API do Canva só dá thumbnail (~595 px) ou
+ * export — para projetar a imagem toda, o JPG é o arquivo.
+ */
+ipcMain.handle("canva:exportImg", (_event, payload) => canva.exportDesignImg(payload));
+
+/**
  * Selos de cache da aba Canva.
  *
  * `cachedPdfs` devolve designId → `updated_at` de TUDO que tem `.pdf` E `.json`,
  * para o renderer comparar com o item da lista e só acender o selo quando o
  * PDF ainda vale. `clearCachedPdf` apaga um, a pedido do operador — a validação
  * do id acontece AQUI (fronteira) e de novo no export.js (defesa).
+ * `clearCachedPdfs` apaga todos, porque trocar a qualidade do export invalida
+ * o cache inteiro (ver `exportarPdf`).
  */
 ipcMain.handle("canva:cachedPdfs", () => canva.cachedPdfs());
 
@@ -2398,6 +2494,9 @@ ipcMain.handle("canva:clearCachedPdf", (_event, payload) => {
   }
   return canva.clearCachedPdf({ designId });
 });
+
+/* Sem payload: não há id a validar — apagar tudo não recebe nada do renderer. */
+ipcMain.handle("canva:clearCachedPdfs", () => canva.clearCachedPdfs());
 
 // ---------------------------------------------------------------------------
 // IPC: Storage (S2) — visibilidade e gerenciamento da pasta de mídia + cache
