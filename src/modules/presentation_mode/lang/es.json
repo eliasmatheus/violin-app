@@ -593,6 +593,7 @@
     "in": "Ampliar (+)",
     "out": "Reducir (−)",
     "fit": "Ajustar",
-    "fit_title": "Volver a la imagen completa (0)"
+    "fit_title": "Volver a la imagen completa (0)",
+    "visor_hint": "Clic amplía · Alt+clic reduce · la rueda del mouse amplía en el punto · arrastre para mover"
   }
 }

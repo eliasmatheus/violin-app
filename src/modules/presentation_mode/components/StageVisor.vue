@@ -19,9 +19,11 @@
         'pm-visor__frame--zoomable': zoomable,
         'pm-visor__frame--zoomed': zoom.scale.value > 1,
       }"
+      :title="zoomable ? tm('zoom_live.visor_hint') : undefined"
       data-testid="pm-visor-frame"
       @wheel="onWheel"
-      @pointerdown="startPan"
+      @pointerdown="startPointer"
+      @dragstart.prevent
     >
       <LiveMirror :cleared="false" />
     </div>
@@ -73,29 +75,51 @@ function onWheel(e: WheelEvent): void {
   if (!zoomable.value) return;
   e.preventDefault();
   const box = mediaBox();
-  const at = box
-    ? { x: (e.clientX - box.left) / box.width, y: (e.clientY - box.top) / box.height }
-    : undefined;
+  const at = box ? pointAt(box, e.clientX, e.clientY) : undefined;
   zoom.zoomBy(Math.exp(-e.deltaY * 0.0015), at);
 }
 
-function startPan(e: PointerEvent): void {
-  if (zoom.scale.value <= 1) return;
+/** Menos que isso entre apertar e soltar é clique, não arraste. */
+const CLICK_SLOP = 4;
+
+function pointAt(box: DOMRect, x: number, y: number): { x: number; y: number } {
+  return { x: (x - box.left) / box.width, y: (y - box.top) / box.height };
+}
+
+/**
+ * Clique amplia no ponto (Alt+clique reduz); com zoom, arrastar move o
+ * recorte. O `dragstart` da imagem é cancelado no elemento: o arrastar nativo
+ * do navegador cancelaria o ponteiro no primeiro movimento.
+ */
+function startPointer(e: PointerEvent): void {
+  if (!zoomable.value || e.button !== 0) return;
   const box = mediaBox();
   if (!box) return;
+  e.preventDefault();
   const el = e.currentTarget as HTMLElement;
   el.setPointerCapture(e.pointerId);
-  let lastX = e.clientX;
-  let lastY = e.clientY;
+  const startX = e.clientX;
+  const startY = e.clientY;
+  let lastX = startX;
+  let lastY = startY;
+  let dragging = false;
   const move = (ev: PointerEvent) => {
-    zoom.panBy((ev.clientX - lastX) / box.width, (ev.clientY - lastY) / box.height);
+    if (!dragging && Math.hypot(ev.clientX - startX, ev.clientY - startY) < CLICK_SLOP) return;
+    dragging = true;
+    if (zoom.scale.value > 1) {
+      zoom.panBy((ev.clientX - lastX) / box.width, (ev.clientY - lastY) / box.height);
+    }
     lastX = ev.clientX;
     lastY = ev.clientY;
   };
-  const end = () => {
+  const end = (ev: PointerEvent) => {
     el.removeEventListener("pointermove", move);
     el.removeEventListener("pointerup", end);
     el.removeEventListener("pointercancel", end);
+    if (dragging || ev.type === "pointercancel") return;
+    const at = pointAt(box, startX, startY);
+    if (e.altKey) zoom.zoomOut(at);
+    else zoom.zoomIn(at);
   };
   el.addEventListener("pointermove", move);
   el.addEventListener("pointerup", end);
@@ -124,9 +148,23 @@ function startPan(e: PointerEvent): void {
   cursor: zoom-in;
 }
 
+.pm-visor__frame--zoomable {
+  touch-action: none;
+  user-select: none;
+}
+
 .pm-visor__frame--zoomed {
   cursor: grab;
-  touch-action: none;
+}
+
+.pm-visor__frame--zoomed:active {
+  cursor: grabbing;
+}
+
+/* A imagem não é alvo: o arrastar nativo dela roubaria o ponteiro do pan. */
+.pm-visor__frame--zoomable :deep(img) {
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 
 .pm-visor__audio {
