@@ -615,5 +615,14 @@
     "lyric": "Todas: solo letra",
     "sung": "Todas: cantado",
     "pb": "Todas: playback"
+  },
+  "text_size": {
+    "title": "Tamaño del texto",
+    "open": "Tamaño del texto de las canciones en esta pantalla",
+    "smaller": "Reducir",
+    "bigger": "Aumentar",
+    "reset": "Volver a 100%",
+    "hint_main": "Letra de las canciones en la pantalla principal. Cambia al instante; la miniatura muestra el resultado.",
+    "hint_stage": "Frase actual y siguiente en el retorno de escenario. Cambia al instante; la miniatura muestra el resultado."
   }
 }

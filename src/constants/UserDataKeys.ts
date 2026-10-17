@@ -335,6 +335,10 @@ export const KEYS = {
       CUSTOM_RETURN_TEXT_FORMAT: `${OPTIONS_SLIDE}.custom_return_text_format`,
       RETURN_TEXT_CASE: `${OPTIONS_SLIDE}.return_text_case`,
       FONT_SIZE_NEXT: `${OPTIONS_SLIDE}.font_size_next`,
+      /** Escala (%) do texto das músicas na tela principal, sobre o tamanho configurado. Padrão 100. */
+      MAIN_TEXT_SCALE: `${OPTIONS_SLIDE}.main_text_scale`,
+      /** Escala (%) do texto das músicas no retorno de palco (atual e próximo). Padrão 100. */
+      RETURN_TEXT_SCALE: `${OPTIONS_SLIDE}.return_text_scale`,
       AFFECT_EXTERNAL_SLIDES: `${OPTIONS}.affect_external_slides`,
 
       // Fundo da tela de retorno (independente do fundo dos slides)

@@ -615,5 +615,14 @@
     "lyric": "Todas: só letra",
     "sung": "Todas: cantado",
     "pb": "Todas: playback"
+  },
+  "text_size": {
+    "title": "Tamanho do texto",
+    "open": "Tamanho do texto das músicas nesta tela",
+    "smaller": "Diminuir",
+    "bigger": "Aumentar",
+    "reset": "Voltar a 100%",
+    "hint_main": "Letra das músicas na tela principal. Muda na hora; a miniatura mostra o resultado.",
+    "hint_stage": "Frase atual e próxima no retorno de palco. Muda na hora; a miniatura mostra o resultado."
   }
 }

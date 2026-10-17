@@ -61,15 +61,18 @@
             }}
           </span>
         </header>
-        <LjMenu :items="mainRole.items.value" align="start">
-          <template #trigger>
-            <button type="button" class="pm-outputs__monitor" data-testid="pm-monitor-main">
-              <LjIcon :icon="ICONS.PROJECTION.SCREEN_OUTLINE" :size="13" />
-              <span class="pm-outputs__monitor-label">{{ mainRole.selectorLabel.value }}</span>
-              <LjIcon :icon="ICONS.UI.CHEVRON_DOWN" :size="11" />
-            </button>
-          </template>
-        </LjMenu>
+        <div class="pm-outputs__monitor-row">
+          <LjMenu :items="mainRole.items.value" align="start">
+            <template #trigger>
+              <button type="button" class="pm-outputs__monitor" data-testid="pm-monitor-main">
+                <LjIcon :icon="ICONS.PROJECTION.SCREEN_OUTLINE" :size="13" />
+                <span class="pm-outputs__monitor-label">{{ mainRole.selectorLabel.value }}</span>
+                <LjIcon :icon="ICONS.UI.CHEVRON_DOWN" :size="11" />
+              </button>
+            </template>
+          </LjMenu>
+          <ScreenTextSize screen="main" />
+        </div>
         <button
           v-if="mainMissing && mainMonitor !== null"
           type="button"
@@ -138,15 +141,18 @@
             }}
           </span>
         </header>
-        <LjMenu :items="stageRole.items.value" align="start">
-          <template #trigger>
-            <button type="button" class="pm-outputs__monitor" data-testid="pm-monitor-stage">
-              <LjIcon :icon="ICONS.PROJECTION.RETURN" :size="13" />
-              <span class="pm-outputs__monitor-label">{{ stageRole.selectorLabel.value }}</span>
-              <LjIcon :icon="ICONS.UI.CHEVRON_DOWN" :size="11" />
-            </button>
-          </template>
-        </LjMenu>
+        <div class="pm-outputs__monitor-row">
+          <LjMenu :items="stageRole.items.value" align="start">
+            <template #trigger>
+              <button type="button" class="pm-outputs__monitor" data-testid="pm-monitor-stage">
+                <LjIcon :icon="ICONS.PROJECTION.RETURN" :size="13" />
+                <span class="pm-outputs__monitor-label">{{ stageRole.selectorLabel.value }}</span>
+                <LjIcon :icon="ICONS.UI.CHEVRON_DOWN" :size="11" />
+              </button>
+            </template>
+          </LjMenu>
+          <ScreenTextSize screen="stage" />
+        </div>
         <button
           v-if="stageMissing && stageMonitor !== null"
           type="button"
@@ -292,6 +298,7 @@ import ScreenToggle from "./ScreenToggle.vue";
 import ScreenZoom from "./ScreenZoom.vue";
 import { useScreenTruth } from "../composables/useScreenTruth";
 import { useLayers, type LayerId } from "../composables/useLayers";
+import ScreenTextSize from "./ScreenTextSize.vue";
 import type { LiveKind } from "../composables/useLiveContent";
 import {
   RETURN_GROUPS,
@@ -461,6 +468,17 @@ const LAYER_ICONS: Record<LayerId, string> = {
 }
 
 /* Monitor da tela: opção, com cara de seletor. */
+.pm-outputs__monitor-row {
+  display: flex;
+  align-items: center;
+  gap: var(--lj-space-2);
+}
+
+.pm-outputs__monitor-row > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
 .pm-outputs__monitor {
   display: flex;
   align-items: center;
