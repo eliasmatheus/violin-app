@@ -75,6 +75,15 @@ describe("useProgram", () => {
     expect(program.skippedIds.value.size).toBe(0);
   });
 
+  it("sessão recolhida reabre quando um item dela entra no ar", () => {
+    program.toggleSession("s2");
+    expect(program.collapsedSessions.value.s2).toBe(true);
+    program.goLive("a");
+    expect(program.collapsedSessions.value.s2).toBe(true);
+    program.goLive("c");
+    expect(program.collapsedSessions.value.s2).toBe(false);
+  });
+
   it("novo item entra logo depois do selecionado", () => {
     program.select("a");
     program.addItem(item("novo"), "s1");

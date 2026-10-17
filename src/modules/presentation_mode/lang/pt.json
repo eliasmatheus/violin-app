@@ -71,7 +71,10 @@
     "default_session": "Geral",
     "save_default_name": "Programa {date}",
     "queued": "NA FILA",
-    "add": "Adicionar"
+    "add": "Adicionar",
+    "expand_session": "Mostrar os itens da sessão",
+    "collapse_session": "Recolher a sessão",
+    "session_done": "{done}/{total} feitos"
   },
   "kinds": {
     "music": "Música",

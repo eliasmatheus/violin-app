@@ -46,6 +46,8 @@ const _liveItemId = ref<string | null>(null);
 const _liveStartedAt = ref<number | null>(null);
 const _doneIds = ref<ReadonlySet<string>>(new Set());
 const _openItems = ref<Record<string, boolean>>({});
+/** Sessões recolhidas na lista (estado da sessão do app, como os itens abertos). */
+const _collapsedSessions = ref<Record<string, boolean>>({});
 /** Item que o operador mandou ao ar com a saída travada: vai quando destravar. */
 const _preparedItemId = ref<string | null>(null);
 
@@ -55,12 +57,21 @@ const _outputLocked = computed(
 
 let _loadSeq = 0;
 
+/** O item que entra no ar não fica escondido: a sessão dele reabre. */
+function _expandSessionOf(itemId: string): void {
+  const session = _program.value.sessions.find((s) => s.items.some((i) => i.id === itemId));
+  if (session && _collapsedSessions.value[session.id]) {
+    _collapsedSessions.value = { ..._collapsedSessions.value, [session.id]: false };
+  }
+}
+
 function _resetRuntime(): void {
   _selectedItemId.value = null;
   _liveItemId.value = null;
   _liveStartedAt.value = null;
   _doneIds.value = new Set();
   _openItems.value = {};
+  _collapsedSessions.value = {};
   _preparedItemId.value = null;
 }
 
@@ -180,6 +191,7 @@ export function useProgram() {
     doneIds: _doneIds,
     skippedIds,
     openItems: _openItems,
+    collapsedSessions: _collapsedSessions,
     nextItemId,
     preparedItemId: _preparedItemId,
     upNextItem,
@@ -348,6 +360,13 @@ export function useProgram() {
       _selectedItemId.value = itemId;
     },
 
+    toggleSession(sessionId: string, collapsed?: boolean): void {
+      _collapsedSessions.value = {
+        ..._collapsedSessions.value,
+        [sessionId]: collapsed ?? !_collapsedSessions.value[sessionId],
+      };
+    },
+
     toggleOpen(itemId: string, open?: boolean): void {
       _openItems.value = { ..._openItems.value, [itemId]: open ?? !_openItems.value[itemId] };
     },
@@ -365,6 +384,7 @@ export function useProgram() {
       _liveItemId.value = itemId;
       _liveStartedAt.value = minutesOfDate(now);
       _selectedItemId.value = itemId;
+      _expandSessionOf(itemId);
     },
 
     /**
@@ -397,6 +417,7 @@ export function useProgram() {
         _liveStartedAt.value = minutesOfDate(now);
       }
       _selectedItemId.value = itemId;
+      _expandSessionOf(itemId);
     },
   };
 }
