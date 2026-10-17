@@ -13,7 +13,8 @@ import type { LiturgyItem } from "@/types/Liturgy";
 import { useLiturgyExecution } from "@/modules/liturgy/composables/useLiturgyExecution";
 import type { ProgramBibleRef, ProgramItem } from "@/types/Presentation";
 import { liturgyItem } from "../program/liturgy";
-import { isMusicMode, type MusicMode } from "../program/musicModes";
+import { applyOverride, isMusicMode, type MusicMode } from "../program/musicModes";
+import { currentMusicOverride } from "./useMusicOverride";
 import { nextVerseOf } from "../program/bible";
 import { useBibleLibrary } from "./useBibleLibrary";
 import { isPowerPoint, powerPointAsPdf } from "./usePowerPoint";
@@ -21,12 +22,24 @@ import { useCloudFiles } from "./useCloudFiles";
 import { isUrl } from "../program/paths";
 
 /**
+ * A versão escolhida no topo do módulo vence a pedida. Playback imposto a uma
+ * música sem playback cai no cantado, em vez de não tocar nada.
+ */
+function effectiveMode(mode: MusicMode | string): { mode: MusicMode | string; forcedPb: boolean } {
+  if (!isMusicMode(mode)) return { mode, forcedPb: false };
+  const override = currentMusicOverride();
+  const effective = applyOverride(mode, override);
+  return { mode: effective, forcedPb: effective === "pb" && mode !== "pb" };
+}
+
+/**
  * Toca uma música no formato pedido. Com letra, ela vai minimizada — os
  * slides aparecem na grade do palco do módulo, não na janela do player por
  * cima dele. "Só áudio" toca sem mandar nada às telas e aparece no palco
  * com o player.
  */
-export function playMusicInMode(idMusic: number, mode: MusicMode | string = "sung"): void {
+export function playMusicInMode(idMusic: number, requested: MusicMode | string = "sung"): void {
+  const { mode, forcedPb } = effectiveMode(requested);
   if (mode === "audio" || mode === "audio_pb") {
     Media.stop();
     void Media.openAudio({
@@ -35,15 +48,24 @@ export function playMusicInMode(idMusic: number, mode: MusicMode | string = "sun
     });
     return;
   }
-  void Media.open({ id_music: idMusic, mode: LITURGY_VERSION_ACTION[mode] ?? MusicActionEnum.AUDIO, minimized: true });
+  const open = (m: MusicMode | string) =>
+    Media.open({ id_music: idMusic, mode: LITURGY_VERSION_ACTION[m] ?? MusicActionEnum.AUDIO, minimized: true });
+  void open(mode).then((ok) => {
+    if (!ok && forcedPb) void open("sung");
+  });
 }
 
 /**
  * Música personalizada no formato pedido, também minimizada. O caminho é o
  * mesmo das listas e da liturgia (`openCustomMusic`), que relê o documento.
  */
-export function playCustomMusicInMode(customId: string, mode: MusicMode | string = "sung"): void {
-  void openCustomMusic(customId, LITURGY_VERSION_ACTION[mode] ?? MusicActionEnum.AUDIO, { minimized: true });
+export function playCustomMusicInMode(customId: string, requested: MusicMode | string = "sung"): void {
+  const { mode, forcedPb } = effectiveMode(requested);
+  const open = (m: MusicMode | string) =>
+    openCustomMusic(customId, LITURGY_VERSION_ACTION[m] ?? MusicActionEnum.AUDIO, { minimized: true });
+  void open(mode).then((ok) => {
+    if (!ok && forcedPb) void open("sung");
+  });
 }
 
 /**

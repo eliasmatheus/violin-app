@@ -607,5 +607,13 @@
     "visor_hint": "Ctrl/Cmd + rueda o pellizco amplía · doble clic alterna entre ajustar y el detalle · con zoom, arrastre, mantenga la rueda o desplace con dos dedos para mover",
     "actual_title": "Tamaño real en la pantalla principal (1)",
     "double_title": "Ampliar 2× (1)"
+  },
+  "music_override": {
+    "label": "Versión de todas las canciones",
+    "hint": "Vale para todas las canciones, incluso las del programa con versión definida. Con banda: Solo letra. Sin banda: Cantado o Playback.",
+    "normal": "Canciones: cada una la suya",
+    "lyric": "Todas: solo letra",
+    "sung": "Todas: cantado",
+    "pb": "Todas: playback"
   }
 }

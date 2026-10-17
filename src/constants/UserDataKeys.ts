@@ -126,6 +126,8 @@ export const KEYS = {
       LIBRARY_FOLDERS: `${MODULES_PRESENTATION_MODE}.library_folders`,
       /** UserData: arquivos marcados com estrela no navegador de arquivos. */
       LIBRARY_FAVORITES: `${MODULES_PRESENTATION_MODE}.library_favorites`,
+      /** UserData: versão de todas as músicas ("" = cada uma a sua; "lyric", "sung", "pb"). Vence a do item. */
+      MUSIC_MODE_OVERRIDE: `${MODULES_PRESENTATION_MODE}.music_mode_override`,
       /** UserData: tipos de conteúdo escondidos no retorno de palco — `{ music?: true, file?: true, ... }`. */
       RETURN_HIDDEN: `${MODULES_PRESENTATION_MODE}.return_hidden`,
       /** UserData: biblioteca ocupando as duas colunas da esquerda. */
