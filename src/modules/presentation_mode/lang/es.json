@@ -611,10 +611,11 @@
   "music_override": {
     "label": "Versión de todas las canciones",
     "hint": "Vale para todas las canciones, incluso las del programa con versión definida. Con banda: Solo letra. Sin banda: Cantado o Playback.",
-    "normal": "Canciones: cada una la suya",
-    "lyric": "Todas: solo letra",
-    "sung": "Todas: cantado",
-    "pb": "Todas: playback"
+    "lyric": "Solo letra",
+    "sung": "Cantado",
+    "pb": "Playback",
+    "short_label": "Canciones",
+    "release": "Haz clic para soltar: cada canción vuelve a su versión"
   },
   "text_size": {
     "title": "Tamaño del texto",

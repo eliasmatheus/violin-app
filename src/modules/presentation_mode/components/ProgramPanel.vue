@@ -104,6 +104,7 @@
         <span class="pm-progress__done" :style="{ width: `${progress.done}%` }" />
         <span class="pm-progress__live" :style="{ width: `${progress.live}%` }" />
       </div>
+      <MusicOverrideToggle />
     </section>
 
     <div class="pm-program__body">
@@ -234,6 +235,7 @@ import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import type { ProgramItem, ProgramSubItem } from "@/types/Presentation";
 import ProgramItemRow from "./ProgramItemRow.vue";
+import MusicOverrideToggle from "./MusicOverrideToggle.vue";
 import AirHistory from "./AirHistory.vue";
 import { useAirHistory } from "../composables/useAirHistory";
 import type { HistoryEntry } from "../program/history";

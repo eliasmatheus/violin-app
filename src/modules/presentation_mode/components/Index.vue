@@ -90,24 +90,6 @@
           <span class="pm-bar__title" data-testid="pm-stage-title">{{ stageTitle }}</span>
           <span v-if="stageMeta" class="pm-bar__meta">{{ stageMeta }}</span>
           <div class="pm-bar__tools">
-            <!-- Versão de todas as músicas: com banda, só letra; sem banda, cantado ou playback. -->
-            <div
-              class="pm-music-override"
-              :class="{ 'pm-music-override--on': !!musicOverride }"
-              :title="tm('music_override.hint')"
-            >
-              <LjSelect
-                size="sm"
-                :icon="ICONS.MUSIC.MUSIC"
-                :model-value="musicOverride"
-                :items="musicOverrideItems"
-                item-value="value"
-                item-label="label"
-                :aria-label="tm('music_override.label')"
-                data-testid="pm-music-override"
-                @update:model-value="(v) => setMusicOverride(isMusicOverride(v) ? v : '')"
-              />
-            </div>
             <LjButton
               size="sm"
               icon-only
@@ -255,7 +237,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { LjButton, LjIcon, LjSelect } from "@/components/ui";
+import { LjButton, LjIcon } from "@/components/ui";
 import ModuleContainer from "@/components/ModuleContainer.vue";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
@@ -332,7 +314,7 @@ import {
   playMusicInMode,
   useProgramExecution,
 } from "../composables/useProgramExecution";
-import { isMusicOverride, needsModeChoice, type MusicMode } from "../program/musicModes";
+import { needsModeChoice, type MusicMode } from "../program/musicModes";
 import { useMusicOverride } from "../composables/useMusicOverride";
 import { isPending } from "../program/models";
 import { itemVideoId, openOnline } from "../composables/useOnlinePlayback";
@@ -528,15 +510,7 @@ function markOnly(item: ProgramItem, force: boolean): void {
   else goLive(item.id);
 }
 
-/* ─── Versão de todas as músicas ─── */
-
-const { override: musicOverride, setOverride: setMusicOverride } = useMusicOverride();
-const musicOverrideItems = computed(() => [
-  { value: "", label: tm("music_override.normal") },
-  { value: "lyric", label: tm("music_override.lyric") },
-  { value: "sung", label: tm("music_override.sung") },
-  { value: "pb", label: tm("music_override.pb") },
-]);
+const { override: musicOverride } = useMusicOverride();
 
 /** Duplo clique no programa. */
 function activate(itemId: string, options?: DispatchOptions): void {
@@ -1105,16 +1079,6 @@ useBroadcastListener(BROADCAST_TYPE.MODULE_RIBBON_ACTION, (payload) => {
   gap: var(--lj-space-1);
   margin-left: auto;
   flex-shrink: 0;
-}
-
-.pm-music-override {
-  min-width: 132px;
-}
-
-/* Ligado, o seletor fica laranja: todas as músicas estão saindo nessa versão. */
-.pm-music-override--on :deep(.lj-select) {
-  border-color: var(--lj-orange);
-  color: var(--lj-orange);
 }
 
 .pm-panel-body {
