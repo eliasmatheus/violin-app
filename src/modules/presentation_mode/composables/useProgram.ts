@@ -154,6 +154,18 @@ const previousItem = computed<ProgramItem | null>(() => {
   return i > 0 ? list[i - 1] : null;
 });
 
+/**
+ * Pulados: os itens antes do que está no ar que não foram concluídos. A
+ * linha mostra o buraco para o operador resolver com um clique.
+ */
+const skippedIds = computed<ReadonlySet<string>>(() => {
+  const list = items.value;
+  const at = _liveItemId.value ? list.findIndex((i) => i.id === _liveItemId.value) : -1;
+  const skipped = new Set<string>();
+  for (let i = 0; i < at; i++) if (!_doneIds.value.has(list[i].id)) skipped.add(list[i].id);
+  return skipped;
+});
+
 export function useProgram() {
   _watchFolder();
   return {
@@ -166,6 +178,7 @@ export function useProgram() {
     liveItemId: _liveItemId,
     liveStartedAt: _liveStartedAt,
     doneIds: _doneIds,
+    skippedIds,
     openItems: _openItems,
     nextItemId,
     preparedItemId: _preparedItemId,
@@ -351,6 +364,38 @@ export function useProgram() {
       _doneIds.value = done;
       _liveItemId.value = itemId;
       _liveStartedAt.value = minutesOfDate(now);
+      _selectedItemId.value = itemId;
+    },
+
+    /**
+     * Marca ou desmarca um item como concluído, à mão. Concluir o item no ar
+     * o tira do marcador: o programa fica sem item ao vivo até o próximo.
+     */
+    setDone(itemId: string, done: boolean): void {
+      const next = new Set(_doneIds.value);
+      if (done) {
+        next.add(itemId);
+        if (_liveItemId.value === itemId) {
+          _liveItemId.value = null;
+          _liveStartedAt.value = null;
+        }
+      } else next.delete(itemId);
+      _doneIds.value = next;
+    },
+
+    /** "Começar daqui": o item vira o atual e tudo antes dele, concluído. */
+    startHere(itemId: string, now = new Date()): void {
+      const list = items.value;
+      const at = list.findIndex((i) => i.id === itemId);
+      if (at < 0) return;
+      const done = new Set(_doneIds.value);
+      for (let i = 0; i < at; i++) done.add(list[i].id);
+      done.delete(itemId);
+      _doneIds.value = done;
+      if (_liveItemId.value !== itemId) {
+        _liveItemId.value = itemId;
+        _liveStartedAt.value = minutesOfDate(now);
+      }
       _selectedItemId.value = itemId;
     },
   };

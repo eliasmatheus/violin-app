@@ -153,6 +153,7 @@
                 :live="element.id === liveItemId"
                 :next="element.id === nextItemId"
                 :done="doneIds.has(element.id)"
+                :skipped="skippedIds.has(element.id)"
                 :prepared="element.id === preparedItemId"
                 :selected="element.id === selectedItemId"
                 :open="!!openItems[element.id]"
@@ -165,6 +166,7 @@
                 @activate="onActivate(element)"
                 @toggle="toggleOpen(element.id)"
                 @edit="emit('edit-item', element.id)"
+                @set-done="(value: boolean) => setDone(element.id, value)"
               />
             </template>
           </draggable>
@@ -303,10 +305,13 @@ const {
   liveItemId,
   liveStartedAt,
   doneIds,
+  skippedIds,
   openItems,
   nextItemId,
   preparedItemId,
   setDate,
+  setDone,
+  startHere,
   setSessions,
   select,
   toggleOpen,
@@ -439,10 +444,13 @@ function editNextPending(): void {
   emit("edit-item", first.id);
 }
 
-/** Item que ainda não tem conteúdo não vai ao ar: o duplo clique abre a escolha. */
+/**
+ * Item que ainda não tem conteúdo não vai ao ar: o duplo clique abre a escolha.
+ * O marcador anda do mesmo jeito — é o momento do culto.
+ */
 function onActivate(item: ProgramItem): void {
+  emit("activate", item.id);
   if (isPending(item)) emit("edit-item", item.id);
-  else emit("activate", item.id);
 }
 
 const readiness = useReadiness();
@@ -488,6 +496,23 @@ function itemMenu(item: ProgramItem): { quick: LjMenuItem[]; items: LjMenuItem[]
     ],
     items: [
       { label: tm("library.preview"), icon: ICONS.UI.EYE, action: () => onSelect(item.id) },
+      { separator: true },
+      doneIds.value.has(item.id)
+        ? {
+            label: tm("program.mark_undone"),
+            icon: ICONS.ACTIONS.UNDO,
+            action: () => setDone(item.id, false),
+          }
+        : {
+            label: tm("program.mark_done"),
+            icon: ICONS.UI.CHECK,
+            action: () => setDone(item.id, true),
+          },
+      {
+        label: tm("program.start_here"),
+        icon: ICONS.PLAYER.FAST_FORWARD,
+        action: () => startHere(item.id),
+      },
       { separator: true },
       {
         label: tm("ribbon.btn.duplicate"),

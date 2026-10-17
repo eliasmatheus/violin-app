@@ -315,6 +315,7 @@ import {
   useProgramExecution,
 } from "../composables/useProgramExecution";
 import { needsModeChoice, type MusicMode } from "../program/musicModes";
+import { isPending } from "../program/models";
 import { itemVideoId, openOnline } from "../composables/useOnlinePlayback";
 import { useOnlinePrefetch } from "../composables/useOnlinePrefetch";
 import { useSeriesRecorder } from "../composables/useSeries";
@@ -425,9 +426,16 @@ function dispatch(
     dispatch({ type: "child", itemId: item.id, childId: item.children[0].id }, { force });
     return;
   }
+  // Item que ainda não tem conteúdo (ESCOLHER): só o marcador do programa anda.
+  if (playable.type === "program" && item && isPending(item)) {
+    markOnly(item, force);
+    return;
+  }
   // Pasta: a série passa o próximo vídeo; a pasta comum abre na biblioteca para o operador escolher.
+  // O marcador anda já: pasta vazia ou à espera da escolha também é o momento do culto.
   if (playable.type === "program" && item?.kind === "folder" && item.folder) {
     const folderItem = item;
+    markOnly(folderItem, force);
     openProgramFolder(folderItem);
     void folders.nextOf(item.folder).then((next) => {
       if (next) dispatch({ type: "folderFile", itemId: folderItem.id, entry: next }, { force });
@@ -436,6 +444,7 @@ function dispatch(
   }
   // Música com a versão em aberto: vai para a prévia, e só entra no ar com a versão escolhida.
   if (playable.type === "program" && item && !mode && needsModeChoice(item)) {
+    markOnly(item, force);
     stage.show(playable);
     return;
   }
@@ -486,6 +495,15 @@ function dispatch(
   stage.markSent(playable, expected);
   airHistory.record(playable, { mode, muted });
   if (expected.songId) goToSlideWhenLoaded(expected.songId, slideIndex);
+}
+
+/**
+ * O marcador do programa anda sem mandar nada às telas: o item é o momento do
+ * culto mesmo quando não tem o que mostrar. Com a saída travada, vai para a fila.
+ */
+function markOnly(item: ProgramItem, force: boolean): void {
+  if (outputLocked.value && !force) prepare(item.id);
+  else goLive(item.id);
 }
 
 /** Duplo clique no programa. */
