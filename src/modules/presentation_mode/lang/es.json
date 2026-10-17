@@ -47,7 +47,7 @@
     "date": "Fecha del programa",
     "change_date": "Cambiar la fecha",
     "today": "Hoy",
-    "settings": "Configurar programa",
+    "settings": "Hora de inicio y carpeta de la iglesia",
     "now": "Ahora",
     "forecast_end": "Fin previsto",
     "late": "+{minutes}m de retraso",
@@ -122,7 +122,7 @@
     "label": "Nombre de la sesión"
   },
   "settings_dialog": {
-    "title": "Configurar programa",
+    "title": "Hora de inicio y carpeta de la iglesia",
     "planned_start": "Inicio previsto",
     "planned_start_hint": "Los horarios de los ítems se cuentan a partir de aquí."
   },
@@ -467,7 +467,10 @@
     "version_main": "En la carpeta de la iglesia",
     "version_copy": "Copia en conflicto ({file})",
     "items": "{n} ítems, {pending} para elegir",
-    "resolve_failed": "No fue posible quedarse con esa versión."
+    "resolve_failed": "No fue posible quedarse con esa versión.",
+    "local": "Solo en esta computadora",
+    "use_church": "Usar carpeta de la iglesia",
+    "open_folder": "clic para abrir la carpeta de los programas"
   },
   "readiness": {
     "title": "Listo para el culto",
@@ -499,7 +502,8 @@
     "change": "Cambiar",
     "remove": "Dejar de usar la carpeta de la iglesia",
     "hint_on": "Programas y modelos quedan en esta carpeta y llegan a las otras computadoras por OneDrive.",
-    "hint_off": "Elige la carpeta compartida (OneDrive) donde están los medios del culto para que el programa aparezca listo en las otras computadoras."
+    "hint_off": "Elige la carpeta compartida (OneDrive) donde están los medios del culto para que el programa aparezca listo en las otras computadoras.",
+    "configure": "Carpeta de la iglesia: donde quedan los programas y modelos"
   },
   "desync": {
     "playing": "LA PANTALLA SIGUE REPRODUCIENDO — el reproductor está en pausa. Haz clic para corregir.",

@@ -333,6 +333,7 @@ export const ICONS = {
     FOLDER: "folder",
     FOLDER_HEART: "folder-heart",
     FOLDER_MULTIPLE: "folders",
+    FOLDER_COG: "folder-cog",
     FOLDER_OFF: "folder-off",
     FOLDER_OPEN: "folder-open",
     FOLDER_PLUS: "folder-plus",

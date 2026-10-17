@@ -52,8 +52,8 @@
     </header>
 
     <!-- Onde o programa está salvo e o que falta escolher nesta semana. -->
-    <div v-if="sync.state !== 'local' || pending.length" class="pm-program__status">
-      <ProgramSyncStatus />
+    <div v-if="church.supported || pending.length" class="pm-program__status">
+      <ProgramSyncStatus @configure="emit('settings')" />
       <button
         v-if="pending.length"
         type="button"
@@ -237,6 +237,7 @@ import { useAirHistory } from "../composables/useAirHistory";
 import type { HistoryEntry } from "../program/history";
 import ProgramModelDialog from "./ProgramModelDialog.vue";
 import ProgramSyncStatus from "./ProgramSyncStatus.vue";
+import { useChurchFolder } from "../composables/useChurchFolder";
 import ReadinessDialog from "./ReadinessDialog.vue";
 import { todayIso, useProgram } from "../composables/useProgram";
 import { sync } from "../composables/programStore";
@@ -282,6 +283,7 @@ const props = defineProps<{
 }>();
 
 const history = useAirHistory().entries;
+const church = useChurchFolder();
 
 /** Sem programa: há quanto o que está no ar entrou (a linha dele no histórico). */
 const onAirForLabel = computed(() => {

@@ -1,17 +1,44 @@
 <template>
-  <button
-    v-if="sync.state !== 'local'"
-    type="button"
-    class="pm-sync"
-    :class="`pm-sync--${tone}`"
-    :title="title"
-    data-testid="pm-sync-status"
-    :data-state="sync.state"
-    @click="onClick"
-  >
-    <LjIcon :icon="icon" :size="12" />
-    <span class="pm-sync__label">{{ label }}</span>
-  </button>
+  <span v-if="church.supported" class="pm-sync__row">
+    <!-- Sem pasta da igreja: o convite para usar uma, que é onde ela se configura. -->
+    <button
+      v-if="sync.state === 'local'"
+      type="button"
+      class="pm-sync"
+      :title="tm('church.hint_off')"
+      data-testid="pm-sync-status"
+      data-state="local"
+      @click="emit('configure')"
+    >
+      <LjIcon :icon="ICONS.UI.FOLDER_OFF" :size="12" />
+      <span class="pm-sync__label">{{ tm("sync.local") }}</span>
+      <span class="pm-sync__cta">{{ tm("sync.use_church") }}</span>
+    </button>
+    <button
+      v-else
+      type="button"
+      class="pm-sync"
+      :class="`pm-sync--${tone}`"
+      :title="title"
+      data-testid="pm-sync-status"
+      :data-state="sync.state"
+      @click="onClick"
+    >
+      <LjIcon :icon="icon" :size="12" />
+      <span class="pm-sync__label">{{ label }}</span>
+    </button>
+    <button
+      v-if="sync.state !== 'local'"
+      type="button"
+      class="pm-sync pm-sync--icon"
+      :title="tm('church.configure')"
+      :aria-label="tm('church.configure')"
+      data-testid="pm-church-configure"
+      @click="emit('configure')"
+    >
+      <LjIcon :icon="ICONS.UI.FOLDER_COG" :size="13" />
+    </button>
+  </span>
   <ProgramConflictDialog v-model="conflictOpen" />
 </template>
 
@@ -24,11 +51,15 @@ import { useModuleI18n } from "@/composables/useModuleI18n";
 import ProgramConflictDialog from "./ProgramConflictDialog.vue";
 import { sync } from "../composables/programStore";
 import { useProgram } from "../composables/useProgram";
+import { useChurchFolder } from "../composables/useChurchFolder";
+import Platform from "@/helpers/Platform";
 
 /**
  * O programa está salvo na pasta da igreja? Foi atualizado por outro
- * computador? Há duas versões? Discreto no cabeçalho do programa; em conflito,
- * abre a escolha da versão. Sem pasta da igreja, não aparece.
+ * computador? Há duas versões? Discreto no cabeçalho do programa. O clique
+ * abre a pasta dos programas no Finder/Explorer (em conflito, a escolha da
+ * versão), e o ícone ao lado leva à configuração da pasta da igreja. Sem
+ * pasta, a linha convida a usar uma.
  *
  * Também é quem confere a pasta de tempos em tempos (e ao voltar para o app),
  * enquanto o programa está à vista.
@@ -37,8 +68,11 @@ import { useProgram } from "../composables/useProgram";
 const CHECK_MS = 10_000;
 const FRESH_MS = 15_000;
 
+const emit = defineEmits<{ configure: [] }>();
+
 const { tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 const program = useProgram();
+const church = useChurchFolder();
 
 const now = ref(Date.now());
 const conflictOpen = ref(false);
@@ -100,15 +134,34 @@ const label = computed(() => {
   }
 });
 
-const title = computed(() =>
-  sync.savedBy
+const title = computed(() => {
+  const where = sync.savedBy
     ? tm("sync.saved_by", { who: sync.savedBy, time: time.value })
-    : tm("sync.folder_hint")
-);
+    : tm("sync.folder_hint");
+  return sync.state === "conflict" ? where : `${where} · ${tm("sync.open_folder")}`;
+});
 
-function onClick(): void {
-  if (sync.state === "conflict") conflictOpen.value = true;
-  else check();
+/** O arquivo do programa do dia na pasta da igreja (`LouvorJA/programas/AAAA-MM-DD.json`). */
+function programFile(root: string): { file: string; dir: string } {
+  const sep = root.includes("\\") && !root.includes("/") ? "\\" : "/";
+  const dir = [root.replace(/[\\/]+$/, ""), "LouvorJA", "programas"].join(sep);
+  return { file: `${dir}${sep}${program.date.value}.json`, dir };
+}
+
+/** Clique: em conflito, a escolha da versão; senão, a pasta dos programas, com o do dia selecionado. */
+async function onClick(): Promise<void> {
+  if (sync.state === "conflict") {
+    conflictOpen.value = true;
+    return;
+  }
+  check();
+  const root = church.root.value;
+  if (!root) return;
+  const { file, dir } = programFile(root);
+  for (const target of [file, dir, root]) {
+    const res = (await Platform.revealFile(target).catch(() => null)) as { ok?: boolean } | null;
+    if (res?.ok) return;
+  }
 }
 </script>
 
@@ -117,7 +170,7 @@ function onClick(): void {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  max-width: 150px;
+  max-width: 220px;
   padding: 1px 6px;
   border: 1px solid transparent;
   border-radius: 3px;
@@ -125,6 +178,28 @@ function onClick(): void {
   color: var(--lj-text-subtle);
   font-size: 10.5px;
   cursor: pointer;
+}
+
+.pm-sync__row {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pm-sync:hover {
+  border-color: var(--lj-surface-border);
+  color: var(--lj-text);
+}
+
+.pm-sync--icon {
+  padding: 1px 3px;
+}
+
+.pm-sync__cta {
+  color: var(--lj-ui-accent-text, var(--lj-orange));
+  font-weight: var(--lj-weight-semibold);
+  white-space: nowrap;
 }
 
 .pm-sync__label {
