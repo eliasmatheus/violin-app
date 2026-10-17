@@ -9,7 +9,13 @@ const volume = ref(80);
 vi.mock("@/composables/useAudioPlayback", () => ({
   useAudioPlayback: () => ({ getElement: () => el, duration, currentTime, isPaused, volume }),
 }));
-const media = vi.hoisted(() => ({ play: vi.fn(), pause: vi.fn(), advanceTime: vi.fn(), goToTime: vi.fn(), setVolume: vi.fn() }));
+const media = vi.hoisted(() => ({
+  play: vi.fn(),
+  pause: vi.fn(),
+  advanceTime: vi.fn(),
+  goToTime: vi.fn(),
+  setVolume: vi.fn(),
+}));
 vi.mock("@/composables/useMedia", () => ({ default: media }));
 const appAudio = vi.hoisted(() => ({ value: "" }));
 vi.mock("@/helpers/AppData", () => ({ default: { get: () => appAudio.value } }));
@@ -20,7 +26,7 @@ const { useLiveTransport, AUTO_ADVANCE_MS } = await import("../useLiveTransport"
 import type { LiveKind } from "../useLiveContent";
 import type { PartPosition } from "../useLiveNavigation";
 
-function setup(kind: LiveKind | null, position: PartPosition | null) {
+function setup(kind: LiveKind | null, position: PartPosition | null, audioLive = false) {
   const liveKind = ref<LiveKind | null>(kind);
   const pos = ref<PartPosition | null>(position);
   const navigate = vi.fn((to: string) => {
@@ -28,7 +34,13 @@ function setup(kind: LiveKind | null, position: PartPosition | null) {
   });
   const scope = effectScope();
   const t = scope.run(() =>
-    useLiveTransport({ liveKind, audioLive: ref(false), position: pos, navigate, locked: ref(false) })
+    useLiveTransport({
+      liveKind,
+      audioLive: ref(audioLive),
+      position: pos,
+      navigate,
+      locked: ref(false),
+    })
   )!;
   return { t, liveKind, pos, navigate, scope };
 }
@@ -78,5 +90,31 @@ describe("useLiveTransport", () => {
     liveKind.value = null;
     await nextTick();
     expect(t.playing.value).toBe(false);
+  });
+
+  it("foto com música por baixo: a barra é da foto, e o K e o mudo vão para a música", () => {
+    file.value = { type: "image" };
+    const { t } = setup("file", null, true);
+    expect(t.timed.value).toBe(false);
+    expect(t.audioUnder.value).toBe(true);
+    expect(t.canPlay.value).toBe(true);
+    expect(t.hasAudio.value).toBe(true);
+    t.togglePlay();
+    expect(media.play).toHaveBeenCalled();
+  });
+
+  it("pasta de fotos com música: reproduzir continua sendo passar as fotos", () => {
+    file.value = { type: "image" };
+    const { t } = setup("file", { unit: "file", index: 0, total: 3 }, true);
+    expect(t.canAutoAdvance.value).toBe(true);
+    t.togglePlay();
+    expect(t.autoAdvancing.value).toBe(true);
+    expect(media.play).not.toHaveBeenCalled();
+  });
+
+  it("só a música no ar (nada nas telas): a barra segue o tempo dela", () => {
+    const { t } = setup(null, null, true);
+    expect(t.timed.value).toBe(true);
+    expect(t.audioUnder.value).toBe(false);
   });
 });

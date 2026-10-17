@@ -41,8 +41,14 @@ export function useLiveTransport(deps: {
     () =>
       deps.liveKind.value === "music" && !!$appdata.get<string>(KEYS.MODULES.MEDIA.CONFIG.AUDIO, "")
   );
-  /** O player do operador está tocando algo com tempo: a linha e o restante seguem ele. */
-  const timed = computed(() => isVideo.value || deps.audioLive.value || musicHasAudio.value);
+  /**
+   * O que está no ar tem tempo: a linha e o restante seguem o player. Áudio
+   * por baixo de uma foto não conta — a barra é da foto; o áudio tem a faixa dele.
+   */
+  const audioUnder = computed(() => deps.audioLive.value && !!deps.liveKind.value);
+  const timed = computed(
+    () => isVideo.value || musicHasAudio.value || (deps.audioLive.value && !deps.liveKind.value)
+  );
 
   const duration = computed(() =>
     Number.isFinite(audio.duration.value) && audio.duration.value > 0 ? audio.duration.value : 0
@@ -81,20 +87,29 @@ export function useLiveTransport(deps: {
   });
   onBeforeUnmount(stopAuto);
 
-  const canPlay = computed(() => !deps.locked.value && (timed.value || canAutoAdvance.value));
-  const playing = computed(() => (timed.value ? !audio.isPaused.value : autoAdvancing.value));
+  /** Foto sozinha com música por baixo: reproduzir/pausar (K) vai para a música. */
+  const playsAudio = computed(() => !timed.value && !canAutoAdvance.value && audioUnder.value);
+  const canPlay = computed(
+    () => !deps.locked.value && (timed.value || canAutoAdvance.value || playsAudio.value)
+  );
+  const playing = computed(() =>
+    timed.value || playsAudio.value ? !audio.isPaused.value : autoAdvancing.value
+  );
+
+  function togglePlayer(): void {
+    if (audio.isPaused.value) Media.play();
+    else Media.pause(true);
+  }
 
   function togglePlay(): void {
     if (!canPlay.value) return;
-    if (timed.value) {
-      if (audio.isPaused.value) Media.play();
-      else Media.pause(true);
-    } else if (autoAdvancing.value) stopAuto();
+    if (timed.value || playsAudio.value) togglePlayer();
+    else if (autoAdvancing.value) stopAuto();
     else startAuto();
   }
 
-  /** Com áudio: o mudo é o do módulo, o mesmo do "Reproduzir sem áudio". */
-  const hasAudio = timed;
+  /** Com som no ar (inclusive a música por baixo da foto): o mudo é o do módulo. */
+  const hasAudio = computed(() => timed.value || deps.audioLive.value);
   function toggleMute(): void {
     if (hasAudio.value) playerMute.toggle();
   }
@@ -106,8 +121,29 @@ export function useLiveTransport(deps: {
     if (timed.value && !deps.locked.value) Media.goToTime(seconds);
   }
 
+  /**
+   * O player em si, sem depender do que a barra controla: a faixa do vídeo de
+   * uma pasta e a faixa da música por baixo da foto usam este.
+   */
+  const player = {
+    playing: computed(() => !audio.isPaused.value),
+    toggle: (): void => {
+      if (!deps.locked.value) togglePlayer();
+    },
+    seekBy: (seconds: number): void => {
+      if (!deps.locked.value) Media.advanceTime(seconds);
+    },
+    seekTo: (seconds: number): void => {
+      if (!deps.locked.value) Media.goToTime(seconds);
+    },
+    currentTime,
+    duration,
+  };
+
   return {
     timed,
+    audioUnder,
+    player,
     isVideo,
     duration,
     currentTime,

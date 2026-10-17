@@ -218,7 +218,8 @@ const segmentIndex = computed(() => {
 
 const posCap = computed(() => {
   if (props.position) return tm(`control.unit.${props.position.unit}`);
-  if (props.audioLive) return tm("control.unit.audio");
+  // Só a música no ar; com uma foto por cima, a barra é da foto.
+  if (props.audioLive && !props.liveKind) return tm("control.unit.audio");
   switch (props.liveKind) {
     case "music":
       return tm("control.unit.slide");
@@ -294,7 +295,7 @@ const endsAt = computed(() =>
 /** Quando o que está no ar entrou: troca de conteúdo zera; trocar de parte, não. */
 const since = ref<number | null>(null);
 watch(
-  () => (onAir.value ? `${props.liveKind}|${props.audioLive}|${props.liveTitle}` : null),
+  () => (onAir.value ? `${props.liveKind}|${props.liveTitle}` : null),
   (key) => (since.value = key ? Date.now() : null),
   { immediate: true }
 );
@@ -312,7 +313,7 @@ const note = computed(() => {
   const t = props.transport;
   const time = `${DateTime.shortTime(t.currentTime.value)} / ${DateTime.shortTime(t.duration.value)}`;
   if (!onAir.value) return tm("control.nothing");
-  if (props.audioLive) return tm("control.audio_note", { time });
+  if (props.audioLive && !props.liveKind) return tm("control.audio_note", { time });
   if (t.timed.value && props.position) return `${props.liveTitle} · ${time}`;
   if (t.autoAdvancing.value)
     return `${props.liveTitle} · ${tm("control.auto_on", { s: AUTO_ADVANCE_MS / 1000 })}`;

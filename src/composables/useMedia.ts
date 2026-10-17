@@ -390,12 +390,22 @@ function _clearFileProjectionCache(): void {
   }
 }
 
-function _hasFileProjectionCache(): boolean {
+/**
+ * Há projeção de arquivo em cache. Com `videoOnly`, só conta vídeo (ou
+ * YouTube): uma foto ou um PDF na tela não ocupam o player, e um áudio pode
+ * tocar por baixo deles (a música do momento com a foto da família).
+ */
+function _hasFileProjectionCache(videoOnly = false): boolean {
   try {
-    return Boolean(
-      localStorage.getItem(KEYS.PROJECTION.LJ_FILE_PROJECTION) ||
-      localStorage.getItem(KEYS.PROJECTION.LJ_YOUTUBE_PROJECTION)
-    );
+    if (localStorage.getItem(KEYS.PROJECTION.LJ_YOUTUBE_PROJECTION)) return true;
+    const file = localStorage.getItem(KEYS.PROJECTION.LJ_FILE_PROJECTION);
+    if (!file || !videoOnly) return Boolean(file);
+    try {
+      const type = (JSON.parse(file) as { type?: string } | null)?.type;
+      return type === "video" || type === "youtube";
+    } catch {
+      return true;
+    }
   } catch {
     return false;
   }
@@ -456,12 +466,14 @@ async function _waitForPreviousVideoWindows(stageEpoch: number): Promise<void> {
 /** Encerra o palco de arquivo/vídeo antes de um novo slide musical ou do editor. */
 async function _releaseFileVideoStage(
   stageEpoch: number,
-  wasVisibleAlready = false
+  wasVisibleAlready = false,
+  /** Áudio entrando: só um vídeo na tela precisa sair (foto e PDF ficam). */
+  videoOnly = false
 ): Promise<void> {
   const wasVisible =
     _isYouTube() ||
     _keepVideoProjectionOnLoadError() ||
-    _hasFileProjectionCache() ||
+    _hasFileProjectionCache(videoOnly) ||
     _videoWindowOpenings.size > 0 ||
     wasVisibleAlready;
   if (!wasVisible) return;
@@ -2516,7 +2528,8 @@ const _self = {
       _opening.value = null;
     }
     if (params.mediaType !== "video") {
-      await _releaseFileVideoStage(stageEpoch);
+      // Só áudio: a foto ou o PDF na tela continuam; um vídeo sai (o player é um só).
+      await _releaseFileVideoStage(stageEpoch, false, params.mediaType === "audio");
       if (stageEpoch !== _stageEpoch) return;
     } else if (!preserveProjectionStage) {
       if ($userdata.get<boolean>(KEYS.MODULES.SLIDE_EDITOR.PROJECTING, false) === true)

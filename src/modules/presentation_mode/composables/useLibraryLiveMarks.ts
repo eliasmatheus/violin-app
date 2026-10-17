@@ -10,6 +10,8 @@ import { useFileLibrary } from "./useFileLibrary";
  */
 export function useLibraryLiveMarks(opts: {
   liveOrigin: Ref<Playable | null>;
+  /** A música por baixo: marcada quando não há arquivo da fila nas telas. */
+  audioOrigin?: Ref<Playable | null>;
   liveProgramItem: Ref<ProgramItem | null>;
 }) {
   const library = useFileLibrary();
@@ -18,9 +20,10 @@ export function useLibraryLiveMarks(opts: {
     const q = library.queue.value;
     const origin = opts.liveOrigin.value;
     const fromQueue = origin?.type === "file" || origin?.type === "folderFile";
-    return q && fromQueue && q.entries[q.index]?.path === origin.entry.path
-      ? q.entries[q.index].path
-      : null;
+    if (q && fromQueue && q.entries[q.index]?.path === origin.entry.path)
+      return q.entries[q.index].path;
+    const audio = opts.audioOrigin?.value;
+    return audio?.type === "file" || audio?.type === "folderFile" ? audio.entry.path : null;
   });
 
   const liveBibleRef = computed<ProgramBibleRef | null>(() => {

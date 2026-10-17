@@ -133,9 +133,10 @@
             v-else-if="pdfDeck.active.value && liveZoom.scale.value <= 1"
             :locked="outputLocked"
           />
-          <StageVisor v-else-if="audioLive" :audio-title="audioTitle" />
           <!-- Vídeo, imagem, versículo, anúncio: o visor mostra o que está na tela. -->
           <StageVisor v-else-if="liveKind" />
+          <!-- Só a música no ar (nada nas telas): o visor mostra o que está tocando. -->
+          <StageVisor v-else-if="audioLive" :audio-title="audioTitle" />
           <div v-else class="pm-stage__body">
             <p class="pm-stage__empty">{{ tm("empty.stage") }}</p>
           </div>
@@ -151,11 +152,21 @@
         <!-- Vídeo só no retorno: o player dele fica no palco enquanto toca. -->
         <ReturnPlayerBar @close="onShowOnReturn(null)" />
         <!-- Vídeo dentro de uma pasta ou momento: a barra anda pelos arquivos; o tempo dele fica aqui. -->
-        <LiveVideoBar
-          v-if="position && (transport.isVideo.value || audioLive)"
-          :transport="transport"
+        <LivePlayerBar
+          v-if="position && transport.isVideo.value"
+          layer="video"
+          :player="transport.player"
           :title="liveTitle"
           :locked="outputLocked"
+        />
+        <!-- Música por baixo da foto: a barra de baixo é da foto; a música tem esta faixa. -->
+        <LivePlayerBar
+          v-if="transport.audioUnder.value"
+          layer="audio"
+          :player="transport.player"
+          :title="audioTitle"
+          :locked="outputLocked"
+          @stop="stopAudio"
         />
         <!-- Uma barra para tudo o que vai ao ar: controla sempre o que está no ar, nunca a prévia. -->
         <ControlBar
@@ -246,7 +257,7 @@ import StageVisor from "./StageVisor.vue";
 import ControlBar from "./ControlBar.vue";
 import PreviewBand from "./PreviewBand.vue";
 import LivePip from "./LivePip.vue";
-import LiveVideoBar from "./LiveVideoBar.vue";
+import LivePlayerBar from "./LivePlayerBar.vue";
 import StagePreview from "./StagePreview.vue";
 import MomentStage from "./MomentStage.vue";
 import SeriesDialog from "./SeriesDialog.vue";
@@ -282,6 +293,7 @@ import { useFileLibrary } from "../composables/useFileLibrary";
 import { useLibraryLiveMarks } from "../composables/useLibraryLiveMarks";
 import { useFlash } from "../composables/useFlash";
 import { useSlideWait } from "../composables/useSlideWait";
+import Media from "@/composables/useMedia";
 import { useSlides } from "@/composables/useSlides";
 import { useLiveContent } from "../composables/useLiveContent";
 import {
@@ -432,7 +444,10 @@ function dispatch(
     return;
   }
 
-  stage.show(playable);
+  const expected = expectationOf(playable, item, mode);
+  // Música por baixo do que está nas telas: a prévia e a fila continuam sendo da foto.
+  const underVisual = expected.kind === "audio" && !!liveKind.value;
+  if (!underVisual) stage.show(playable);
   // A tela é uma só: o que entra tira o vídeo que estava (na tela ou só no retorno).
   const video = playsVideo(playable, item);
   const music = playable.type === "song" || item?.kind === "music";
@@ -440,14 +455,14 @@ function dispatch(
   // Sem áudio: o mudo do palco. Outra mídia com som devolve o volume de antes.
   if (muted) playerMute.mute();
   else if (video || playable.type === "song" || item?.kind === "music") playerMute.unmute();
-  const expected = expectationOf(playable, item, mode);
   if (playable.type === "child" && item) {
     goLive(item.id);
     executeChild(item, playable.childId);
     Telemetry.track("presentation_moment_child_live", { kind: item.kind });
   } else if (playable.type === "folderFile" && item) {
     goLive(item.id);
-    library.startQueue(playable.entry, folders.filesOf(item.folder ?? ""));
+    if (expected.kind !== "audio")
+      library.startQueue(playable.entry, folders.filesOf(item.folder ?? ""));
     projectPath(playable.entry.path, playable.entry.name);
     Telemetry.track("presentation_folder_file_live", {});
   } else if (item) {
@@ -455,7 +470,7 @@ function dispatch(
     execute(item, mode);
     Telemetry.track("presentation_item_live", { kind: item.kind });
   } else if (playable.type === "file") {
-    library.startQueue(playable.entry);
+    if (expected.kind !== "audio") library.startQueue(playable.entry);
     projectPath(playable.entry.path, playable.entry.name);
     Telemetry.track("presentation_library_projected", { ext: playable.entry.ext });
   } else if (playable.type === "song") {
@@ -526,11 +541,23 @@ const liveOrigin = computed<Playable | null>(() => {
   return isOnAir(sent.expected, signal) ? sent.playable : null;
 });
 
+/** A música que o módulo pôs no ar por baixo (ou no lugar) do que está nas telas. */
+const audioOrigin = computed<Playable | null>(() =>
+  audioLive.value ? (stage.sentAudio.value?.playable ?? null) : null
+);
+
+/** Para só a música: a foto (ou o PDF) continua no ar. */
+function stopAudio(): void {
+  Media.stop();
+  stage.clearAudio();
+}
+
 /** O item em prévia é o que está no ar? Então o palco é o controle dele. */
 const previewIsLive = computed(() => {
   const t = stage.preview.value;
   if (!t) return true;
   if (liveOrigin.value && samePlayable(t, liveOrigin.value)) return true;
+  if (audioOrigin.value && samePlayable(t, audioOrigin.value)) return true;
   // Música tocada de outro módulo: os slides no ar dizem qual é.
   return t.type === "song" && t.id_music === liveSongId.value;
 });
@@ -651,7 +678,11 @@ const { stageIcon, stageTitle, stageMeta } = useStageHeader({
 });
 
 const library = useFileLibrary();
-const { libraryLivePath, liveBibleRef } = useLibraryLiveMarks({ liveOrigin, liveProgramItem });
+const { libraryLivePath, liveBibleRef } = useLibraryLiveMarks({
+  liveOrigin,
+  audioOrigin,
+  liveProgramItem,
+});
 
 /** Tira do ar o que está na tela, mantendo a apresentação aberta. */
 function takeOff(): void {
@@ -694,7 +725,10 @@ const transport = useLiveTransport({
   navigate,
   locked: outputLocked,
 });
-const liveTitle = computed(() => (audioLive.value ? audioTitle.value : live.title.value));
+/** O título da camada visual; só com a música no ar, o dela. */
+const liveTitle = computed(() =>
+  liveKind.value || !audioLive.value ? live.title.value : audioTitle.value
+);
 const livePipProgress = computed(() => {
   const d = transport.duration.value;
   return transport.timed.value && d ? Math.min(100, (transport.currentTime.value / d) * 100) : null;

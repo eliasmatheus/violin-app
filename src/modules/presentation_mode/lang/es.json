@@ -421,7 +421,8 @@
     "stop": "Quitar de esta capa",
     "announcements": "Anuncios",
     "orphans_cleared": "Las pantallas mostraban algo que la app ya no controlaba (se recargó): volvieron al fondo.",
-    "hidden_video": "Video reproduciéndose fuera de la pantalla"
+    "hidden_video": "Video reproduciéndose fuera de la pantalla",
+    "stop_audio": "Detener solo la música (lo que está en las pantallas sigue)"
   },
   "menu": {
     "open": "Abrir",

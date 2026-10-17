@@ -354,9 +354,14 @@ export function useFileLibrary(scope: LibraryScope = "files") {
     /**
      * O arquivo foi para a tela: a pasta de onde ele saiu vira a fila de
      * Anterior/Próximo — a aberta na grade ou, para a pasta do programa, `from`.
+     * Só os do mesmo tipo de camada: fotos e vídeos andam entre si, áudios entre si.
      */
     startQueue(entry: LibraryEntry, from?: LibraryEntry[]): void {
-      const files = (from ?? entries.value).filter((e) => !e.isDir);
+      // A fila é da camada visual: os áudios da pasta tocam por baixo, não são "partes".
+      const visual = fileKind(entry.ext) !== "audio";
+      const files = (from ?? entries.value).filter(
+        (e) => !e.isDir && (fileKind(e.ext) === "audio") !== visual
+      );
       const index = files.findIndex((e) => e.path === entry.path);
       _queue.value = index >= 0 ? { entries: files, index } : { entries: [entry], index: 0 };
     },

@@ -16,12 +16,20 @@ interface Sent {
 }
 
 const _preview = ref<Playable | null>(null);
+/** A camada visual: o que foi mandado às telas. */
 const _sent = ref<Sent | null>(null);
+/**
+ * A camada de áudio: o som que toca por baixo da foto (música do momento da
+ * família, fundo musical). Fica à parte para a foto continuar sendo "o que
+ * está no ar" — a barra do centro e o passador andam por ela.
+ */
+const _sentAudio = ref<Sent | null>(null);
 
 export function useStage() {
   return {
     preview: _preview,
     sent: _sent,
+    sentAudio: _sentAudio,
     show(target: Playable | null): void {
       _preview.value = target;
     },
@@ -30,17 +38,29 @@ export function useStage() {
      * novo — Anterior/Próximo na pasta não deixam o palco para trás.
      */
     markSent(playable: Playable, expected: LiveExpectation): void {
+      if (expected.kind === "audio") {
+        _sentAudio.value = { playable, expected };
+        if (!_preview.value) _preview.value = playable;
+        return;
+      }
       const previous = _sent.value?.playable;
-      if (!_preview.value || (previous && samePlayable(_preview.value, previous))) _preview.value = playable;
+      if (!_preview.value || (previous && samePlayable(_preview.value, previous)))
+        _preview.value = playable;
       _sent.value = { playable, expected };
     },
     /** Saiu do ar; o que estava no palco fica nele, pronto para voltar. */
     clearSent(): void {
       _sent.value = null;
+      _sentAudio.value = null;
+    },
+    /** Só o áudio parou: a foto continua no ar. */
+    clearAudio(): void {
+      _sentAudio.value = null;
     },
     reset(): void {
       _preview.value = null;
       _sent.value = null;
+      _sentAudio.value = null;
     },
   };
 }

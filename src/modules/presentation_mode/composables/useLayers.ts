@@ -85,7 +85,8 @@ export function stopAllLayers(): void {
   const live = useLiveContent();
   if (live.current.value) takeOffAir(live.current.value);
   if (returnOverride.value) void showOnReturn(null);
-  if ($appdata.get<boolean>(KEYS.MODULES.MEDIA.CONFIG.AUDIO_ONLY, false)) Media.close(true, false, true);
+  if ($appdata.get<boolean>(KEYS.MODULES.MEDIA.CONFIG.AUDIO_ONLY, false))
+    Media.close(true, false, true);
 }
 
 let _orphansChecked = false;
@@ -128,7 +129,10 @@ export function useLayers() {
     if (player.state.id) return player.state.title;
     // Vídeo tocando no player sem estar na tela (aberto por outro caminho):
     // o operador vê na camada de áudio e pode parar.
-    if ($appdata.get<boolean>(KEYS.MODULES.MEDIA.CONFIG.VIDEO_FILE, false) && $appdata.get<boolean>(KEYS.MODULES.MEDIA.IS_PLAYING, false)) {
+    if (
+      $appdata.get<boolean>(KEYS.MODULES.MEDIA.CONFIG.VIDEO_FILE, false) &&
+      $appdata.get<boolean>(KEYS.MODULES.MEDIA.IS_PLAYING, false)
+    ) {
       return $appdata.get<string>(KEYS.MODULES.MEDIA.CONFIG.TITLE, "") || tm("hidden_video");
     }
     return "";
@@ -140,9 +144,19 @@ export function useLayers() {
     {
       id: "audio",
       title: audioTitle.value,
-      stop: () => (player.state.id && !screenVideoPlaying() ? void showOnReturn(null) : Media.close(true, false, true)),
+      // Parar o som não tira a foto: só o vídeo da tela leva a imagem junto (é o mesmo player).
+      stop: () =>
+        player.state.id && !screenVideoPlaying()
+          ? void showOnReturn(null)
+          : screenVideoPlaying()
+            ? Media.close(true, false, true)
+            : Media.stop(),
     },
   ]);
 
-  return { layers, busy: computed(() => layers.value.some((l) => !!l.title)), stopAll: stopAllLayers };
+  return {
+    layers,
+    busy: computed(() => layers.value.some((l) => !!l.title)),
+    stopAll: stopAllLayers,
+  };
 }

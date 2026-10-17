@@ -1,15 +1,22 @@
 <template>
-  <footer class="pm-lvideo" data-testid="pm-live-video">
-    <span class="pm-lvideo__pill">{{ tm("stage.on_air") }}</span>
+  <footer
+    class="pm-lvideo"
+    :class="`pm-lvideo--${layer}`"
+    :data-testid="layer === 'audio' ? 'pm-live-audio' : 'pm-live-video'"
+  >
+    <span class="pm-lvideo__pill">
+      <LjIcon v-if="layer === 'audio'" :icon="ICONS.MUSIC.AUDIO" :size="11" />
+      {{ layer === "audio" ? tm("layers.audio") : tm("stage.on_air") }}
+    </span>
     <span class="pm-lvideo__title" :title="title">{{ title }}</span>
     <LjButton
       variant="primary"
       icon-only
-      :icon="transport.playing.value ? ICONS.PLAYER.PAUSE : ICONS.PLAYER.PLAY"
-      :title="transport.playing.value ? tm('stage.pause') : tm('stage.play')"
+      :icon="player.playing.value ? ICONS.PLAYER.PAUSE : ICONS.PLAYER.PLAY"
+      :title="player.playing.value ? tm('stage.pause') : tm('stage.play')"
       :disabled="locked"
       data-testid="pm-live-video-play"
-      @click="transport.togglePlay()"
+      @click="player.toggle()"
     />
     <LjButton
       icon-only
@@ -17,7 +24,7 @@
       :title="tm('video.back_10')"
       :disabled="locked"
       data-testid="pm-live-video-back"
-      @click="transport.seekBy(-10)"
+      @click="player.seekBy(-10)"
     />
     <LjButton
       icon-only
@@ -25,30 +32,41 @@
       :title="tm('video.forward_10')"
       :disabled="locked"
       data-testid="pm-live-video-forward"
-      @click="transport.seekBy(10)"
+      @click="player.seekBy(10)"
     />
-    <span class="pm-lvideo__time">{{ DateTime.shortTime(transport.currentTime.value) }}</span>
+    <span class="pm-lvideo__time">{{ DateTime.shortTime(player.currentTime.value) }}</span>
     <LjSlider
       class="pm-lvideo__timeline"
-      :model-value="transport.currentTime.value"
+      :model-value="player.currentTime.value"
       :min="0"
-      :max="transport.duration.value || 1"
+      :max="player.duration.value || 1"
       :step="0.1"
-      :disabled="locked || !transport.duration.value"
+      :disabled="locked || !player.duration.value"
       :aria-label="tm('video.timeline')"
       data-testid="pm-live-video-timeline"
-      @update:model-value="(t: number) => transport.seekTo(t)"
+      @update:model-value="(t: number) => player.seekTo(t)"
     />
     <span class="pm-lvideo__remaining">
       −{{ DateTime.shortTime(remaining) }}
       <span class="pm-lvideo__ends">{{ tm("video.ends_at", { time: endsAt }) }}</span>
     </span>
+    <!-- Música por baixo da foto: parar só ela; a foto continua no ar. -->
+    <LjButton
+      v-if="layer === 'audio'"
+      icon-only
+      variant="ghost"
+      :icon="ICONS.ACTIONS.CLOSE"
+      :title="tm('layers.stop_audio')"
+      :aria-label="tm('layers.stop_audio')"
+      data-testid="pm-live-audio-stop"
+      @click="emit('stop')"
+    />
   </footer>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
-import { LjButton, LjSlider } from "@/components/ui";
+import { LjButton, LjIcon, LjSlider } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import DateTime from "@/helpers/DateTime";
@@ -56,22 +74,26 @@ import { useModuleI18n } from "@/composables/useModuleI18n";
 import type { useLiveTransport } from "../composables/useLiveTransport";
 
 /**
- * O tempo do vídeo (ou áudio) que está no ar como parte de uma pasta ou de
- * um momento. A barra de baixo anda pelos arquivos; esta faixa, logo acima,
- * é o player do arquivo da vez — como a do vídeo só no retorno. O som fica
- * na barra de baixo, que é a mesma para toda mídia.
+ * Faixa do player acima da barra do centro, para o que toca junto com outra
+ * coisa: o vídeo da vez numa pasta ou momento (a barra anda pelos arquivos) e
+ * a música por baixo de uma foto (a barra é da foto). Como a do vídeo só no
+ * retorno. O volume e o silenciar ficam na barra de baixo, que é a do som.
  */
 
 const props = defineProps<{
-  transport: ReturnType<typeof useLiveTransport>;
+  player: ReturnType<typeof useLiveTransport>["player"];
   title: string;
   locked: boolean;
+  /** `video`: parte do que está no ar; `audio`: a camada de áudio, com o próprio parar. */
+  layer: "video" | "audio";
 }>();
+
+const emit = defineEmits<{ stop: [] }>();
 
 const { tm, locale } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 
 const remaining = computed(() =>
-  Math.max(0, props.transport.duration.value - props.transport.currentTime.value)
+  Math.max(0, props.player.duration.value - props.player.currentTime.value)
 );
 const now = ref(Date.now());
 const clock = setInterval(() => (now.value = Date.now()), 1000);
@@ -101,7 +123,18 @@ const endsAt = computed(() =>
   flex-shrink: 0;
 }
 
+.pm-lvideo--audio {
+  border-top-color: var(--lj-live-select);
+}
+
+.pm-lvideo--audio .pm-lvideo__pill {
+  background: var(--lj-live-select);
+}
+
 .pm-lvideo__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   padding: 1px 6px;
   border-radius: 2px;
   background: var(--lj-danger);

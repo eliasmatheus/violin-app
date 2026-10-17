@@ -421,7 +421,8 @@
     "stop": "Tirar desta camada",
     "announcements": "Anúncios",
     "orphans_cleared": "As telas mostravam algo que o app não controlava mais (ele recarregou): voltaram ao fundo.",
-    "hidden_video": "Vídeo tocando fora da tela"
+    "hidden_video": "Vídeo tocando fora da tela",
+    "stop_audio": "Parar só a música (o que está nas telas continua)"
   },
   "menu": {
     "open": "Abrir",
