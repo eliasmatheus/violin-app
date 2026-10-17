@@ -341,6 +341,19 @@ export async function reopenOutputs(): Promise<void> {
   }
 }
 
+/**
+ * O retorno de palco tem monitor escolhido (e ligado). Sem ele, o módulo não
+ * oferece nada do retorno: miniatura, o que ele mostra e "Reproduzir só no retorno".
+ */
+export function useHasStageMonitor() {
+  const { displays, roles } = useDisplays();
+  return computed(() => {
+    const displayId = roles.value.find((r) => r.role === "stage")?.displayId;
+    if (displayId == null) return false;
+    return displays.value.some((d) => String(d.id) === String(displayId));
+  });
+}
+
 export function useOutputs() {
   _installResponder();
   const { displays, roles } = useDisplays();

@@ -177,7 +177,8 @@
     "state_off": "DESLIGADA",
     "screen_off": "DESLIGADA",
     "screen_idle": "FUNDO",
-    "missing_stage_full": "O retorno de palco fechou — reabrir"
+    "missing_stage_full": "O retorno de palco fechou — reabrir",
+    "no_stage_monitor": "Nenhum monitor · clique para escolher"
   },
   "stage": {
     "on_air": "NO AR",

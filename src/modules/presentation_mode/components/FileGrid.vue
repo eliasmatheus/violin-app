@@ -125,6 +125,7 @@ import { ModuleEnum } from "@/enums/ModuleEnum";
 import DateTime from "@/helpers/DateTime";
 import Platform from "@/helpers/Platform";
 import { useModuleI18n } from "@/composables/useModuleI18n";
+import { useHasStageMonitor } from "../composables/useOutputs";
 import type { ProgramItem } from "@/types/Presentation";
 import { fileKind, useFileLibrary, type LibraryEntry } from "../composables/useFileLibrary";
 import { useMediaMeta } from "../composables/useMediaMeta";
@@ -171,6 +172,7 @@ const emit = defineEmits<{
 }>();
 
 const { tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
+const hasStageMonitor = useHasStageMonitor();
 const lib = useFileLibrary();
 const { meta, request } = useMediaMeta();
 const cloud = useCloudFiles();
@@ -275,7 +277,9 @@ function menuFor(entry: LibraryEntry): EntryMenu {
             },
           ]
         : []),
-      ...(kind === "image" || kind === "video"
+      // Só no retorno: só com monitor no retorno (ou para tirar o que já está lá).
+      ...((kind === "image" || kind === "video") &&
+      (hasStageMonitor.value || entry.path === props.returnPath)
         ? [
             entry.path === props.returnPath
               ? {

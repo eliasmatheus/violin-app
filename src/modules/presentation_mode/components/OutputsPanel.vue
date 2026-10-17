@@ -146,12 +146,22 @@
             <template #trigger>
               <button type="button" class="pm-outputs__monitor" data-testid="pm-monitor-stage">
                 <LjIcon :icon="ICONS.PROJECTION.RETURN" :size="13" />
-                <span class="pm-outputs__monitor-label">{{ stageRole.selectorLabel.value }}</span>
+                <!-- Sem monitor no retorno: só o seletor, com um aviso discreto. -->
+                <span
+                  v-if="!hasStageMonitor"
+                  class="pm-outputs__monitor-label pm-outputs__monitor-label--empty"
+                  data-testid="pm-stage-no-monitor"
+                >
+                  {{ tm("outputs.no_stage_monitor") }}
+                </span>
+                <span v-else class="pm-outputs__monitor-label">
+                  {{ stageRole.selectorLabel.value }}
+                </span>
                 <LjIcon :icon="ICONS.UI.CHEVRON_DOWN" :size="11" />
               </button>
             </template>
           </LjMenu>
-          <ScreenTextSize screen="stage" />
+          <ScreenTextSize v-if="hasStageMonitor" screen="stage" />
         </div>
         <button
           v-if="stageMissing && stageMonitor !== null"
@@ -163,6 +173,7 @@
           {{ tm("outputs.missing_stage_full") }}
         </button>
         <div
+          v-if="hasStageMonitor"
           class="pm-outputs__screen"
           role="button"
           tabindex="0"
@@ -198,7 +209,7 @@
           </button>
         </div>
         <!-- O que o retorno mostra, por tipo: desligado, ele fica no fundo enquanto o tipo está no ar. -->
-        <div class="pm-outputs__shows" data-testid="pm-return-shows">
+        <div v-if="hasStageMonitor" class="pm-outputs__shows" data-testid="pm-return-shows">
           <span class="pm-outputs__shows-label">{{ tm("return_control.shows") }}</span>
           <button
             v-for="group in RETURN_GROUPS"
@@ -292,7 +303,7 @@ import { useModuleI18n } from "@/composables/useModuleI18n";
 import type { ProgramItem } from "@/types/Presentation";
 import LiveMirror from "./LiveMirror.vue";
 import ReturnMirror from "./ReturnMirror.vue";
-import { returnOverride, useOutputs } from "../composables/useOutputs";
+import { returnOverride, useHasStageMonitor, useOutputs } from "../composables/useOutputs";
 import { useMonitorRole } from "../composables/useMonitorRole";
 import ScreenToggle from "./ScreenToggle.vue";
 import ScreenZoom from "./ScreenZoom.vue";
@@ -341,6 +352,7 @@ const zoomed = ref<"main" | "stage" | null>(null);
 const truth = useScreenTruth();
 const mainRole = useMonitorRole("projection");
 const stageRole = useMonitorRole("stage");
+const hasStageMonitor = useHasStageMonitor();
 
 const visibility = useReturnVisibility();
 const liveGroup = computed(() => returnGroupOf(props.liveKind));
@@ -468,6 +480,10 @@ const LAYER_ICONS: Record<LayerId, string> = {
 }
 
 /* Monitor da tela: opção, com cara de seletor. */
+.pm-outputs__monitor-label--empty {
+  color: var(--lj-text-subtle);
+}
+
 .pm-outputs__monitor-row {
   display: flex;
   align-items: center;

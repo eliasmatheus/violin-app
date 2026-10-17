@@ -177,7 +177,8 @@
     "state_off": "APAGADA",
     "screen_off": "APAGADA",
     "screen_idle": "FONDO",
-    "missing_stage_full": "El retorno de escenario se cerró — reabrir"
+    "missing_stage_full": "El retorno de escenario se cerró — reabrir",
+    "no_stage_monitor": "Ningún monitor · haz clic para elegir"
   },
   "stage": {
     "on_air": "AL AIRE",
