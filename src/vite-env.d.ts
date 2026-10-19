@@ -474,6 +474,10 @@ declare global {
       convert: (path: string, force?: boolean) => Promise<PptxConvertResult>;
       /** Diálogo nativo de fontes (.ttf/.otf); instala para o usuário. */
       installFonts: () => Promise<PptxFontInstallResult>;
+      /** Animações e mídias de um .pptx (itens antigos, sem a contagem guardada). */
+      features?: (
+        path: string
+      ) => Promise<{ ok: true; features: unknown } | { ok: false; code: string; message: string }>;
       /** Modo nativo: o PowerPoint apresenta no PA, com animações e mídias. */
       nativeStart: (path: string, startIndex?: number) => Promise<PptxNativeResult>;
       nativeNav: (action: "next" | "prev" | "goto" | "black", index?: number) => Promise<PptxNativeResult>;

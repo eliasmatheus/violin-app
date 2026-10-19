@@ -102,6 +102,19 @@ function Stop-Show {
 function Start-Show($a) {
     Stop-Show | Out-Null
     $app = Get-PPT
+    # Apresentações que sobraram de uma sessão anterior do LouvorJA (app fechado no meio,
+    # sem tempo de encerrar): estão na mesma pasta temporária e seguram o arquivo aberto.
+    try {
+        for ($k = $app.Presentations.Count; $k -ge 1; $k--) {
+            $p = $app.Presentations.Item($k)
+            # Compara pelo nome (a pasta pode vir em formato curto, EMILAY~1, de um lado só)
+            $dirNome = [IO.Path]::GetFileName([IO.Path]::GetDirectoryName([string]$p.FullName))
+            if ($dirNome -eq 'native' -and [string]$p.Name -like 'apresentacao*') {
+                try { $p.SlideShowWindow.View.Exit() } catch { }
+                try { $p.Close() } catch { }
+            }
+        }
+    } catch { }
     try { Unblock-File -LiteralPath ([string]$a.file) -ErrorAction SilentlyContinue } catch { }
     $pres = $null
     for ($t = 1; $t -le 3 -and $pres -eq $null; $t++) {

@@ -362,6 +362,7 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     /** Abre o diálogo nativo de fontes e instala as escolhidas. */
     installFonts: () => ipcRenderer.invoke("pptx:installFonts"),
     /** Modo nativo: o PowerPoint apresenta no PA (animações e mídias). */
+    features: (path) => ipcRenderer.invoke("pptx:features", { path }),
     nativeStart: (path, startIndex) => ipcRenderer.invoke("pptx:nativeStart", { path, startIndex }),
     nativeNav: (action, index) => ipcRenderer.invoke("pptx:nativeNav", { action, index }),
     nativeEnd: () => ipcRenderer.invoke("pptx:nativeEnd"),

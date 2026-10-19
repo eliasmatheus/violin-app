@@ -415,7 +415,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from "vue";
 import { useViewport } from "@/composables/useViewport";
 import { module as manifest } from "../manifest";
 import ModuleContainer from "@/components/ModuleContainer.vue";
@@ -461,6 +461,7 @@ import {
   applyProgress,
   isFontFileName,
   isPowerPointName,
+  parseFeatures,
   missingFonts,
   parseConvertResult,
   progressDetail,
@@ -1263,6 +1264,30 @@ const arquivoNoPalco = computed(() =>
   palco.value?.fileId ? (files.value.find((f) => f.id === palco.value?.fileId) ?? null) : null
 );
 const fontesNoPalco = computed(() => arquivoNoPalco.value?.pptx?.fonts ?? null);
+
+/*
+ * Itens adicionados antes da contagem de animações não a guardaram: o aviso
+ * "este arquivo tem animações…" não aparecia. Conta uma vez, ao abrir o
+ * painel, e grava no item.
+ */
+const featuresPedidas = new Set<string>();
+watch(arquivoNoPalco, async (file) => {
+  const pptx = file?.pptx;
+  const api = (Platform.api as LouvorjaApi | null)?.pptx;
+  if (!file || !pptx?.source || pptx.features || !api?.features) return;
+  if (featuresPedidas.has(file.id)) return;
+  featuresPedidas.add(file.id);
+  try {
+    const r = await api.features(pptx.source);
+    if (!r.ok) return;
+    const atualizado = { ...file, pptx: { ...pptx, features: parseFeatures(r.features) } };
+    await saveFile(JSON.parse(JSON.stringify(atualizado)) as MediaFile);
+    const i = files.value.findIndex((f) => f.id === file.id);
+    if (i >= 0) files.value[i] = atualizado;
+  } catch {
+    /* sem o aviso, o resto segue igual */
+  }
+});
 
 /* ---------------- Modo nativo: o PowerPoint apresenta no PA ---------------- */
 

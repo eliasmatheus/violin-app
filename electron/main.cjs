@@ -2567,6 +2567,12 @@ pptx.onNativeState((state) => {
   for (const w of BrowserWindow.getAllWindows()) safeSend(w, "pptx:native-state", state);
 });
 
+ipcMain.handle("pptx:features", (_event, payload) => {
+  const filePath = payload && typeof payload === "object" ? payload.path : undefined;
+  if (typeof filePath !== "string") return { ok: false, code: "invalid_file", message: "Arquivo inválido." };
+  return pptx.features(filePath);
+});
+
 ipcMain.handle("pptx:nativeStart", async (event, payload) => {
   const filePath = payload && typeof payload === "object" ? payload.path : undefined;
   if (typeof filePath !== "string") return { ok: false, code: "invalid_file", message: "Arquivo inválido." };

@@ -520,7 +520,12 @@ async function _nativeStart(rawPath, { bounds = null, startIndex = 0, onProgress
   // Cópia sem a marca "baixado da internet" (Modo de Exibição Protegido trava a automação)
   const dir = path.join(_tempDir(), "native");
   await fs.mkdir(dir, { recursive: true });
-  const copia = path.join(dir, `apresentacao${path.extname(v.file).toLowerCase()}`);
+  // Nome novo a cada vez: uma apresentação anterior que o PowerPoint ainda segura
+  // aberta (app fechado no meio) travaria a cópia com EBUSY. As antigas saem quando der.
+  for (const antigo of await fs.readdir(dir).catch(() => [])) {
+    await fs.rm(path.join(dir, antigo), { force: true }).catch(() => {});
+  }
+  const copia = path.join(dir, `apresentacao-${Date.now()}${path.extname(v.file).toLowerCase()}`);
   await fs.writeFile(copia, await fs.readFile(v.file));
   try {
     const st = await _nativeShow().start(copia, bounds, Math.max(0, Number(startIndex) || 0));
@@ -561,6 +566,17 @@ function disposeNative() {
 }
 
 /** O que este computador consegue fazer (para a interface explicar antes de tentar). */
+/** Animações e mídias de um .pptx já na biblioteca (itens adicionados antes desta contagem). */
+async function features(rawPath) {
+  const v = await validateInput(rawPath);
+  if (!v.ok) return v;
+  try {
+    return { ok: true, features: await readPptxFeatures(v.file) };
+  } catch (e) {
+    return { ok: false, code: "read_failed", message: String(e.message || e).slice(0, 300) };
+  }
+}
+
 async function status() {
   const c = await detectConverter();
   return { ok: true, converter: c.label || null, platform: process.platform, native: _nativeSupported(c) };
@@ -569,6 +585,7 @@ async function status() {
 module.exports = {
   convert,
   status,
+  features,
   installFontFiles,
   nativeStart,
   nativeNav,
