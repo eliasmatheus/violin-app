@@ -166,7 +166,12 @@ public struct RECT { public int Left; public int Top; public int Right; public i
         $h = [IntPtr]::Zero
         try { $h = [IntPtr][long]$w.HWND } catch { }
         # Em algumas versões o HWND vem 0: a janela da apresentação tem a classe "screenClass"
-        if ($h -eq [IntPtr]::Zero) { $h = [LouvorJA.Win32]::FindWindow('screenClass', [NullString]::Value) }
+        # A janela pode demorar um instante para existir depois do Run
+        for ($t = 0; $t -lt 15 -and $h -eq [IntPtr]::Zero; $t++) {
+            $h = [LouvorJA.Win32]::FindWindow('screenClass', [NullString]::Value)
+            if ($h -eq [IntPtr]::Zero) { Start-Sleep -Milliseconds 200 }
+        }
+        $script:diag.tentativas = $t
         $script:diag.hwnd = [long]$h
         # HWND_TOPMOST = -1; SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE = 0x13
         $script:diag.topmost = [LouvorJA.Win32]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x13)
