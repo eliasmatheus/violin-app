@@ -1461,12 +1461,24 @@ async function iniciarNativo(file: MediaFile | null | undefined): Promise<void> 
   }
 }
 
+let ultimaNav: { action: string; em: number } = { action: "", em: 0 };
+
 async function nativoNav(
   action: "next" | "prev" | "goto" | "black",
   index?: number
 ): Promise<void> {
   const api = (Platform.api as LouvorjaApi | null)?.pptx;
   if (!api || !nativoAtivo.value) return;
+  /*
+   * Uma tecla chega por mais de um caminho (atalho do módulo e navegação do
+   * player): duas chamadas de "próximo" no mesmo toque pulavam a animação do
+   * clique seguinte — o slide entrava e a animação dele já rodava junto.
+   */
+  if (action === "next" || action === "prev") {
+    const agora = Date.now();
+    if (ultimaNav.action === action && agora - ultimaNav.em < 350) return;
+    ultimaNav = { action, em: agora };
+  }
   const r = await api.nativeNav(action, index);
   if (r.ok) aoEstadoNativo(r.state);
 }
