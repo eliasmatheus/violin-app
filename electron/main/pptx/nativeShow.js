@@ -92,7 +92,10 @@ function Stop-Show {
     if ($script:win -ne $null) { try { $script:win.View.Exit() } catch { } }
     if ($script:pres -ne $null) { try { $script:pres.Close() } catch { } }
     $script:win = $null; $script:pres = $null
-    if ($script:owns -and $script:ppt -ne $null) {
+    # Fecha o PowerPoint quando não sobra nenhuma apresentação aberta, mesmo que ele
+    # já estivesse aberto (de uma sessão anterior do LouvorJA, por exemplo). Se o
+    # operador tiver outro arquivo aberto nele, fica como está.
+    if ($script:ppt -ne $null) {
         try { if ($script:ppt.Presentations.Count -eq 0) { $script:ppt.Quit() } } catch { }
         $script:ppt = $null
     }
