@@ -2592,6 +2592,7 @@ ipcMain.handle("pptx:convert", (event, payload) => {
   }
   const sender = event.sender;
   return pptx.convert(filePath, {
+    force: payload.force === true,
     onProgress: (p) => safeSend(sender, "pptx:progress", { path: filePath, ...p }),
   });
 });

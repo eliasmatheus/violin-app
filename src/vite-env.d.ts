@@ -448,7 +448,7 @@ declare global {
     pptx?: {
       status: () => Promise<{ ok: true; converter: string | null; platform: string }>;
       /** Pendente durante a conversão (segundos a alguns minutos). */
-      convert: (path: string) => Promise<PptxConvertResult>;
+      convert: (path: string, force?: boolean) => Promise<PptxConvertResult>;
       /** Diálogo nativo de fontes (.ttf/.otf); instala para o usuário. */
       installFonts: () => Promise<PptxFontInstallResult>;
       /** Instala fontes arrastadas (.ttf, .otf ou o .zip do DaFont). */

@@ -252,7 +252,8 @@ async function ensureFonts(file, onProgress, log) {
 /**
  * Converte um .pptx em PDF fiel.
  * @param {string} rawPath  caminho vindo do renderer (validado aqui)
- * @param {{onProgress?: (p: object) => void, log?: (...a: any[]) => void}} [opts]
+ * @param {{onProgress?: (p: object) => void, log?: (...a: any[]) => void, force?: boolean}} [opts]
+ *   force: ignora o PDF guardado e converte de novo ("Gerar de novo")
  * @returns {Promise<PptxResult>}
  */
 function convert(rawPath, opts = {}) {
@@ -261,7 +262,7 @@ function convert(rawPath, opts = {}) {
   return run;
 }
 
-async function _convert(rawPath, { onProgress = () => {}, log = console.log } = {}) {
+async function _convert(rawPath, { onProgress = () => {}, log = console.log, force = false } = {}) {
   const v = await validateInput(rawPath);
   if (!v.ok) return v;
   const { file } = v;
@@ -297,7 +298,8 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log } = 
   const base = `${hash}-${_signature(report.items)}-${converter.id}-v${CACHE_VERSION}`;
   const pdf = path.join(outDir, `${base}.pdf`);
   const meta = path.join(outDir, `${base}.json`);
-  if (fss.existsSync(pdf) && fss.existsSync(meta)) {
+  // force = "Gerar de novo": o operador pediu outra conversão, não o que já está guardado.
+  if (!force && fss.existsSync(pdf) && fss.existsSync(meta)) {
     return { ok: true, path: pdf, cached: true, converter: converter.label, fonts: report.items, staleFonts: false, fontsError };
   }
 

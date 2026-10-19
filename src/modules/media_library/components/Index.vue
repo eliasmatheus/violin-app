@@ -1122,7 +1122,8 @@ async function importPowerPoint(
     if (info) backgroundTasks.updateTask(taskId, info);
   });
   try {
-    const result = parseConvertResult(await api.convert(filePath));
+    // Gerar de novo (substituir) sempre converte; importar usa o que já estiver pronto.
+    const result = parseConvertResult(await api.convert(filePath, !!substituir));
     if (!result.ok) {
       backgroundTasks.updateTask(taskId, { status: "error", error: result.message });
       if (daJanela() && importacao.value) {

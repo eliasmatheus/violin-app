@@ -357,7 +357,8 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
   pptx: {
     status: () => ipcRenderer.invoke("pptx:status"),
     /** Pendente durante a conversão; devolve `{ ok, path }` ou `{ ok: false, code, message }`. */
-    convert: (path) => ipcRenderer.invoke("pptx:convert", { path }),
+    /** `force`: ignora o PDF guardado ("Gerar de novo"). */
+    convert: (path, force) => ipcRenderer.invoke("pptx:convert", { path, force: force === true }),
     /** Abre o diálogo nativo de fontes e instala as escolhidas. */
     installFonts: () => ipcRenderer.invoke("pptx:installFonts"),
     /** Instala fontes arrastadas (.ttf, .otf ou .zip). */
