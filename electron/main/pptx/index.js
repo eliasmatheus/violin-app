@@ -554,7 +554,9 @@ async function nativeNav(action, index) {
 
 async function nativeEnd() {
   if (!_native) return { ok: true, state: { active: false } };
-  return { ok: true, state: await _native.end() };
+  const st = await _native.end();
+  void _nlog("encerrar", st);
+  return { ok: true, state: st };
 }
 
 function nativeState() {

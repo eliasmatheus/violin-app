@@ -83,8 +83,10 @@ function Get-State {
             black  = ($st -eq 3)
         }
     } catch {
-        Stop-Show | Out-Null
-        return @{ active = $false }
+        $motivo = $_.Exception.Message
+        $info = Stop-Show
+        $info.motivo = [string]$motivo
+        return $info
     }
 }
 
@@ -97,6 +99,11 @@ function Stop-Show([bool]$fecharPrograma = $true) {
     # mesmo que ele já estivesse aberto (de uma sessão anterior do LouvorJA, por
     # exemplo). Arquivo aberto pelo operador nele: fica como está. Ao trocar de
     # apresentação (Start-Show) não fecha, para não reabrir o programa à toa.
+    if ($fecharPrograma -and $script:ppt -eq $null) {
+        # A referência pode ter se perdido no caminho: pega o PowerPoint que estiver aberto
+        try { $script:ppt = [Runtime.InteropServices.Marshal]::GetActiveObject('PowerPoint.Application') } catch { }
+        $info.reconectou = ($script:ppt -ne $null)
+    }
     if ($fecharPrograma -and $script:ppt -ne $null) {
         try {
             $restantes = 0
