@@ -1287,9 +1287,21 @@ const painelNativo = computed(() => {
   };
 });
 
+/*
+ * Enquanto o PowerPoint apresenta, as setas do operador (e o passador de
+ * slides, que manda as mesmas teclas) são dele. Sem o delegado elas caíam no
+ * avanço de página do PDF e mexiam só no retorno.
+ */
+const _navegacaoNativa = {
+  next: () => nativoNav("next"),
+  prev: () => nativoNav("prev"),
+};
+
 function aoEstadoNativo(st: PptxNativeState): void {
   const estava = nativoAtivo.value;
   nativo.value = st && typeof st === "object" ? st : { active: false };
+  if (nativo.value.active && !estava) $media.registerNavigationDelegate(_navegacaoNativa);
+  if (!nativo.value.active && estava) $media.unregisterNavigationDelegate();
   if (nativo.value.active) {
     retornoNativoPagina((nativo.value.index ?? 0) + 1);
     return;
@@ -1991,6 +2003,8 @@ async function togglePlay(): Promise<void> {
 }
 
 async function next(): Promise<void> {
+  // Modo nativo: seta, controle remoto e faixa de menus vão para o PowerPoint.
+  if (nativoAtivo.value) return nativoNav("next");
   if (pdfNoPalco.value) {
     const total = currentPdfTotalPages.value;
     if (total > 0 && currentPdfPage.value >= total) {
@@ -2019,6 +2033,7 @@ async function next(): Promise<void> {
 }
 
 async function prev(): Promise<void> {
+  if (nativoAtivo.value) return nativoNav("prev");
   if (pdfNoPalco.value) {
     if (currentPdfPage.value <= 1) {
       if (pdfExterno.value) return;
