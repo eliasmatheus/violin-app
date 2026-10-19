@@ -134,7 +134,7 @@
     "feat_animations": "animações em {count} slide(s)",
     "feat_videos": "{count} vídeo(s)",
     "feat_audios": "{count} áudio(s)",
-    "feat_hint": "Este arquivo tem {items}. No modo imagem eles ficam parados — para vê-los, use Apresentar com o PowerPoint (só no telão, sem retorno).",
+    "feat_hint": "Este arquivo tem {items}. No modo imagem eles ficam parados — para vê-los, use Apresentar com o PowerPoint (o retorno mostra o slide atual e o próximo).",
     "feat_hint_no_native": "Este arquivo tem {items}, que ficam parados no modo imagem. Para apresentá-los é preciso o Microsoft PowerPoint no Windows.",
     "project_native": "Apresentar com o PowerPoint"
   }

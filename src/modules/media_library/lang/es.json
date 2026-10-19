@@ -134,7 +134,7 @@
     "feat_animations": "animaciones en {count} diapositiva(s)",
     "feat_videos": "{count} video(s)",
     "feat_audios": "{count} audio(s)",
-    "feat_hint": "Este archivo tiene {items}. En el modo imagen quedan quietos — para verlos, usa Presentar con PowerPoint (solo en la pantalla, sin retorno).",
+    "feat_hint": "Este archivo tiene {items}. En el modo imagen quedan quietos — para verlos, usa Presentar con PowerPoint (el retorno muestra la diapositiva actual y la siguiente).",
     "feat_hint_no_native": "Este archivo tiene {items}, que quedan quietos en el modo imagen. Para presentarlos se necesita Microsoft PowerPoint en Windows.",
     "project_native": "Presentar con PowerPoint"
   }

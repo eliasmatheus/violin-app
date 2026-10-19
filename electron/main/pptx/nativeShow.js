@@ -32,6 +32,8 @@ $script:ppt = $null
 $script:owns = $false
 $script:pres = $null
 $script:win = $null
+$script:visiveis = @(1)
+$script:pagina = 1
 
 function Get-PPT {
     if ($script:ppt -ne $null) {
@@ -62,10 +64,18 @@ function Get-State {
         $v = $script:win.View
         $st = [int]$v.State      # 1 rodando, 2 pausado, 3 tela preta, 4 tela branca, 5 terminou
         if ($st -eq 5) { throw 'fim' }
+        # Índice na conta do PDF (só slides visíveis), para casar com as miniaturas e o retorno.
+        # Na tela preta do fim da apresentação não há slide: fica o último.
+        try {
+            $si = [int]$v.Slide.SlideIndex
+            $pg = 0
+            foreach ($n in $script:visiveis) { if ($n -le $si) { $pg++ } }
+            $script:pagina = [Math]::Max(1, $pg)
+        } catch { }
         return @{
             active = $true
-            index  = ([int]$v.CurrentShowPosition) - 1
-            total  = [int]$script:pres.Slides.Count
+            index  = $script:pagina - 1
+            total  = $script:visiveis.Count
             black  = ($st -eq 3)
         }
     } catch {
@@ -116,8 +126,16 @@ function Start-Show($a) {
     try { $w.Activate() } catch { }
     $script:pres = $pres
     $script:win = $w
+    $script:visiveis = @()
+    foreach ($sl in $pres.Slides) {
+        $h = $false
+        try { $h = ([int]$sl.SlideShowTransition.Hidden -eq -1) } catch { }
+        if (-not $h) { $script:visiveis += [int]$sl.SlideIndex }
+    }
+    if ($script:visiveis.Count -eq 0) { $script:visiveis = @(1) }
+    $script:pagina = 1
     $i = [int]$a.startIndex
-    if ($i -gt 0) { try { $w.View.GotoSlide($i + 1) } catch { } }
+    if ($i -gt 0 -and $i -lt $script:visiveis.Count) { try { $w.View.GotoSlide($script:visiveis[$i]) } catch { } }
     return (Get-State)
 }
 
@@ -127,7 +145,10 @@ function Nav($a) {
     switch ([string]$a.action) {
         'next'  { $v.Next() }
         'prev'  { $v.Previous() }
-        'goto'  { $v.GotoSlide(([int]$a.index) + 1) }
+        'goto'  {
+            $k = [int]$a.index
+            if ($k -ge 0 -and $k -lt $script:visiveis.Count) { $v.GotoSlide($script:visiveis[$k]) }
+        }
         'black' { if ([int]$v.State -eq 3) { $v.State = 1 } else { $v.State = 3 } }
     }
     return (Get-State)

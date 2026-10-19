@@ -101,7 +101,11 @@ Nesse modo (`electron/main/pptx/nativeShow.js`, Windows + PowerPoint):
   o slide), Tela preta e Encerrar; o main consulta o slide atual a cada 700 ms
   e publica `pptx:native-state`, então avançar pelo próprio PowerPoint também
   aparece no painel;
-- **não há retorno** nesse modo: o PowerPoint apresenta em uma tela só.
+- **o retorno continua sendo o do LouvorJA** (se "Exibir na tela de retorno" estiver
+  ligado): a mesma janela do modo imagem, com o slide atual e o próximo tirados do
+  PDF já gerado. A página acompanha o PowerPoint pela consulta de estado; o índice
+  vem na conta do PDF (slides ocultos ficam de fora), então casa com as
+  miniaturas. A animação não aparece no retorno — ele mostra a imagem final do slide.
 
 IPC: `pptx:nativeStart` (`{ path, startIndex }`), `pptx:nativeNav`
 (`{ action: next|prev|goto|black, index }`), `pptx:nativeEnd`,
@@ -111,6 +115,6 @@ IPC: `pptx:nativeStart` (`{ path, startIndex }`), `pptx:nativeNav`
 
 - No modo imagem, animações, transições e vídeos não passam para o PDF: cada
   slide vira uma página estática. Para eles existe o modo nativo (acima),
-  hoje só no Windows e sem retorno.
+  hoje só no Windows (o retorno mostra a imagem final de cada slide).
 - Fontes pagas que não estão embutidas nem no Google Fonts continuam faltando;
   o operador recebe a lista para instalar à mão e adicionar de novo.

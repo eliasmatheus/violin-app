@@ -429,7 +429,12 @@ import PptxImportDialog from "./PptxImportDialog.vue";
 import $broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
-import { closeProjectionWindows, openSiteWindow } from "@/helpers/ProjectionWindows";
+import {
+  closeFileProjectionWindows,
+  closeProjectionWindows,
+  openMediaWindow,
+  openSiteWindow,
+} from "@/helpers/ProjectionWindows";
 import $media from "@/composables/useMedia";
 import $appdata from "@/helpers/AppData";
 import $userdata from "@/helpers/UserData";
@@ -1282,8 +1287,63 @@ const painelNativo = computed(() => {
 function aoEstadoNativo(st: PptxNativeState): void {
   const estava = nativoAtivo.value;
   nativo.value = st && typeof st === "object" ? st : { active: false };
-  // O PowerPoint terminou (Esc nele ou fim dos slides): o painel some com ele.
-  if (estava && !nativo.value.active && !pdfNoPalco.value) palco.value = null;
+  if (nativo.value.active) {
+    retornoNativoPagina((nativo.value.index ?? 0) + 1);
+    return;
+  }
+  // O PowerPoint terminou (Esc nele ou fim dos slides): o painel e o retorno saem com ele.
+  if (estava && !pdfNoPalco.value) {
+    palco.value = null;
+    fecharRetornoNativo();
+  }
+}
+
+/*
+ * Retorno do palestrante no modo nativo.
+ *
+ * O PA é do PowerPoint, mas o retorno continua sendo o do LouvorJA: a mesma
+ * janela do modo imagem, com o slide atual e o próximo tirados do PDF já
+ * gerado. A animação não aparece ali (é a imagem final do slide), o que basta
+ * para quem está falando saber onde está e o que vem depois.
+ */
+let retornoNativoId: string | undefined;
+
+async function abrirRetornoNativo(file: MediaFile, pagina: number): Promise<void> {
+  if (!($userdata.get(KEYS.OPTIONS.FILE_PROJECTION.SHOW_RETURN, false) as boolean)) return;
+  retornoNativoId = newFileProjectionId();
+  // Mesmo playback_id: o nosso próprio listener reconhece e não "adota" de novo.
+  currentPdfPlaybackId = retornoNativoId;
+  currentPdfPage.value = pagina;
+  const payload = {
+    url: resolvePath(file.path),
+    type: "pdf",
+    title: file.name,
+    page: pagina,
+    playback_id: retornoNativoId,
+  };
+  try {
+    localStorage.setItem(KEYS.PROJECTION.LJ_FILE_PROJECTION, JSON.stringify(payload));
+  } catch {
+    /* cache de reabertura é opcional */
+  }
+  await openMediaWindow("return", "file");
+  $broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, payload);
+}
+
+function retornoNativoPagina(pagina: number): void {
+  if (!retornoNativoId || currentPdfPlaybackId !== retornoNativoId) return;
+  if (currentPdfPage.value === pagina) return;
+  currentPdfPage.value = pagina;
+  broadcastPdfPage();
+}
+
+function fecharRetornoNativo(): void {
+  if (!retornoNativoId) return;
+  retornoNativoId = undefined;
+  currentPdfPlaybackId = undefined;
+  localStorage.removeItem(KEYS.PROJECTION.LJ_FILE_PROJECTION);
+  $broadcast.send(BROADCAST_TYPE.MEDIA_CLOSE, {});
+  void closeFileProjectionWindows();
 }
 
 /**
@@ -1307,6 +1367,8 @@ async function iniciarNativo(file: MediaFile | null | undefined): Promise<void> 
       $alert.error({ text: tm("pptx.native_failed", { message: r.message }), translate: false });
       return;
     }
+    const pagina = (r.state?.index ?? inicio) + 1;
+    await abrirRetornoNativo(file, pagina);
     aoEstadoNativo(r.state);
   } catch (error) {
     palco.value = null;
@@ -1333,6 +1395,7 @@ async function encerrarNativo(): Promise<void> {
   const r = await api.nativeEnd();
   aoEstadoNativo(r.ok ? r.state : { active: false });
   palco.value = null;
+  fecharRetornoNativo();
 }
 
 /** "Apresentar com o PowerPoint" da janela de importação. */
