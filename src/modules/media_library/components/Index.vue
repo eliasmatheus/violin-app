@@ -1247,7 +1247,7 @@ const regerando = ref(false);
 const painelVisivel = computed(
   () =>
     !!palco.value &&
-    (pdfNoPalco.value || nativoAtivo.value) &&
+    (pdfNoPalco.value || nativoAtivo.value || nativoAbrindo.value) &&
     !painelOculto.value &&
     libraryFilter.value !== "canva"
 );
@@ -1262,6 +1262,8 @@ const fontesNoPalco = computed(() => arquivoNoPalco.value?.pptx?.fonts ?? null);
 const nativo = ref<PptxNativeState>({ active: false });
 const nativoAtivo = computed(() => nativo.value.active === true);
 const nativoAbrindo = ref(false);
+/** Este computador consegue apresentar pelo PowerPoint (Windows com PowerPoint). */
+const nativoNestePc = ref(false);
 let pararEscutaNativo: (() => void) | null = null;
 
 /** O que o painel precisa saber do modo nativo (null = PDF comum, sem a opção). */
@@ -1269,7 +1271,8 @@ const painelNativo = computed(() => {
   const pptx = arquivoNoPalco.value?.pptx;
   if (!pptx && !nativoAtivo.value) return null;
   return {
-    available: !!pptx?.nativeAvailable,
+    // Itens adicionados antes do modo nativo não guardaram a flag: vale o que este PC tem.
+    available: !!pptx?.source && (pptx.nativeAvailable === true || nativoNestePc.value),
     active: nativoAtivo.value,
     black: !!nativo.value.black,
     busy: nativoAbrindo.value,
@@ -1998,7 +2001,7 @@ useBroadcastListener(BROADCAST_TYPE.FILE_PROJECTION, (payload) => {
 
   if (decisao.acao === "limpar") {
     pdfExterno.value = null;
-    if (!nativoAtivo.value) palco.value = null;
+    if (!nativoAtivo.value && !nativoAbrindo.value) palco.value = null;
     avisoContagemDado = false;
     if (decisao.encerrada) currentPdfPlaybackId = undefined;
     return;
@@ -2020,7 +2023,7 @@ useBroadcastListener(BROADCAST_TYPE.FILE_PROJECTION, (payload) => {
 
 useBroadcastListener(BROADCAST_TYPE.MEDIA_CLOSE, () => {
   pdfExterno.value = null;
-  if (!nativoAtivo.value) palco.value = null;
+  if (!nativoAtivo.value && !nativoAbrindo.value) palco.value = null;
   avisoContagemDado = false;
   currentPdfPlaybackId = undefined;
 });
@@ -2065,6 +2068,10 @@ onMounted(async () => {
     void pptxApi.nativeState().then((st) => {
       if (st?.active) aoEstadoNativo(st);
     });
+    void pptxApi
+      .status()
+      .then((s) => (nativoNestePc.value = s?.native === true))
+      .catch(() => {});
   }
   files.value = await loadLibrary();
   await loadCategories();

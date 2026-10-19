@@ -468,7 +468,8 @@ declare global {
      * pelo próprio PowerPoint (Windows/Mac) ou pelo LibreOffice.
      */
     pptx?: {
-      status: () => Promise<{ ok: true; converter: string | null; platform: string }>;
+      /** `native`: dá para apresentar pelo próprio PowerPoint neste computador. */
+      status: () => Promise<{ ok: true; converter: string | null; platform: string; native?: boolean }>;
       /** Pendente durante a conversão (segundos a alguns minutos). */
       convert: (path: string, force?: boolean) => Promise<PptxConvertResult>;
       /** Diálogo nativo de fontes (.ttf/.otf); instala para o usuário. */

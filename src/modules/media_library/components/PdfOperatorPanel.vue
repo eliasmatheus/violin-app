@@ -41,7 +41,9 @@
     </header>
 
     <!-- Modo de apresentação: imagens (PA + retorno) ou o próprio PowerPoint (animações) -->
-    <div v-if="native" class="pdf-op__mode" :class="{ 'is-native': native.active }">
+    <div
+      v-if="native && (native.active || native.available || resumoRecursos)"
+      class="pdf-op__mode" :class="{ 'is-native': native.active }">
       <template v-if="native.active">
         <LjChip variant="primary" :icon="ICONS.PROJECTION.PRESENT">
           {{ tm("pptx.native_on") }}

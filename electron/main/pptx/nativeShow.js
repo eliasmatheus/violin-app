@@ -112,6 +112,8 @@ function Start-Show($a) {
             $w.Height = [double]$b.height * 0.75
         } catch { }
     }
+    # Ativa a apresentação uma vez: sem isso a barra de tarefas do Windows fica por cima do PA
+    try { $w.Activate() } catch { }
     $script:pres = $pres
     $script:win = $w
     $i = [int]$a.startIndex

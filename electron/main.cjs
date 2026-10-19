@@ -2567,7 +2567,7 @@ pptx.onNativeState((state) => {
   for (const w of BrowserWindow.getAllWindows()) safeSend(w, "pptx:native-state", state);
 });
 
-ipcMain.handle("pptx:nativeStart", (event, payload) => {
+ipcMain.handle("pptx:nativeStart", async (event, payload) => {
   const filePath = payload && typeof payload === "object" ? payload.path : undefined;
   if (typeof filePath !== "string") return { ok: false, code: "invalid_file", message: "Arquivo inválido." };
   const startIndex = Number.isInteger(payload.startIndex) ? payload.startIndex : 0;
@@ -2582,11 +2582,18 @@ ipcMain.handle("pptx:nativeStart", (event, payload) => {
     };
   }
   const sender = event.sender;
-  return pptx.nativeStart(filePath, {
+  const r = await pptx.nativeStart(filePath, {
     bounds: d.bounds,
     startIndex,
     onProgress: (p) => safeSend(sender, "pptx:progress", { path: filePath, ...p }),
   });
+  // A apresentação foi ativada (para a barra de tarefas sair de cima do PA);
+  // o foco volta para o operador, que segue mandando pelo LouvorJA.
+  if (r && r.ok) {
+    const win = BrowserWindow.fromWebContents(sender);
+    if (win && !win.isDestroyed()) setTimeout(() => !win.isDestroyed() && win.focus(), 400);
+  }
+  return r;
 });
 
 ipcMain.handle("pptx:nativeNav", (_event, payload) => {
