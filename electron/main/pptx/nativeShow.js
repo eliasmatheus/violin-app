@@ -88,22 +88,40 @@ function Get-State {
     }
 }
 
-function Stop-Show {
+function Stop-Show([bool]$fecharPrograma = $true) {
     if ($script:win -ne $null) { try { $script:win.View.Exit() } catch { } }
     if ($script:pres -ne $null) { try { $script:pres.Close() } catch { } }
     $script:win = $null; $script:pres = $null
-    # Fecha o PowerPoint quando não sobra nenhuma apresentação aberta, mesmo que ele
-    # já estivesse aberto (de uma sessão anterior do LouvorJA, por exemplo). Se o
-    # operador tiver outro arquivo aberto nele, fica como está.
-    if ($script:ppt -ne $null) {
-        try { if ($script:ppt.Presentations.Count -eq 0) { $script:ppt.Quit() } } catch { }
+    $info = @{ active = $false }
+    # Fecha o PowerPoint quando não sobra nenhuma apresentação do operador aberta,
+    # mesmo que ele já estivesse aberto (de uma sessão anterior do LouvorJA, por
+    # exemplo). Arquivo aberto pelo operador nele: fica como está. Ao trocar de
+    # apresentação (Start-Show) não fecha, para não reabrir o programa à toa.
+    if ($fecharPrograma -and $script:ppt -ne $null) {
+        try {
+            $restantes = 0
+            for ($k = $script:ppt.Presentations.Count; $k -ge 1; $k--) {
+                $p = $script:ppt.Presentations.Item($k)
+                $semJanela = $true
+                try { $semJanela = ($p.Windows.Count -eq 0) } catch { }
+                $dirNome = [IO.Path]::GetFileName([IO.Path]::GetDirectoryName([string]$p.FullName))
+                # Sobras do próprio LouvorJA (cópias do modo nativo, conversões sem janela)
+                if ($semJanela -or ($dirNome -eq 'native' -and [string]$p.Name -like 'apresentacao*')) {
+                    try { $p.Close() } catch { }
+                } else { $restantes++ }
+            }
+            $info.restantes = $restantes
+            if ($restantes -eq 0) { $script:ppt.Quit(); $info.fechou = $true }
+        } catch { $info.erro = $_.Exception.Message }
+        try { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($script:ppt) } catch { }
         $script:ppt = $null
+        [GC]::Collect(); [GC]::WaitForPendingFinalizers()
     }
-    return @{ active = $false }
+    return $info
 }
 
 function Start-Show($a) {
-    Stop-Show | Out-Null
+    Stop-Show $false | Out-Null
     $app = Get-PPT
     # Apresentações que sobraram de uma sessão anterior do LouvorJA (app fechado no meio,
     # sem tempo de encerrar): estão na mesma pasta temporária e seguram o arquivo aberto.

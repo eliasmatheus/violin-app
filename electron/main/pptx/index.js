@@ -565,7 +565,6 @@ function disposeNative() {
   _native?.dispose();
 }
 
-/** O que este computador consegue fazer (para a interface explicar antes de tentar). */
 /** Animações e mídias de um .pptx já na biblioteca (itens adicionados antes desta contagem). */
 async function features(rawPath) {
   const v = await validateInput(rawPath);
@@ -577,6 +576,7 @@ async function features(rawPath) {
   }
 }
 
+/** O que este computador consegue fazer (para a interface explicar antes de tentar). */
 async function status() {
   const c = await detectConverter();
   return { ok: true, converter: c.label || null, platform: process.platform, native: _nativeSupported(c) };
