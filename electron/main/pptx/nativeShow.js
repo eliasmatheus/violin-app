@@ -129,9 +129,6 @@ function Start-Show($a) {
             $app = Get-PPT
         }
     }
-    # A janela de edição do arquivo fica minimizada (o PowerPoint pode já estar aberto
-    # pelo operador: aí só esta janela, não o programa inteiro).
-    try { $pres.Windows.Item(1).WindowState = 2 } catch { }      # ppWindowMinimized
     if ($script:owns) { try { $app.WindowState = 2 } catch { } }
     $s = $pres.SlideShowSettings
     $s.ShowType = 1                 # ppShowTypeSpeaker (tela cheia)
@@ -151,6 +148,9 @@ function Start-Show($a) {
     }
     # Sem isso a barra de tarefas do Windows fica por cima do PA quando o foco volta ao
     # LouvorJA: a janela da apresentação fica "sempre no topo", como o telão do LouvorJA.
+    # PowerPoint que o operador já tinha aberto: só a janela de edição deste arquivo é
+    # minimizada, e só depois do Run (antes dele a apresentação nascia minimizada).
+    if (-not $script:owns) { try { $pres.Windows.Item(1).WindowState = 2 } catch { } }
     try { $w.Activate() } catch { }
     $script:diag = @{}
     try {
@@ -166,7 +166,7 @@ public struct RECT { public int Left; public int Top; public int Right; public i
         $h = [IntPtr]::Zero
         try { $h = [IntPtr][long]$w.HWND } catch { }
         # Em algumas versões o HWND vem 0: a janela da apresentação tem a classe "screenClass"
-        if ($h -eq [IntPtr]::Zero) { $h = [LouvorJA.Win32]::FindWindow('screenClass', $null) }
+        if ($h -eq [IntPtr]::Zero) { $h = [LouvorJA.Win32]::FindWindow('screenClass', [NullString]::Value) }
         $script:diag.hwnd = [long]$h
         # HWND_TOPMOST = -1; SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE = 0x13
         $script:diag.topmost = [LouvorJA.Win32]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x13)
