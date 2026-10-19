@@ -121,6 +121,7 @@
     "panel_loading": "Carregando os slides…",
     "panel_slides": "Slides",
     "missing_hint_drop": "Falta alguma? Arraste para cá o arquivo da fonte (.ttf, .otf ou o .zip do DaFont) ou clique em Instalar fonte… — o PowerPoint é gerado de novo sozinho.",
-    "fonts_installed_names": "Fonte(s) instalada(s): {names}."
+    "fonts_installed_names": "Fonte(s) instalada(s): {names}.",
+    "fonts_error": "Não consegui conferir as fontes deste computador: {message}"
   }
 }

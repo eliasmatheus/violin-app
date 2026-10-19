@@ -280,11 +280,15 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log } = 
 
   onProgress({ phase: "fonts" });
   let report = { items: [], installed: 0, embedded: false };
+  let fontsError = "";
   try {
     report = await ensureFonts(file, onProgress, log);
   } catch (e) {
     // Sem a análise de fontes ainda dá para converter — só não há garantia.
-    log("[pptx] análise de fontes falhou:", e.message);
+    // O motivo vai para a tela: antes ficava só no console e a lista vinha vazia.
+    fontsError = String(e?.message || e).slice(0, 400);
+    log("[pptx] análise de fontes falhou:", fontsError);
+    onProgress({ phase: "fonts", fonts: [], error: fontsError });
   }
 
   const outDir = _outDir();
@@ -294,7 +298,7 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log } = 
   const pdf = path.join(outDir, `${base}.pdf`);
   const meta = path.join(outDir, `${base}.json`);
   if (fss.existsSync(pdf) && fss.existsSync(meta)) {
-    return { ok: true, path: pdf, cached: true, converter: converter.label, fonts: report.items, staleFonts: false };
+    return { ok: true, path: pdf, cached: true, converter: converter.label, fonts: report.items, staleFonts: false, fontsError };
   }
 
   onProgress({ phase: "converting", converter: converter.label });
@@ -320,7 +324,15 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log } = 
       );
     }
     onProgress({ phase: "done" });
-    return { ok: true, path: pdf, cached: false, converter: converter.label, fonts: report.items, staleFonts: r.staleFonts };
+    return {
+      ok: true,
+      path: pdf,
+      cached: false,
+      converter: converter.label,
+      fonts: report.items,
+      staleFonts: r.staleFonts,
+      fontsError,
+    };
   } catch (e) {
     fs.unlink(tmp).catch(() => {});
     log("[pptx] conversão falhou:", e.message);

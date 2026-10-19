@@ -98,13 +98,37 @@ async function detectConverter(platform = process.platform) {
 }
 
 // ── PowerPoint no Windows ──────────────────────────────────────────────────
+/**
+ * Cópia do arquivo SEM a marca "baixado da internet".
+ *
+ * O Windows grava essa marca (Zone.Identifier) em tudo que vem do navegador,
+ * WhatsApp ou e-mail, e o PowerPoint abre esses arquivos no "Modo de Exibição
+ * Protegido" — onde a automação falha com um E_FAIL sem explicação. Copiar
+ * byte a byte (stream, não CopyFile) gera um arquivo novo sem a marca; o
+ * original do operador fica como está.
+ */
+async function _copiaSemMarca(input, dir) {
+  await fs.mkdir(dir, { recursive: true });
+  const dest = path.join(dir, `entrada${path.extname(input).toLowerCase()}`);
+  await new Promise((resolve, reject) => {
+    const r = fss.createReadStream(input);
+    const w = fss.createWriteStream(dest);
+    r.on("error", reject);
+    w.on("error", reject);
+    w.on("finish", resolve);
+    r.pipe(w);
+  });
+  return dest;
+}
+
 async function _windowsPowerPoint(input, output, opts) {
   const outDir = path.join(opts.tempDir, `png-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   try {
+    const copia = await _copiaSemMarca(input, path.join(outDir, "in"));
     const res = await runWindowsTask(
       "convert",
       {
-        input,
+        input: copia,
         outDir,
         width: SLIDE_WIDTH_PX,
         withWindow: !!opts.withWindow,

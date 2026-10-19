@@ -41,6 +41,9 @@
       <p v-if="state.phase === 'error'" class="pptx-import__error">{{ state.error }}</p>
 
       <div class="pptx-import__fonts-title">{{ tm("pptx.fonts_title") }}</div>
+      <p v-if="state.fontsError" class="pptx-import__error">
+        {{ tm("pptx.fonts_error", { message: state.fontsError }) }}
+      </p>
       <p v-if="state.phase === 'fonts' && !state.fonts.length" class="pptx-import__hint">
         {{ tm("pptx.checking_fonts") }}
       </p>

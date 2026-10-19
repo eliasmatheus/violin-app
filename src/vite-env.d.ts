@@ -99,6 +99,8 @@ declare global {
         fonts: PptxFont[];
         /** O PowerPoint estava com outra apresentação aberta e não leu as fontes novas. */
         staleFonts: boolean;
+        /** A conferência das fontes falhou (a conversão seguiu sem ela). */
+        fontsError?: string;
       }
     | { ok: false; code: string; message: string };
 
@@ -115,6 +117,8 @@ declare global {
     converter?: string;
     /** Na fase "fonts": a lista completa de fontes do arquivo, já classificadas. */
     fonts?: PptxFont[];
+    /** Na fase "fonts": a conferência das fontes falhou, com o motivo. */
+    error?: string;
   }
 
   interface LouvorjaApi {

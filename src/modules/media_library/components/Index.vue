@@ -1166,6 +1166,7 @@ async function importPowerPoint(
         ...importacao.value,
         phase: "done",
         fonts: result.fonts.map((f) => ({ ...f })),
+        fontsError: result.fontsError || importacao.value.fontsError,
         fileId: file.id,
       };
       if (result.staleFonts) $alert.info({ text: tm("pptx.stale_fonts"), translate: false });

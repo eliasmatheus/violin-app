@@ -133,6 +133,8 @@ function Do-Convert($a) {
     # Open(FileName, ReadOnly, Untitled, WithWindow) — msoTrue = -1, msoFalse = 0
     $withWindow = 0
     if ($a.withWindow) { $withWindow = -1 }
+    # Garantia extra contra o "Modo de Exibicao Protegido" (arquivo baixado da internet)
+    try { Unblock-File -LiteralPath ([string]$a.input) -ErrorAction SilentlyContinue } catch { }
     try {
         $pres = $app.Presentations.Open([string]$a.input, -1, 0, $withWindow)
     } catch {

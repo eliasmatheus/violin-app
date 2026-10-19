@@ -52,6 +52,7 @@ export function parseConvertResult(raw: unknown): PptxConvertResult {
         ? r.fonts.filter((f) => f && typeof f.name === "string" && typeof f.status === "string")
         : [],
       staleFonts: !!r.staleFonts,
+      fontsError: typeof r.fontsError === "string" ? r.fontsError : "",
     };
   }
   const fail = r as { code?: unknown; message?: unknown } | null;
@@ -96,6 +97,8 @@ export interface PptxImportState {
   converter: string;
   fonts: { name: string; status: string; source?: string | null }[];
   error: string;
+  /** A conferência das fontes falhou: o motivo, para o operador ver. */
+  fontsError?: string;
   /** id do item já salvo na biblioteca, para "Projetar agora". */
   fileId?: string;
 }
@@ -104,9 +107,10 @@ export interface PptxImportState {
 export function applyProgress(state: PptxImportState, p: PptxProgress): PptxImportState {
   if (p.path !== state.path) return state;
   if (p.phase === "fonts") {
-    return Array.isArray(p.fonts)
-      ? { ...state, phase: "fonts", fonts: p.fonts.map((f) => ({ ...f })) }
-      : { ...state, phase: "fonts" };
+    const next: PptxImportState = { ...state, phase: "fonts" };
+    if (Array.isArray(p.fonts)) next.fonts = p.fonts.map((f) => ({ ...f }));
+    if (typeof p.error === "string" && p.error) next.fontsError = p.error;
+    return next;
   }
   if (p.phase === "converting")
     return { ...state, phase: "converting", converter: p.converter || "" };
