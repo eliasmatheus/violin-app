@@ -18,8 +18,8 @@ import "@/assets/styles/appmenu-options.css";
 import ModuleManager from "@/helpers/ModuleManager";
 import { renderCategoryTile } from "@/helpers/CategoryTile";
 import $storage from "@/helpers/Storage";
-import $alert from "@helpers/Alert";
 import Platform from "@/helpers/Platform";
+import $alert from "@/helpers/Alert";
 import WakeLock from "@/helpers/WakeLock";
 import { installFileDrop } from "@/helpers/FileDrop";
 import {
@@ -42,6 +42,7 @@ import Modules from "@/helpers/Modules";
 import Dev from "@/helpers/Dev";
 import UserData from "@/helpers/UserData";
 import AppData from "@/helpers/AppData";
+import { anyOpenModuleWants } from "@/config/modules";
 import { useFileProjection } from "@/composables/useFileProjection";
 import { useBackgroundSound } from "@/composables/useBackgroundSound";
 import { syncFromIdb as syncDevicesFromIdb } from "@/composables/useDevices";
@@ -2755,39 +2756,49 @@ $storage.hydrate().then(async () => {
           }
         };
 
+        // Com um módulo de operação ao vivo aberto (manifesto: `shell.immediateEscape`)
+        // o Esc é a saída de emergência: tira da
+        // tela na hora, sem diálogo — um erro no telão não pode esperar o
+        // operador achar o "Sim". E as janelas ficam: fechá-las é o "Parar
+        // apresentação". Fora dele, vale a confirmação de sempre.
+        const immediate = anyOpenModuleWants("immediateEscape");
+        const stop = (confirmKey, action) => {
+          if (immediate) action();
+          else $alert.yesno(confirmKey, (btn) => btn === "yes" && action());
+        };
+        Broadcast.send(BROADCAST_TYPE.RETURN_OVERRIDE, { active: false });
+
         /*
          * URL projetada: só um item no telão, então é ela que o ESC encerra,
          * e com a mesma confirmação que a projeção de slides tem.
          */
         if (ProjectionWindows.isSiteProjectionActive()) {
-          $alert.yesno("modules.media.alerts.close_projection", (btn) => {
-            if (btn === "yes") void ProjectionWindows.closeSiteWindow();
-          });
+          stop(
+            "modules.media.alerts.close_projection",
+            () => void ProjectionWindows.closeSiteWindow()
+          );
           return;
         }
 
         // Projeção de anúncios
         const fp = useFileProjection();
+        const lastFile = Broadcast.getLastPayload(BROADCAST_TYPE.FILE_PROJECTION);
         if (fp.isProjecting.value && fp.currentType.value === "announcements") {
           fp.stopProjection();
           Projection.close("announcements");
         }
-        // Projeção de arquivos de imagem e vídeo
-        else if (Broadcast.getLastPayload(BROADCAST_TYPE.FILE_PROJECTION)) {
-          $alert.yesno("modules.media.alerts.close_projection", (btn) => {
-            if (btn === "yes") {
-              Broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, { action: "clear" });
-              Media.close(true);
-              closeEverythingElse();
-            }
+        // Projeção de arquivos de imagem e vídeo. O "clear" também fica no
+        // cache — não é arquivo no ar.
+        else if (lastFile && lastFile.action !== "clear") {
+          stop("modules.media.alerts.close_projection", () => {
+            Broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, { action: "clear" });
+            Media.close(true, false, immediate);
+            closeEverythingElse();
           });
         } else if (_mediaIsActive()) {
-          // Música/Slides (com confirmação se ativa)
-          $alert.yesno("modules.media.alerts.close", (btn) => {
-            if (btn === "yes") {
-              Media.close(true);
-              closeEverythingElse();
-            }
+          stop("modules.media.alerts.close", () => {
+            Media.close(true, false, immediate);
+            closeEverythingElse();
           });
         } else {
           closeEverythingElse();

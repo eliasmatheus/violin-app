@@ -192,6 +192,49 @@ declare global {
       chooseFile: (kind?: "media") => Promise<string | null>;
       chooseImage: () => Promise<string | null>;
       chooseDir: () => Promise<string | null>;
+      listDir: (dirPath: string) => Promise<
+        | {
+            ok: true;
+            entries: {
+              name: string;
+              path: string;
+              isDir: boolean;
+              ext: string;
+              size: number;
+              mtimeMs: number;
+            }[];
+          }
+        | { ok: false; error: string }
+      >;
+      seriesRead?: (
+        dirPath: string
+      ) => Promise<
+        | {
+            ok: true;
+            series: import("./types/Series").SeriesDoc | null;
+            versions: import("./types/Series").SeriesVersion[];
+          }
+        | { ok: false; error: string }
+      >;
+      seriesResolve?: (
+        dirPath: string,
+        choice: string
+      ) => Promise<
+        | { ok: true; series: import("./types/Series").SeriesDoc | null; partial?: number }
+        | { ok: false; error: string }
+      >;
+      seriesApply?: (
+        dirPath: string,
+        op: import("./types/Series").SeriesOp
+      ) => Promise<{ ok: true; series: import("./types/Series").SeriesDoc } | { ok: false; error: string }>;
+      church?: (op: string, ...args: unknown[]) => Promise<unknown>;
+      computerName?: () => Promise<string>;
+      convertPresentation?: (
+        filePath: string
+      ) => Promise<{ ok: true; pdf: string; cached: boolean } | { ok: false; error: string }>;
+      cloudStates?: (paths: string[]) => Promise<Record<string, "local" | "cloud">>;
+      cloudDownload?: (filePath: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+      onCloudProgress?: (cb: (data: { path: string; percent: number }) => void) => () => void;
       setDataDir: (dir: string, opts?: { moveExisting?: boolean }) => Promise<void>;
       enforceQuota: (maxBytes: number) => Promise<void>;
       checkLocal: (paths: string[]) => Promise<Record<string, "own" | "classic" | false>>;
@@ -302,6 +345,17 @@ declare global {
       cancel: (id: string) => Promise<boolean>;
       has: (id: string) => Promise<boolean>;
       list: () => Promise<import("./helpers/OnlineVideo").OnlineVideoFile[]>;
+      prefetch?: (id: string, opts?: { maxHeight?: number }) => Promise<{ ok: boolean }>;
+      accountStatus?: () => Promise<import("./helpers/OnlineVideo").YouTubeAccountStatus>;
+      accountLogin?: () => Promise<import("./helpers/OnlineVideo").YouTubeAccountStatus>;
+      accountLogout?: () => Promise<import("./helpers/OnlineVideo").YouTubeAccountStatus>;
+      collection?: (
+        source: import("./helpers/OnlineVideo").YouTubeCollectionSource,
+        range: { start: number; count: number; lang?: string }
+      ) => Promise<
+        | ({ ok: true } & import("./helpers/OnlineVideo").YouTubeCollectionPage)
+        | { ok: false; error: { kind: string; message: string } }
+      >;
       keep: (id: string) => Promise<boolean>;
       prepare: () => Promise<{ ok: boolean; ready?: boolean; error?: unknown }>;
       remove: (id: string) => Promise<boolean>;

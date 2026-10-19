@@ -21,6 +21,7 @@ const MODULES_LIBRAS = `${MODULES}.${ModuleEnum.LIBRAS}`;
 const MODULES_LITURGY = `${MODULES}.${ModuleEnum.LITURGY}`;
 const MODULES_MEDIA = `${MODULES}.${ModuleEnum.MEDIA}`;
 const MODULES_MEDIA_CONFIG = `${MODULES}.${ModuleEnum.MEDIA}.config`;
+const MODULES_PRESENTATION_MODE = `${MODULES}.${ModuleEnum.PRESENTATION_MODE}`;
 const MODULES_STOPWATCH = `${MODULES}.${ModuleEnum.STOPWATCH}`;
 const MODULES_TIMER = `${MODULES}.${ModuleEnum.TIMER}`;
 const MODULES_TIMER_WORSHIP = `${MODULES}.${ModuleEnum.TIMER_WORSHIP}`;
@@ -105,6 +106,47 @@ export const KEYS = {
       SHOW_NOTES: `${MODULES_LITURGY}.show_notes`,
       MARK_ON_ACCESS: `${MODULES_LITURGY}.mark_on_access`,
       SHOW: `${MODULES_LITURGY}.show`,
+    },
+    PRESENTATION_MODE: {
+      /** AppData: módulo aberto em alguma aba. */
+      SHOW: `${MODULES_PRESENTATION_MODE}.show`,
+      /** UserData: esconde o corpo do ribbon e as abas de módulo enquanto a aba está ativa. */
+      EXPANDED: `${MODULES_PRESENTATION_MODE}.expanded`,
+      /** UserData: saída travada. Mora aqui porque o stateBinding do ribbon lê o UserData; o módulo zera ao abrir. */
+      OUTPUT_LOCKED: `${MODULES_PRESENTATION_MODE}.output_locked`,
+      /** AppData: há saída para abrir — alguma das duas (tela principal, retorno) está fechada. */
+      CAN_START: `${MODULES_PRESENTATION_MODE}.can_start`,
+      /** AppData: há saída aberta para fechar. */
+      CAN_STOP: `${MODULES_PRESENTATION_MODE}.can_stop`,
+      /** AppData: há saída aberta e a tela ainda não está limpa. */
+      CAN_CLEAR: `${MODULES_PRESENTATION_MODE}.can_clear`,
+      /** AppData: há conteúdo no ar para tirar (música, versículo, arquivo...). */
+      CAN_TAKE_OFF: `${MODULES_PRESENTATION_MODE}.can_take_off`,
+      /** UserData: pastas do navegador de arquivos — `{ path, label }[]`. */
+      LIBRARY_FOLDERS: `${MODULES_PRESENTATION_MODE}.library_folders`,
+      /** UserData: arquivos marcados com estrela no navegador de arquivos. */
+      LIBRARY_FAVORITES: `${MODULES_PRESENTATION_MODE}.library_favorites`,
+      /** UserData: tipos de conteúdo escondidos no retorno de palco — `{ music?: true, file?: true, ... }`. */
+      RETURN_HIDDEN: `${MODULES_PRESENTATION_MODE}.return_hidden`,
+      /** UserData: biblioteca ocupando as duas colunas da esquerda. */
+      LIBRARY_FULL_WIDTH: `${MODULES_PRESENTATION_MODE}.library_full_width`,
+      /** UserData: altura da biblioteca em px, ajustada arrastando a borda. */
+      LIBRARY_HEIGHT: `${MODULES_PRESENTATION_MODE}.library_height`,
+      /** UserData: largura (px) da coluna do programa, à esquerda. */
+      PROGRAM_WIDTH: `${MODULES_PRESENTATION_MODE}.program_width`,
+      /** UserData: largura (px) da coluna das saídas, à direita. */
+      OUTPUTS_WIDTH: `${MODULES_PRESENTATION_MODE}.outputs_width`,
+      /** UserData: coluna do programa escondida (ribbon → Exibição → Mostrar programa). */
+      PROGRAM_HIDDEN: `${MODULES_PRESENTATION_MODE}.program_hidden`,
+      /**
+       * UserData: a pasta da igreja deste computador (OneDrive…), onde ficam os
+       * programas e modelos compartilhados. Vazio: só neste computador.
+       */
+      CHURCH_FOLDER: `${MODULES_PRESENTATION_MODE}.church_folder`,
+      /** UserData: onde a busca da aba Músicas procura — `{ name, lyric, album, track }`. */
+      MUSIC_SEARCH: `${MODULES_PRESENTATION_MODE}.music_search`,
+      /** UserData: aba Músicas mostra só as que têm playback. */
+      MUSIC_INSTRUMENTAL: `${MODULES_PRESENTATION_MODE}.music_instrumental`,
     },
     MUSICS: {
       SELECTED_PLAYLIST: `${MODULES}.${ModuleEnum.MUSICS}.selected_playlist`,
@@ -435,6 +477,8 @@ export const KEYS = {
     POPUP: "popup",
     APP_UPDATE_AVAILABLE: "app_update_available",
     APP_UPDATE_VERSION: "app_update_version",
+    /** AppData: id do módulo da aba ativa (o que está à vista). */
+    ACTIVE_MODULE: "active_module",
   },
   REMOTE: {
     IS_CONNECTED: "remote.is_connected",

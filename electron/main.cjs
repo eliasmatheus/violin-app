@@ -81,6 +81,12 @@ const fileOpen = require("./main/fileOpen.js");
 const splash = require("./main/splash.js");
 const storage = require("./main/storage.js");
 const docStore = require("./main/docStore.js");
+const fileBrowser = require("./main/fileBrowser.js");
+const cloudFiles = require("./main/cloudFiles.js").createCloudFiles();
+const seriesFile = require("./main/seriesFile.js");
+const fileActions = require("./main/fileActions.js");
+const churchFolder = require("./main/churchFolder.js");
+const { createPresentationConverter } = require("./main/presentationConvert.js");
 const mediaVariants = require("./main/mediaVariants.js");
 const mediaResolver = require("./main/mediaResolver.js");
 const classicLibrary = require("./main/classicLibrary.js");
@@ -2635,6 +2641,48 @@ ipcMain.handle("storage:readDir", async (_e, dirPath) => {
   }
   return walk(dirPath);
 });
+
+/** Um nível de uma pasta, com tamanho e data — navegador de arquivos do Modo apresentação. */
+ipcMain.handle("files:listDir", (_e, dirPath) => fileBrowser.listDir(dirPath));
+// Pastas na nuvem (OneDrive, Google Drive, iCloud...): o que ainda não baixou, e baixar.
+ipcMain.handle("files:cloudStates", (_e, paths) => cloudFiles.states(paths));
+ipcMain.handle("files:cloudDownload", (event, filePath) =>
+  cloudFiles.download(filePath, (percent) => {
+    if (!event.sender.isDestroyed()) event.sender.send("files:cloudProgress", { path: filePath, percent });
+  })
+);
+// Histórico de uma série de vídeos, gravado na própria pasta (nome de arquivo fixo).
+ipcMain.handle("files:seriesRead", (_e, dirPath) => seriesFile.read(dirPath));
+ipcMain.handle("files:seriesApply", (_e, dirPath, op) => seriesFile.apply(dirPath, op));
+// Cópias em conflito do sincronizador: "merge" ou o nome da versão escolhida.
+ipcMain.handle("files:seriesResolve", (_e, dirPath, choice) => seriesFile.resolve(dirPath, choice));
+// Ações de arquivo da biblioteca do Modo apresentação (só arquivos, nunca pastas).
+ipcMain.handle("files:rename", (_e, filePath, newName) =>
+  fileActions.rename(filePath, newName, {
+    renameInSeries: (dir, from, to) => seriesFile.apply(dir, { type: "rename", from, to }),
+  })
+);
+ipcMain.handle("files:setHidden", (_e, filePath, hidden) => fileActions.setHidden(filePath, hidden));
+ipcMain.handle("files:trash", (_e, filePath) => fileActions.trash(filePath, shell));
+ipcMain.handle("files:reveal", (_e, filePath) => fileActions.reveal(filePath, shell));
+// Pasta da igreja: programas e modelos do Modo apresentação numa pasta compartilhada.
+const CHURCH_OPS = {
+  stat: churchFolder.stat,
+  read: churchFolder.read,
+  write: churchFolder.write,
+  list: churchFolder.list,
+  conflicts: churchFolder.conflicts,
+  resolve: churchFolder.resolve,
+};
+ipcMain.handle("files:church", (_e, op, ...args) =>
+  Object.prototype.hasOwnProperty.call(CHURCH_OPS, op) ? CHURCH_OPS[op](...args) : { ok: false, error: "invalid" }
+);
+ipcMain.handle("files:computerName", () => churchFolder.computerName());
+// PowerPoint → PDF pelo PowerPoint instalado; o PDF é cache, refeito se o arquivo mudar.
+const presentationConverter = createPresentationConverter({
+  cacheDir: path.join(paths.dataDir(), "cache", "presentations"),
+});
+ipcMain.handle("files:convertPresentation", (_e, filePath) => presentationConverter.toPdf(filePath));
 
 ipcMain.handle("storage:chooseDir", async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
