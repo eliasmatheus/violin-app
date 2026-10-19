@@ -133,7 +133,12 @@ function Do-Convert($a) {
     # Open(FileName, ReadOnly, Untitled, WithWindow) — msoTrue = -1, msoFalse = 0
     $withWindow = 0
     if ($a.withWindow) { $withWindow = -1 }
-    $pres = $app.Presentations.Open([string]$a.input, -1, 0, $withWindow)
+    try {
+        $pres = $app.Presentations.Open([string]$a.input, -1, 0, $withWindow)
+    } catch {
+        throw ('O PowerPoint nao conseguiu abrir este arquivo. Abra o arquivo no PowerPoint: se ele ' +
+               'pedir para reparar, repare, salve e adicione de novo. (' + $_.Exception.Message + ')')
+    }
     if ($a.withWindow -and $owns) { try { $app.WindowState = 2 } catch { } }
     # Cada slide vira uma imagem desenhada pelo proprio PowerPoint (fonte certa,
     # efeitos, transparencias). O PDF com essas imagens e montado no Node: o
