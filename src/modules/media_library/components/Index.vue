@@ -1397,6 +1397,9 @@ async function abrirRetornoNativo(file: MediaFile, pagina: number): Promise<void
     if (!aberto) {
       console.info("[pptx] abrindo o retorno do modo nativo", { espera });
       await openMediaWindow("return", "file");
+      // O retorno nasce com o foco; as setas (e o passador) têm que continuar
+      // chegando aqui, que é quem as manda ao PowerPoint.
+      window.focus();
     }
     const reenviar = !espera || !aberto || currentPdfPlaybackId !== id;
     currentPdfPlaybackId = id;
