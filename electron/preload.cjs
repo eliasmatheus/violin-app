@@ -351,6 +351,22 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
   },
 
   /*
+   * PowerPoint fiel: o main instala as fontes que faltam e o PowerPoint (ou o
+   * LibreOffice) salva o .pptx como PDF. Ver `electron/main/pptx/`.
+   */
+  pptx: {
+    status: () => ipcRenderer.invoke("pptx:status"),
+    /** Pendente durante a conversão; devolve `{ ok, path }` ou `{ ok: false, code, message }`. */
+    convert: (path) => ipcRenderer.invoke("pptx:convert", { path }),
+    /** Andamento (fontes, conversão). Devolve a função de cleanup. */
+    onProgress: (cb) => {
+      const handler = (_e, data) => cb?.(data);
+      ipcRenderer.on("pptx:progress", handler);
+      return () => ipcRenderer.off("pptx:progress", handler);
+    },
+  },
+
+  /*
    * Integração Canva. Segredos (Client Secret, access/refresh token) não
    * passam por aqui: só resultado já validado no main. Ver
    * `electron/main/canva/` — o cofre é `storage/canva_secrets.json`.

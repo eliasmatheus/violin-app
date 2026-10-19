@@ -78,6 +78,39 @@ declare global {
     continuation?: string | null;
   }
 
+  /** Situação de uma fonte usada pelo .pptx depois da verificação. */
+  interface PptxFont {
+    name: string;
+    /**
+     * ok = já instalada · office = fonte de nuvem do Office · embedded = usada de
+     * dentro do arquivo · installed = instalada agora · missing = não encontrada ·
+     * unmatched = instalada, mas com nome diferente do que o arquivo pede
+     */
+    status: "ok" | "office" | "embedded" | "installed" | "missing" | "unmatched";
+    source: "embedded" | "google" | null;
+  }
+
+  type PptxConvertResult =
+    | {
+        ok: true;
+        path: string;
+        cached: boolean;
+        converter: string;
+        fonts: PptxFont[];
+        /** O PowerPoint estava com outra apresentação aberta e não leu as fontes novas. */
+        staleFonts: boolean;
+      }
+    | { ok: false; code: string; message: string };
+
+  interface PptxProgress {
+    path: string;
+    phase: "fonts" | "font" | "converting" | "done";
+    name?: string;
+    status?: string;
+    source?: string | null;
+    converter?: string;
+  }
+
   interface LouvorjaApi {
     platform: string;
     version: string;
@@ -395,6 +428,17 @@ declare global {
      * Integração Canva. OAuth2+PKCE, listagem e `view_url` acontecem no main;
      * aqui só chega resultado já validado.
      */
+    /**
+     * PowerPoint fiel: instala as fontes que faltam e converte o .pptx em PDF
+     * pelo próprio PowerPoint (Windows/Mac) ou pelo LibreOffice.
+     */
+    pptx?: {
+      status: () => Promise<{ ok: true; converter: string | null; platform: string }>;
+      /** Pendente durante a conversão (segundos a alguns minutos). */
+      convert: (path: string) => Promise<PptxConvertResult>;
+      /** Andamento da conversão. Devolve a função de cleanup. */
+      onProgress: (cb: (data: PptxProgress) => void) => () => void;
+    };
     canva: {
       status: () => Promise<CanvaStatus>;
       /** Grava no cofre. O Client Secret nunca volta daqui. */

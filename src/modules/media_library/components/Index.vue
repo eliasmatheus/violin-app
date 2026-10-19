@@ -324,7 +324,7 @@
         ref="fileInput"
         type="file"
         multiple
-        accept="image/*,video/*,.pdf,.heic,.heif"
+        :accept="`image/*,video/*,.pdf,.heic,.heif,${PPT_ACCEPT}`"
         class="media-file-input"
         @change="onFilesSelected"
       />
@@ -397,6 +397,14 @@ import { KEYS } from "@/constants/UserDataKeys";
 import { IMAGE_EXT, VIDEO_EXT } from "@/constants/FileTypes";
 import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
 import Telemetry from "@/helpers/Telemetry";
+import { useBackgroundTasks } from "@/composables/useBackgroundTasks";
+import {
+  PPT_ACCEPT,
+  isPowerPointName,
+  missingFonts,
+  parseConvertResult,
+  progressDetail,
+} from "../pptxImport";
 import {
   adotarProjecaoExterna,
   fileProjectionPageFor,
@@ -833,7 +841,11 @@ async function onDrop(e: DragEvent): Promise<void> {
   const valid: File[] = [];
   for (const f of Array.from(droppedFiles)) {
     const ext = f.name.split(".").pop()?.toLowerCase() || "";
-    const isMedia = IMAGE_EXT.includes(ext) || VIDEO_EXT.includes(ext) || ext === "pdf";
+    const isMedia =
+      IMAGE_EXT.includes(ext) ||
+      VIDEO_EXT.includes(ext) ||
+      ext === "pdf" ||
+      isPowerPointName(f.name);
     if (isMedia) valid.push(f);
   }
   if (valid.length < droppedFiles.length) noteUnsupported();
@@ -848,6 +860,10 @@ async function onDrop(e: DragEvent): Promise<void> {
 /** Importa um arquivo arrastado (com caminho no desktop ou blob na web). */
 async function importDroppedEntry(f: File, categoryId: string): Promise<void> {
   const filePath = localPathOf(f);
+  if (isPowerPointName(f.name)) {
+    await importPowerPoint(filePath, f.name, categoryId);
+    return;
+  }
   if (filePath && !isHeic(f.name, (f as File).type)) {
     const name = f.name;
     const ext = name.split(".").pop()?.toLowerCase() || "";
@@ -1009,6 +1025,73 @@ const podeVoltar = computed(() => {
 /*  Library management                                                 */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  PowerPoint → PDF fiel (fontes instaladas antes)                    */
+/* ------------------------------------------------------------------ */
+
+const backgroundTasks = useBackgroundTasks();
+
+/**
+ * Converte o .pptx num PDF fiel e guarda o PDF na biblioteca, com o nome do
+ * arquivo original. A conversão roda no main (fontes + PowerPoint/LibreOffice)
+ * e aparece na lista de tarefas em segundo plano enquanto dura.
+ */
+async function importPowerPoint(
+  filePath: string | null | undefined,
+  name: string,
+  categoryId: string
+): Promise<void> {
+  const api = (Platform.api as LouvorjaApi | null)?.pptx;
+  if (!Platform.isDesktop || !api || !filePath) {
+    $alert.error({ text: tm("pptx.desktop_only"), translate: false });
+    return;
+  }
+  const taskId = "pptx-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
+  backgroundTasks.registerTask(taskId, tm("pptx.task", { name }));
+  const off = api.onProgress((p) => {
+    if (!p || p.path !== filePath) return;
+    const info = progressDetail(p, tm);
+    if (info) backgroundTasks.updateTask(taskId, info);
+  });
+  try {
+    const result = parseConvertResult(await api.convert(filePath));
+    if (!result.ok) {
+      backgroundTasks.updateTask(taskId, { status: "error", error: result.message });
+      $alert.error({ text: tm("pptx.failed", { message: result.message }), translate: false });
+      return;
+    }
+    backgroundTasks.completeTask(taskId);
+    const file: MediaFile = {
+      id: "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+      name,
+      path: result.path,
+      type: "pdf",
+      addedAt: Date.now(),
+      categoryId,
+    };
+    await saveFile(file);
+    files.value.unshift(file);
+
+    const faltam = missingFonts(result.fonts);
+    if (faltam.length) {
+      $alert.info({
+        text: tm("pptx.missing_fonts", { name, fonts: faltam.join(", ") }),
+        translate: false,
+      });
+    } else if (result.staleFonts) {
+      $alert.info({ text: tm("pptx.stale_fonts"), translate: false });
+    } else {
+      $snackbar.success(tm(result.cached ? "pptx.ready_cached" : "pptx.ready", { name }));
+    }
+  } catch (error) {
+    const message = (error as Error)?.message || String(error);
+    backgroundTasks.updateTask(taskId, { status: "error", error: message });
+    $alert.error({ text: tm("pptx.failed", { message }), translate: false });
+  } finally {
+    off();
+  }
+}
+
 function buildThumbPath(filePath: string): string | undefined {
   if (Platform.isDesktop) {
     return $path.local(filePath);
@@ -1041,7 +1124,11 @@ async function doAddFiles(categoryId: string): Promise<void> {
     if (!result) return;
     const paths = Array.isArray(result) ? result : [result];
     for (const rawPath of paths) {
-      const name = rawPath.split("/").pop() || rawPath.split("\\").pop() || rawPath;
+      const name = rawPath.split(/[\\/]/).pop() || rawPath;
+      if (isPowerPointName(name)) {
+        await importPowerPoint(rawPath, name, categoryId);
+        continue;
+      }
       const ext = name.split(".").pop()?.toLowerCase() || "";
       const isImage = IMAGE_EXT.includes(ext);
       const isVideo = VIDEO_EXT.includes(ext);
@@ -1097,6 +1184,10 @@ async function onFilesSelected(e: Event): Promise<void> {
   for (const f of Array.from(input.files)) {
     try {
       const filePath = localPathOf(f);
+      if (isPowerPointName(f.name)) {
+        await importPowerPoint(filePath, f.name, pendingCategoryId ?? UNCATEGORIZED_ID);
+        continue;
+      }
       if (filePath && !isHeic(f.name, (f as File).type)) {
         const name = f.name;
         const ext = name.split(".").pop()?.toLowerCase() || "";

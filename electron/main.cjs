@@ -92,6 +92,7 @@ const mediaResolver = require("./main/mediaResolver.js");
 const classicLibrary = require("./main/classicLibrary.js");
 const netHealth = require("./main/netHealth.js");
 const canva = require("./main/canva/index.js");
+const pptx = require("./main/pptx/index.js");
 const { ehPaginaDeLogin, hostCanva } = require("./main/windowRoute.js");
 
 // Aberto por um terminal que depois foi fechado, o stdout vira um pipe morto:
@@ -2545,6 +2546,31 @@ ipcMain.handle("canva:clearCachedPdf", (_event, payload) => {
 ipcMain.handle("canva:clearCachedPdfs", () => canva.clearCachedPdfs());
 
 // ---------------------------------------------------------------------------
+// IPC: PowerPoint fiel — .pptx vira PDF desenhado pelo próprio PowerPoint
+// (ou LibreOffice) depois de instalar as fontes que faltam. O PDF entra na
+// Biblioteca de Mídia e segue pela projeção de arquivo (telão e retorno).
+// ---------------------------------------------------------------------------
+
+/** Conversor disponível neste computador (PowerPoint, LibreOffice ou nenhum). */
+ipcMain.handle("pptx:status", () => pptx.status());
+
+/**
+ * Converte e devolve o caminho do PDF. Fica pendente durante a conversão
+ * (segundos a alguns minutos); o andamento chega por `pptx:progress`.
+ * O caminho é validado no `pptx/index.js` (extensão, existência, tamanho).
+ */
+ipcMain.handle("pptx:convert", (event, payload) => {
+  const filePath = payload && typeof payload === "object" ? payload.path : undefined;
+  if (typeof filePath !== "string") {
+    return { ok: false, code: "invalid_file", message: "Arquivo inválido." };
+  }
+  const sender = event.sender;
+  return pptx.convert(filePath, {
+    onProgress: (p) => safeSend(sender, "pptx:progress", { path: filePath, ...p }),
+  });
+});
+
+// ---------------------------------------------------------------------------
 // IPC: Storage (S2) — visibilidade e gerenciamento da pasta de mídia + cache
 // ---------------------------------------------------------------------------
 
@@ -2706,8 +2732,8 @@ ipcMain.handle("storage:chooseFile", async (event, kind) => {
       ? {
           filters: [
             {
-              name: "Imagens, vídeos e PDF",
-              extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "heic", "heif", "mp4", "webm", "mkv", "mov", "avi", "m4v", "pdf"],
+              name: "Imagens, vídeos, PDF e PowerPoint",
+              extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "heic", "heif", "mp4", "webm", "mkv", "mov", "avi", "m4v", "pdf", "pptx", "ppsx", "pptm", "ppt", "pps", "odp"],
             },
             { name: "Todos os arquivos", extensions: ["*"] },
           ],

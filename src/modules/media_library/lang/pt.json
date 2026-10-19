@@ -1,6 +1,6 @@
 {
   "title": "Biblioteca de Mídia",
-  "unsupported_file_type": "Tipo de arquivo não suportado. A biblioteca aceita imagens, vídeos e PDF. Para áudio, use o Som de Fundo.",
+  "unsupported_file_type": "Tipo de arquivo não suportado. A biblioteca aceita imagens, vídeos, PDF e PowerPoint. Para áudio, use o Som de Fundo.",
   "description": "Gerencie e projeta imagens e vídeos em sequência.",
   "library": "Biblioteca",
   "playlist": "Playlist",
@@ -76,5 +76,18 @@
     "url_placeholder": "https://www.canva.com/design/...",
     "project_url": "Projetar",
     "url_invalid": "Esse não é o link de um design do Canva. Cole algo como https://www.canva.com/design/..."
+  },
+  "pptx": {
+    "task": "PowerPoint: {name}",
+    "checking_fonts": "Conferindo as fontes…",
+    "font_searching": "Procurando a fonte {name}…",
+    "font_installed": "Fonte {name} instalada",
+    "converting": "Gerando as páginas no {converter}…",
+    "desktop_only": "PowerPoint só pode ser adicionado no aplicativo para computador.",
+    "ready": "{name} pronto para projetar.",
+    "ready_cached": "{name} já estava pronto.",
+    "missing_fonts": "{name} foi adicionado, mas faltam fontes neste computador: {fonts}. Instale-as e adicione o arquivo de novo para corrigir.",
+    "stale_fonts": "O PowerPoint estava com outra apresentação aberta e pode não ter usado as fontes recém-instaladas. Feche o PowerPoint e adicione o arquivo de novo.",
+    "failed": "Não foi possível abrir o PowerPoint: {message}"
   }
 }
