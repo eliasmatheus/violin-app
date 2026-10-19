@@ -2559,6 +2559,21 @@ ipcMain.handle("pptx:status", () => pptx.status());
  * (segundos a alguns minutos); o andamento chega por `pptx:progress`.
  * O caminho é validado no `pptx/index.js` (extensão, existência, tamanho).
  */
+/**
+ * "Instalar fonte…" do painel do PowerPoint. O arquivo é escolhido no diálogo
+ * nativo AQUI — nenhum caminho vem do renderer.
+ */
+ipcMain.handle("pptx:installFonts", async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win, {
+    title: "Instalar fonte",
+    properties: ["openFile", "multiSelections"],
+    filters: [{ name: "Fontes", extensions: ["ttf", "otf"] }],
+  });
+  if (result.canceled || !result.filePaths?.length) return { ok: false, code: "canceled", message: "" };
+  return pptx.installFontFiles(result.filePaths);
+});
+
 ipcMain.handle("pptx:convert", (event, payload) => {
   const filePath = payload && typeof payload === "object" ? payload.path : undefined;
   if (typeof filePath !== "string") {

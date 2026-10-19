@@ -1,0 +1,149 @@
+<template>
+  <LjDialog
+    :model-value="!!state"
+    size="md"
+    :title="titulo"
+    :icon="state?.phase === 'error' ? ICONS.UI.ALERT : ICONS.MODULES.MEDIA_LIBRARY"
+    :icon-variant="
+      state?.phase === 'error' ? 'danger' : state?.phase === 'done' ? 'success' : 'info'
+    "
+    @update:model-value="(v: boolean) => !v && emit('close')"
+  >
+    <div v-if="state" class="pptx-import">
+      <div class="pptx-import__file" :title="state.name">{{ state.name }}</div>
+
+      <ol class="pptx-import__steps">
+        <li :class="classeEtapa('fonts')">
+          <LjSpinner v-if="state.phase === 'fonts'" :size="14" />
+          <LjIcon v-else :icon="ICONS.UI.CHECK_CIRCLE" :size="16" />
+          {{ tm("pptx.step_fonts") }}
+        </li>
+        <li :class="classeEtapa('converting')">
+          <LjSpinner v-if="state.phase === 'converting'" :size="14" />
+          <LjIcon v-else :icon="ICONS.UI.CHECK_CIRCLE" :size="16" />
+          {{ tm("pptx.step_slides", { converter: state.converter || "PowerPoint" }) }}
+        </li>
+        <li :class="classeEtapa('done')">
+          <LjIcon :icon="ICONS.UI.CHECK_CIRCLE" :size="16" />
+          {{ tm("pptx.step_done") }}
+        </li>
+      </ol>
+
+      <LjProgress v-if="state.phase === 'fonts' || state.phase === 'converting'" indeterminate />
+
+      <p v-if="state.phase === 'error'" class="pptx-import__error">{{ state.error }}</p>
+
+      <div class="pptx-import__fonts-title">{{ tm("pptx.fonts_title") }}</div>
+      <p v-if="state.phase === 'fonts' && !state.fonts.length" class="pptx-import__hint">
+        {{ tm("pptx.checking_fonts") }}
+      </p>
+      <PptxFontList v-else :fonts="state.fonts" :tm="tm" />
+      <p v-if="state.phase === 'done' && faltando" class="pptx-import__hint">
+        {{ tm("pptx.missing_hint") }}
+      </p>
+    </div>
+
+    <template #footer>
+      <template v-if="state?.phase === 'done'">
+        <LjButton size="sm" @click="emit('close')">{{ tm("pptx.close") }}</LjButton>
+        <LjButton size="sm" variant="primary" :icon="ICONS.PLAYER.PLAY" @click="emit('project')">
+          {{ tm("pptx.project_now") }}
+        </LjButton>
+      </template>
+      <LjButton v-else-if="state?.phase === 'error'" size="sm" @click="emit('close')">
+        {{ tm("pptx.close") }}
+      </LjButton>
+      <LjButton v-else size="sm" @click="emit('close')">{{ tm("pptx.background") }}</LjButton>
+    </template>
+  </LjDialog>
+</template>
+
+<script setup lang="ts">
+import { computed } from "vue";
+import { LjButton, LjDialog, LjIcon, LjProgress, LjSpinner } from "@/components/ui";
+import { ICONS } from "@/config/Icons";
+import PptxFontList from "./PptxFontList.vue";
+import { missingFonts, type PptxImportState } from "../pptxImport";
+
+/**
+ * Andamento de um PowerPoint sendo preparado: fontes, geração dos slides e o
+ * resultado. Fechar não cancela — a conversão segue e aparece também em
+ * "Processos em segundo plano".
+ */
+const props = defineProps<{
+  state: PptxImportState | null;
+  tm: (_key: string, _named?: Record<string, unknown>) => string;
+}>();
+
+const emit = defineEmits<{ close: []; project: [] }>();
+
+const ORDEM = ["fonts", "converting", "done"] as const;
+
+const titulo = computed(() => {
+  if (props.state?.phase === "done") return props.tm("pptx.dialog_ready");
+  if (props.state?.phase === "error") return props.tm("pptx.dialog_failed");
+  return props.tm("pptx.dialog_title");
+});
+
+const faltando = computed(() => missingFonts((props.state?.fonts ?? []) as PptxFont[]).length > 0);
+
+function classeEtapa(etapa: (typeof ORDEM)[number]): string {
+  const atual = props.state?.phase ?? "fonts";
+  if (atual === "error") return "is-pending";
+  const a = ORDEM.indexOf(atual as (typeof ORDEM)[number]);
+  const e = ORDEM.indexOf(etapa);
+  if (etapa === "done" && atual === "done") return "is-done";
+  return e < a ? "is-done" : e === a ? "is-active" : "is-pending";
+}
+</script>
+
+<style>
+.pptx-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lj-space-5);
+}
+.pptx-import__file {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pptx-import__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lj-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pptx-import__steps li {
+  display: flex;
+  align-items: center;
+  gap: var(--lj-space-4);
+}
+.pptx-import__steps li.is-pending {
+  opacity: 0.45;
+}
+.pptx-import__steps li.is-done svg {
+  color: var(--lj-success);
+}
+.pptx-import__steps li.is-active {
+  font-weight: 600;
+}
+.pptx-import__fonts-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.pptx-import__error {
+  margin: 0;
+  color: var(--lj-danger);
+}
+.pptx-import__hint {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+</style>

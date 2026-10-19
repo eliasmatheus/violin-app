@@ -109,6 +109,8 @@ declare global {
     status?: string;
     source?: string | null;
     converter?: string;
+    /** Na fase "fonts": a lista completa de fontes do arquivo, já classificadas. */
+    fonts?: PptxFont[];
   }
 
   interface LouvorjaApi {
@@ -436,6 +438,10 @@ declare global {
       status: () => Promise<{ ok: true; converter: string | null; platform: string }>;
       /** Pendente durante a conversão (segundos a alguns minutos). */
       convert: (path: string) => Promise<PptxConvertResult>;
+      /** Diálogo nativo de fontes (.ttf/.otf); instala para o usuário. */
+      installFonts: () => Promise<
+        { ok: true; installed: number } | { ok: false; code: string; message: string }
+      >;
       /** Andamento da conversão. Devolve a função de cleanup. */
       onProgress: (cb: (data: PptxProgress) => void) => () => void;
     };

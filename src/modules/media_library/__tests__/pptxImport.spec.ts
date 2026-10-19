@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   PPT_ACCEPT,
+  applyProgress,
+  fontTone,
   isPowerPointName,
   missingFonts,
   parseConvertResult,
@@ -53,5 +55,65 @@ describe("pptxImport", () => {
       progressDetail({ path: "a", phase: "converting", converter: "PowerPoint" }, tm)?.detail
     ).toContain("PowerPoint");
     expect(progressDetail({ path: "a", phase: "done" }, tm)).toBeNull();
+  });
+});
+
+describe("pptxImport — janela de andamento", () => {
+  const base = {
+    name: "Culto.pptx",
+    path: "C:/Culto.pptx",
+    phase: "fonts" as const,
+    converter: "",
+    fonts: [],
+    error: "",
+  };
+
+  it("acompanha fontes e etapas do arquivo certo", () => {
+    let s = applyProgress(base, {
+      path: "C:/Culto.pptx",
+      phase: "font",
+      name: "Brich",
+      status: "searching",
+    });
+    expect(s.fonts).toEqual([{ name: "Brich", status: "searching", source: null }]);
+    s = applyProgress(s, {
+      path: "C:/Culto.pptx",
+      phase: "font",
+      name: "Brich",
+      status: "installed",
+      source: "embedded",
+    });
+    expect(s.fonts).toHaveLength(1);
+    expect(s.fonts[0].status).toBe("installed");
+    s = applyProgress(s, { path: "C:/Culto.pptx", phase: "converting", converter: "PowerPoint" });
+    expect(s.phase).toBe("converting");
+    expect(s.converter).toBe("PowerPoint");
+    // evento de outro arquivo não mexe
+    expect(applyProgress(s, { path: "C:/Outro.pptx", phase: "fonts" })).toBe(s);
+  });
+
+  it("dá cor à situação de cada fonte", () => {
+    expect(fontTone("ok")).toBe("success");
+    expect(fontTone("installed")).toBe("success");
+    expect(fontTone("missing")).toBe("danger");
+    expect(fontTone("unmatched")).toBe("warning");
+    expect(fontTone("searching")).toBe("neutral");
+  });
+});
+
+describe("pptxImport — lista inicial de fontes", () => {
+  it("a fase de fontes já traz todas, classificadas", () => {
+    const s = applyProgress(
+      { name: "a", path: "p", phase: "fonts", converter: "", fonts: [], error: "" },
+      {
+        path: "p",
+        phase: "fonts",
+        fonts: [
+          { name: "Arial", status: "ok", source: null },
+          { name: "Brich", status: "missing", source: null },
+        ],
+      }
+    );
+    expect(s.fonts.map((f) => f.name)).toEqual(["Arial", "Brich"]);
   });
 });

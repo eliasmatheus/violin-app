@@ -358,6 +358,8 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     status: () => ipcRenderer.invoke("pptx:status"),
     /** Pendente durante a conversão; devolve `{ ok, path }` ou `{ ok: false, code, message }`. */
     convert: (path) => ipcRenderer.invoke("pptx:convert", { path }),
+    /** Abre o diálogo nativo de fontes e instala as escolhidas. */
+    installFonts: () => ipcRenderer.invoke("pptx:installFonts"),
     /** Andamento (fontes, conversão). Devolve a função de cleanup. */
     onProgress: (cb) => {
       const handler = (_e, data) => cb?.(data);

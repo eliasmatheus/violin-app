@@ -72,3 +72,46 @@ export function progressDetail(
     return { detail: tm("pptx.converting", { converter: p.converter || "" }), progress: 60 };
   return null;
 }
+
+export type FontTone = "success" | "warning" | "danger" | "neutral" | "primary";
+
+/** Cor da situação de uma fonte: verde resolvida, vermelho faltando, cinza procurando. */
+export function fontTone(status: string): FontTone {
+  if (status === "missing") return "danger";
+  if (status === "unmatched") return "warning";
+  if (status === "searching") return "neutral";
+  return "success";
+}
+
+/** Estado da janela de importação, montado a partir dos eventos de andamento. */
+export interface PptxImportState {
+  name: string;
+  path: string;
+  phase: "fonts" | "converting" | "done" | "error";
+  converter: string;
+  fonts: { name: string; status: string; source?: string | null }[];
+  error: string;
+  /** id do item já salvo na biblioteca, para "Projetar agora". */
+  fileId?: string;
+}
+
+/** Aplica um evento de andamento ao estado (função pura, testável). */
+export function applyProgress(state: PptxImportState, p: PptxProgress): PptxImportState {
+  if (p.path !== state.path) return state;
+  if (p.phase === "fonts") {
+    return Array.isArray(p.fonts)
+      ? { ...state, phase: "fonts", fonts: p.fonts.map((f) => ({ ...f })) }
+      : { ...state, phase: "fonts" };
+  }
+  if (p.phase === "converting")
+    return { ...state, phase: "converting", converter: p.converter || "" };
+  if (p.phase === "font" && p.name) {
+    const fonts = [...state.fonts];
+    const i = fonts.findIndex((f) => f.name === p.name);
+    const item = { name: p.name, status: p.status || "searching", source: p.source ?? null };
+    if (i >= 0) fonts[i] = item;
+    else fonts.push(item);
+    return { ...state, fonts };
+  }
+  return state;
+}

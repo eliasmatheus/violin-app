@@ -63,6 +63,25 @@
           <!-- Aba Canva: conteúdo remoto, navegação por pastas, sem busca local. -->
           <CanvaTab v-if="libraryFilter === 'canva'" />
 
+          <!-- PDF no telão: painel do operador (slide atual, próximo, todos, fontes) -->
+          <PdfOperatorPanel
+            v-else-if="painelVisivel && palco"
+            :url="palco.url"
+            :title="palco.title"
+            :page="currentPdfPage"
+            :total="currentPdfTotalPages"
+            :fonts="fontesNoPalco"
+            :regenerating="regerando"
+            :tm="tm"
+            @goto="irParaPagina"
+            @prev="prev"
+            @next="next"
+            @stop="stop"
+            @back="painelOculto = true"
+            @install-font="instalarFonteManual"
+            @regenerate="regerarNoPalco"
+          />
+
           <template v-else>
             <div class="media-search">
               <LjInput
@@ -267,6 +286,18 @@
         </div>
         <div class="media-playerbar-controls">
           <LjButton
+            v-if="palco && !painelVisivel"
+            size="sm"
+            variant="ghost"
+            :icon="ICONS.UI.VIEW_GRID_OUTLINE"
+            @click="
+              painelOculto = false;
+              libraryFilter = 'all';
+            "
+          >
+            {{ tm("pptx.panel_open") }}
+          </LjButton>
+          <LjButton
             icon-only
             variant="ghost"
             :icon="ICONS.PLAYER.PREV"
@@ -295,6 +326,14 @@
           />
         </div>
       </div>
+
+      <!-- Andamento do PowerPoint (fontes + slides) -->
+      <PptxImportDialog
+        :state="importacao"
+        :tm="tm"
+        @close="importacao = null"
+        @project="projetarImportado"
+      />
 
       <!-- Rename dialog -->
       <LjDialog
@@ -376,6 +415,8 @@ import CategoryManagerDialog, {
 } from "@/components/CategoryManagerDialog.vue";
 import { LjButton, LjDialog, LjDivider, LjEmpty, LjIcon, LjInput, LjTabs } from "@/components/ui";
 import CanvaTab from "./CanvaTab.vue";
+import PdfOperatorPanel from "./PdfOperatorPanel.vue";
+import PptxImportDialog from "./PptxImportDialog.vue";
 import $broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
@@ -400,10 +441,12 @@ import Telemetry from "@/helpers/Telemetry";
 import { useBackgroundTasks } from "@/composables/useBackgroundTasks";
 import {
   PPT_ACCEPT,
+  applyProgress,
   isPowerPointName,
   missingFonts,
   parseConvertResult,
   progressDetail,
+  type PptxImportState,
 } from "../pptxImport";
 import {
   adotarProjecaoExterna,
@@ -429,6 +472,8 @@ interface MediaFile {
   data?: ArrayBuffer;
   mime?: string;
   categoryId?: string;
+  /** PDF gerado de um PowerPoint: o .pptx de origem e a situação das fontes. */
+  pptx?: { source: string; fonts: PptxFont[] };
 }
 
 interface PlaylistItem {
@@ -1031,25 +1076,36 @@ const podeVoltar = computed(() => {
 
 const backgroundTasks = useBackgroundTasks();
 
+/** Janela de andamento do PowerPoint sendo preparado (null = fechada). */
+const importacao = ref<PptxImportState | null>(null);
+
 /**
  * Converte o .pptx num PDF fiel e guarda o PDF na biblioteca, com o nome do
  * arquivo original. A conversão roda no main (fontes + PowerPoint/LibreOffice)
- * e aparece na lista de tarefas em segundo plano enquanto dura.
+ * e o andamento aparece numa janela — e em "Processos em segundo plano", que
+ * continua valendo se o operador fechar a janela.
+ *
+ * `substituir`: "Gerar de novo" do painel — atualiza o item existente em vez
+ * de criar outro.
  */
 async function importPowerPoint(
   filePath: string | null | undefined,
   name: string,
-  categoryId: string
-): Promise<void> {
+  categoryId: string,
+  substituir?: MediaFile
+): Promise<MediaFile | null> {
   const api = (Platform.api as LouvorjaApi | null)?.pptx;
   if (!Platform.isDesktop || !api || !filePath) {
     $alert.error({ text: tm("pptx.desktop_only"), translate: false });
-    return;
+    return null;
   }
   const taskId = "pptx-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
   backgroundTasks.registerTask(taskId, tm("pptx.task", { name }));
+  importacao.value = { name, path: filePath, phase: "fonts", converter: "", fonts: [], error: "" };
+  const daJanela = () => importacao.value?.path === filePath;
   const off = api.onProgress((p) => {
     if (!p || p.path !== filePath) return;
+    if (daJanela() && importacao.value) importacao.value = applyProgress(importacao.value, p);
     const info = progressDetail(p, tm);
     if (info) backgroundTasks.updateTask(taskId, info);
   });
@@ -1057,38 +1113,134 @@ async function importPowerPoint(
     const result = parseConvertResult(await api.convert(filePath));
     if (!result.ok) {
       backgroundTasks.updateTask(taskId, { status: "error", error: result.message });
-      $alert.error({ text: tm("pptx.failed", { message: result.message }), translate: false });
-      return;
+      if (daJanela() && importacao.value) {
+        importacao.value = { ...importacao.value, phase: "error", error: result.message };
+      } else {
+        $alert.error({ text: tm("pptx.failed", { message: result.message }), translate: false });
+      }
+      return null;
     }
     backgroundTasks.completeTask(taskId);
-    const file: MediaFile = {
-      id: "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
-      name,
-      path: result.path,
-      type: "pdf",
-      addedAt: Date.now(),
-      categoryId,
-    };
-    await saveFile(file);
-    files.value.unshift(file);
-
-    const faltam = missingFonts(result.fonts);
-    if (faltam.length) {
-      $alert.info({
-        text: tm("pptx.missing_fonts", { name, fonts: faltam.join(", ") }),
-        translate: false,
+    const pptx = { source: filePath, fonts: result.fonts };
+    let file: MediaFile;
+    if (substituir) {
+      file = substituir;
+      file.path = result.path;
+      file.pptx = pptx;
+      await saveFile({
+        ...file,
+        pptx: { source: pptx.source, fonts: pptx.fonts.map((f) => ({ ...f })) },
       });
-    } else if (result.staleFonts) {
-      $alert.info({ text: tm("pptx.stale_fonts"), translate: false });
+      files.value = [...files.value];
     } else {
-      $snackbar.success(tm(result.cached ? "pptx.ready_cached" : "pptx.ready", { name }));
+      file = {
+        id: "file_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+        name,
+        path: result.path,
+        type: "pdf",
+        addedAt: Date.now(),
+        categoryId,
+        pptx,
+      };
+      await saveFile({
+        ...file,
+        pptx: { source: pptx.source, fonts: pptx.fonts.map((f) => ({ ...f })) },
+      });
+      files.value.unshift(file);
     }
+
+    if (daJanela() && importacao.value) {
+      importacao.value = {
+        ...importacao.value,
+        phase: "done",
+        fonts: result.fonts.map((f) => ({ ...f })),
+        fileId: file.id,
+      };
+      if (result.staleFonts) $alert.info({ text: tm("pptx.stale_fonts"), translate: false });
+    } else {
+      // A janela foi fechada (segue em segundo plano): avisa do jeito curto.
+      const faltam = missingFonts(result.fonts);
+      if (faltam.length) {
+        $alert.info({
+          text: tm("pptx.missing_fonts", { name, fonts: faltam.join(", ") }),
+          translate: false,
+        });
+      } else if (result.staleFonts) {
+        $alert.info({ text: tm("pptx.stale_fonts"), translate: false });
+      } else {
+        $snackbar.success(tm(result.cached ? "pptx.ready_cached" : "pptx.ready", { name }));
+      }
+    }
+    return file;
   } catch (error) {
     const message = (error as Error)?.message || String(error);
     backgroundTasks.updateTask(taskId, { status: "error", error: message });
-    $alert.error({ text: tm("pptx.failed", { message }), translate: false });
+    if (daJanela() && importacao.value) {
+      importacao.value = { ...importacao.value, phase: "error", error: message };
+    } else {
+      $alert.error({ text: tm("pptx.failed", { message }), translate: false });
+    }
+    return null;
   } finally {
     off();
+  }
+}
+
+/** "Projetar agora" da janela de importação. */
+async function projetarImportado(): Promise<void> {
+  const id = importacao.value?.fileId;
+  importacao.value = null;
+  const file = files.value.find((f) => f.id === id);
+  if (file) await tocarDaBiblioteca(file);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Painel do operador (PDF no telão)                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * O PDF que está no telão: de onde ler as miniaturas e, se veio de um
+ * PowerPoint, as fontes. Preenchido por quem projeta (biblioteca, playlist ou
+ * a aba Canva) e limpo quando a projeção acaba.
+ */
+const palco = ref<{ url: string; title: string; fileId?: string } | null>(null);
+/** O operador voltou para a biblioteca com o PDF ainda no ar. */
+const painelOculto = ref(false);
+const regerando = ref(false);
+
+const painelVisivel = computed(
+  () => !!palco.value && pdfNoPalco.value && !painelOculto.value && libraryFilter.value !== "canva"
+);
+const arquivoNoPalco = computed(() =>
+  palco.value?.fileId ? (files.value.find((f) => f.id === palco.value?.fileId) ?? null) : null
+);
+const fontesNoPalco = computed(() => arquivoNoPalco.value?.pptx?.fonts ?? null);
+
+function irParaPagina(n: number): void {
+  const total = currentPdfTotalPages.value;
+  if (n < 1 || (total > 0 && n > total)) return;
+  currentPdfPage.value = n;
+  broadcastPdfPage();
+}
+
+async function instalarFonteManual(): Promise<void> {
+  const api = (Platform.api as LouvorjaApi | null)?.pptx;
+  if (!api) return;
+  const r = await api.installFonts();
+  if (r.ok) $snackbar.success(tm("pptx.fonts_installed_count", { count: r.installed }));
+  else if (r.code !== "canceled") $alert.error({ text: r.message, translate: false });
+}
+
+/** "Gerar de novo": converte outra vez o .pptx de origem (ex.: depois de instalar uma fonte). */
+async function regerarNoPalco(): Promise<void> {
+  const file = arquivoNoPalco.value;
+  if (!file?.pptx?.source || regerando.value) return;
+  regerando.value = true;
+  try {
+    const novo = await importPowerPoint(file.pptx.source, file.name, file.categoryId ?? "", file);
+    if (novo) await tocarDaBiblioteca(novo);
+  } finally {
+    regerando.value = false;
   }
 }
 
@@ -1417,6 +1569,15 @@ async function tocarDaBiblioteca(file: MediaFile): Promise<void> {
   avisoContagemDado = false;
 
   await projetarItem(itemDe(file), false);
+  /*
+   * PDF projetado pelo card não está na lista: sem isto nada o considerava
+   * "no palco" — a barra com a página não aparecia e o Próximo caía no ramo
+   * da playlist (que fecha a projeção). Fica com as mesmas regras do PDF de
+   * fora (Canva): última página não fecha nada.
+   */
+  if (file.type === "pdf" && currentPdfPlaybackId && palco.value?.fileId === file.id) {
+    pdfExterno.value = { playback_id: currentPdfPlaybackId, title: file.name };
+  }
 }
 
 /**
@@ -1451,6 +1612,10 @@ async function projetarItem(item: PlaylistItem, backward: boolean): Promise<void
   if (item.type === "pdf") {
     payload.page = 1;
     payload.playback_id = currentPdfPlaybackId;
+    palco.value = { url, title: item.name, fileId: item.id };
+    painelOculto.value = false;
+  } else {
+    palco.value = null;
   }
   // A blob URL only exists in the renderer that owns the library. The return
   // projection runs in another window, so give it the IndexedDB reference to
@@ -1588,6 +1753,7 @@ function stop(): void {
   ++playIndexGeneration;
   currentPdfPlaybackId = undefined;
   pdfExterno.value = null;
+  palco.value = null;
   avisoContagemDado = false;
   isPlaying.value = false;
   currentIndex.value = -1;
@@ -1653,6 +1819,7 @@ useBroadcastListener(BROADCAST_TYPE.FILE_PROJECTION, (payload) => {
 
   if (decisao.acao === "limpar") {
     pdfExterno.value = null;
+    palco.value = null;
     avisoContagemDado = false;
     if (decisao.encerrada) currentPdfPlaybackId = undefined;
     return;
@@ -1667,11 +1834,14 @@ useBroadcastListener(BROADCAST_TYPE.FILE_PROJECTION, (payload) => {
     title: decisao.title,
     declaredPageCount: decisao.declaredPageCount,
   };
+  const url = (payload as { url?: unknown } | null)?.url;
+  palco.value = typeof url === "string" && url ? { url, title: decisao.title } : null;
   avisoContagemDado = false;
 });
 
 useBroadcastListener(BROADCAST_TYPE.MEDIA_CLOSE, () => {
   pdfExterno.value = null;
+  palco.value = null;
   avisoContagemDado = false;
   currentPdfPlaybackId = undefined;
 });

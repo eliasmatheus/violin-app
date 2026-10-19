@@ -20,6 +20,9 @@ export default [
         FullscreenOptions: "readonly",
         CanvaStatus: "readonly",
         CanvaItem: "readonly",
+        PptxFont: "readonly",
+        PptxProgress: "readonly",
+        PptxConvertResult: "readonly",
       },
       parserOptions: {
         parser: tseslint.parser,

@@ -138,6 +138,10 @@ async function ensureFonts(file, onProgress, log) {
     source: null,
   }));
 
+  // Lista completa logo de cara: a janela do operador mostra todas as fontes,
+  // não só as que precisam de ação.
+  onProgress({ phase: "fonts", fonts: report.items.map((i) => ({ ...i })) });
+
   const emb = new Set(embedded.map(norm));
   const faltando = report.items.filter((i) => i.status === "missing");
   if (!faltando.length) return report;
@@ -324,10 +328,34 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log } = 
   }
 }
 
+/**
+ * Instala arquivos de fonte escolhidos pelo operador (.ttf/.otf), para o caso
+ * de uma fonte que não está embutida nem no Google Fonts.
+ * @param {string[]} files  caminhos vindos do diálogo nativo do main
+ * @returns {Promise<{ok: true, installed: number} | {ok: false, code: string, message: string}>}
+ */
+async function installFontFiles(files) {
+  const lista = (Array.isArray(files) ? files : []).filter(
+    (f) => typeof f === "string" && /\.(ttf|otf)$/i.test(f) && fss.existsSync(f)
+  );
+  if (!lista.length) return { ok: false, code: "no_fonts", message: "Nenhum arquivo .ttf ou .otf." };
+  const fonts = [];
+  for (const f of lista) {
+    const n = await readFontNames(f);
+    fonts.push({ path: f, registryName: n.registryName, names: [n.family, n.full, n.typo].filter(Boolean) });
+  }
+  try {
+    const installed = await _systemFonts().install(fonts);
+    return { ok: true, installed };
+  } catch (e) {
+    return { ok: false, code: "install_failed", message: String(e.message || e).slice(0, 400) };
+  }
+}
+
 /** O que este computador consegue fazer (para a interface explicar antes de tentar). */
 async function status() {
   const c = await detectConverter();
   return { ok: true, converter: c.label || null, platform: process.platform };
 }
 
-module.exports = { convert, status, validateInput, fetchWithTimeout, PPT_EXT };
+module.exports = { convert, status, installFontFiles, validateInput, fetchWithTimeout, PPT_EXT };
