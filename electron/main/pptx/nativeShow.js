@@ -122,8 +122,16 @@ function Start-Show($a) {
             $w.Height = [double]$b.height * 0.75
         } catch { }
     }
-    # Ativa a apresentação uma vez: sem isso a barra de tarefas do Windows fica por cima do PA
+    # Sem isso a barra de tarefas do Windows fica por cima do PA quando o foco volta ao
+    # LouvorJA: a janela da apresentação fica "sempre no topo", como o telão do LouvorJA.
     try { $w.Activate() } catch { }
+    try {
+        if (-not ('LouvorJA.Win32' -as [type])) {
+            Add-Type -Namespace LouvorJA -Name Win32 -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetWindowPos(System.IntPtr h, System.IntPtr after, int x, int y, int cx, int cy, uint flags);'
+        }
+        # HWND_TOPMOST = -1; SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE = 0x13
+        [void][LouvorJA.Win32]::SetWindowPos([IntPtr][long]$w.HWND, [IntPtr](-1), 0, 0, 0, 0, 0x13)
+    } catch { }
     $script:pres = $pres
     $script:win = $w
     $script:visiveis = @()

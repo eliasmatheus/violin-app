@@ -429,6 +429,8 @@ import PptxImportDialog from "./PptxImportDialog.vue";
 import $broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
+import { isOpen as isProjectionOpen } from "@/helpers/Projection";
+import { PROJECTION_TYPE } from "@/constants/Projection";
 import {
   closeFileProjectionWindows,
   closeProjectionWindows,
@@ -1307,39 +1309,67 @@ function aoEstadoNativo(st: PptxNativeState): void {
  * para quem está falando saber onde está e o que vem depois.
  */
 let retornoNativoId: string | undefined;
+/** O que o retorno precisa para abrir o PDF (sem a página, que muda). */
+let retornoNativoBase: Record<string, unknown> | null = null;
 
-async function abrirRetornoNativo(file: MediaFile, pagina: number): Promise<void> {
-  if (!($userdata.get(KEYS.OPTIONS.FILE_PROJECTION.SHOW_RETURN, false) as boolean)) return;
-  retornoNativoId = newFileProjectionId();
-  // Mesmo playback_id: o nosso próprio listener reconhece e não "adota" de novo.
-  currentPdfPlaybackId = retornoNativoId;
-  currentPdfPage.value = pagina;
-  const payload = {
-    url: resolvePath(file.path),
-    type: "pdf",
-    title: file.name,
-    page: pagina,
-    playback_id: retornoNativoId,
-  };
+/** Manda o PDF inteiro para o retorno (abre ou reativa) na página atual. */
+function enviarRetornoNativo(): void {
+  if (!retornoNativoBase) return;
+  const atual = { ...retornoNativoBase, page: currentPdfPage.value };
   try {
-    localStorage.setItem(KEYS.PROJECTION.LJ_FILE_PROJECTION, JSON.stringify(payload));
+    localStorage.setItem(KEYS.PROJECTION.LJ_FILE_PROJECTION, JSON.stringify(atual));
   } catch {
     /* cache de reabertura é opcional */
   }
-  await openMediaWindow("return", "file");
-  $broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, payload);
+  $broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, atual);
+}
+
+async function abrirRetornoNativo(file: MediaFile, pagina: number): Promise<void> {
+  if (!($userdata.get(KEYS.OPTIONS.FILE_PROJECTION.SHOW_RETURN, false) as boolean)) return;
+  const id = newFileProjectionId();
+  retornoNativoId = id;
+  // Mesmo playback_id: o nosso próprio listener reconhece e não "adota" de novo.
+  currentPdfPlaybackId = id;
+  currentPdfPage.value = pagina;
+  retornoNativoBase = {
+    url: resolvePath(file.path),
+    type: "pdf",
+    title: file.name,
+    playback_id: id,
+  };
+  /*
+   * O PA do LouvorJA acabou de fechar para o PowerPoint entrar, e a limpeza
+   * dessa janela (useProjectionShutdown) fecha o retorno e apaga o cache logo
+   * depois. Por isso abre, confere e reabre algumas vezes enquanto o modo
+   * nativo estiver de pé.
+   */
+  for (const espera of [0, 1500, 3000]) {
+    if (espera) await new Promise((r) => setTimeout(r, espera));
+    if (retornoNativoId !== id || (!nativoAtivo.value && !nativoAbrindo.value)) return;
+    currentPdfPlaybackId = id;
+    if (!(await isProjectionOpen(PROJECTION_TYPE.FILE_RETURN))) {
+      console.info("[pptx] abrindo o retorno do modo nativo", { espera });
+      await openMediaWindow("return", "file");
+    }
+    enviarRetornoNativo();
+  }
 }
 
 function retornoNativoPagina(pagina: number): void {
-  if (!retornoNativoId || currentPdfPlaybackId !== retornoNativoId) return;
-  if (currentPdfPage.value === pagina) return;
+  if (!retornoNativoId) return;
+  // Um "clear" atrasado do PA que fechou pode ter zerado o id: o retorno ainda é nosso.
+  const mudouId = currentPdfPlaybackId !== retornoNativoId;
+  currentPdfPlaybackId = retornoNativoId;
+  if (!mudouId && currentPdfPage.value === pagina) return;
   currentPdfPage.value = pagina;
-  broadcastPdfPage();
+  if (mudouId) enviarRetornoNativo();
+  else broadcastPdfPage();
 }
 
 function fecharRetornoNativo(): void {
   if (!retornoNativoId) return;
   retornoNativoId = undefined;
+  retornoNativoBase = null;
   currentPdfPlaybackId = undefined;
   localStorage.removeItem(KEYS.PROJECTION.LJ_FILE_PROJECTION);
   $broadcast.send(BROADCAST_TYPE.MEDIA_CLOSE, {});
@@ -1367,9 +1397,8 @@ async function iniciarNativo(file: MediaFile | null | undefined): Promise<void> 
       $alert.error({ text: tm("pptx.native_failed", { message: r.message }), translate: false });
       return;
     }
-    const pagina = (r.state?.index ?? inicio) + 1;
-    await abrirRetornoNativo(file, pagina);
     aoEstadoNativo(r.state);
+    void abrirRetornoNativo(file, (r.state?.index ?? inicio) + 1);
   } catch (error) {
     palco.value = null;
     const message = (error as Error)?.message || String(error);
