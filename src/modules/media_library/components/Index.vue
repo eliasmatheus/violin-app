@@ -1310,6 +1310,8 @@ function aoEstadoNativo(st: PptxNativeState): void {
  * para quem está falando saber onde está e o que vem depois.
  */
 let retornoNativoId: string | undefined;
+/** Quando o PA do LouvorJA fechou para o PowerPoint entrar. */
+let paFechadoEm = 0;
 /** O que o retorno precisa para abrir o PDF (sem a página, que muda). */
 let retornoNativoBase: Record<string, unknown> | null = null;
 
@@ -1345,11 +1347,13 @@ async function abrirRetornoNativo(file: MediaFile, pagina: number): Promise<void
   };
   /*
    * O PA do LouvorJA acabou de fechar para o PowerPoint entrar, e a limpeza
-   * dessa janela (useProjectionShutdown) fecha o retorno e apaga o cache logo
-   * depois. Por isso abre, confere e reabre algumas vezes enquanto o modo
-   * nativo estiver de pé.
+   * dessa janela (useProjectionShutdown, ~2 s depois) fecha o retorno junto.
+   * Por isso o retorno só abre depois dela, e é conferido uma vez em seguida.
+   * Não insiste mais do que isso: se o operador fechar o retorno (Esc), fica fechado.
    */
-  for (const espera of [0, 1500, 3000]) {
+  const desdeOFechamento = Date.now() - paFechadoEm;
+  if (desdeOFechamento < 2600) await new Promise((r) => setTimeout(r, 2600 - desdeOFechamento));
+  for (const espera of [0, 1200]) {
     if (espera) await new Promise((r) => setTimeout(r, espera));
     if (retornoNativoId !== id || (!nativoAtivo.value && !nativoAbrindo.value)) return;
     const aberto = await isProjectionOpen(PROJECTION_TYPE.FILE_RETURN);
@@ -1357,7 +1361,6 @@ async function abrirRetornoNativo(file: MediaFile, pagina: number): Promise<void
       console.info("[pptx] abrindo o retorno do modo nativo", { espera });
       await openMediaWindow("return", "file");
     }
-    // Primeira vez, reabertura, ou um "clear" atrasado zerou o id: manda o PDF de novo.
     const reenviar = !espera || !aberto || currentPdfPlaybackId !== id;
     currentPdfPlaybackId = id;
     if (reenviar) enviarRetornoNativo();
@@ -1396,6 +1399,7 @@ async function iniciarNativo(file: MediaFile | null | undefined): Promise<void> 
   const inicio = palco.value?.fileId === file.id ? Math.max(0, currentPdfPage.value - 1) : 0;
   const manter = { url: resolvePath(file.path), title: file.name, fileId: file.id };
   stop();
+  paFechadoEm = Date.now();
   palco.value = manter;
   painelOculto.value = false;
   nativoAbrindo.value = true;

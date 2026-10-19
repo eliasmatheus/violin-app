@@ -37,12 +37,16 @@ $script:pagina = 1
 
 function Get-PPT {
     if ($script:ppt -ne $null) {
-        try { $null = $script:ppt.Version; return $script:ppt } catch { $script:ppt = $null }
+        try { if ($script:ppt.Presentations -ne $null) { return $script:ppt } } catch { }
+        $script:ppt = $null
     }
     try {
         $script:ppt = [Runtime.InteropServices.Marshal]::GetActiveObject('PowerPoint.Application')
         $script:owns = $false
+        # Um PowerPoint que está fechando ainda aparece aqui, mas sem Presentations
+        if ($script:ppt.Presentations -eq $null) { throw 'fechando' }
     } catch {
+        $script:ppt = $null
         for ($t = 1; $t -le 3; $t++) {
             try { $script:ppt = New-Object -ComObject PowerPoint.Application; $script:owns = $true; break }
             catch {
@@ -99,11 +103,18 @@ function Start-Show($a) {
     Stop-Show | Out-Null
     $app = Get-PPT
     try { Unblock-File -LiteralPath ([string]$a.file) -ErrorAction SilentlyContinue } catch { }
-    try {
-        # Open(FileName, ReadOnly, Untitled, WithWindow): com janela, para as fontes embutidas valerem
-        $pres = $app.Presentations.Open([string]$a.file, -1, 0, -1)
-    } catch {
-        throw ('O PowerPoint nao conseguiu abrir este arquivo. (' + $_.Exception.Message + ')')
+    $pres = $null
+    for ($t = 1; $t -le 3 -and $pres -eq $null; $t++) {
+        try {
+            # Open(FileName, ReadOnly, Untitled, WithWindow): com janela, para as fontes embutidas valerem
+            $pres = $app.Presentations.Open([string]$a.file, -1, 0, -1)
+        } catch {
+            if ($t -eq 3) { throw ('O PowerPoint nao conseguiu abrir este arquivo. (' + $_.Exception.Message + ')') }
+            # O PowerPoint da apresentacao anterior pode estar terminando de fechar: espera e pega outro
+            Start-Sleep -Seconds 2
+            $script:ppt = $null
+            $app = Get-PPT
+        }
     }
     # A janela de edição do arquivo fica minimizada (o PowerPoint pode já estar aberto
     # pelo operador: aí só esta janela, não o programa inteiro).
