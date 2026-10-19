@@ -76,7 +76,7 @@ apagam.
 | `electron/main/pptx/googleFonts.js`       | catálogo e download do Google Fonts                 |
 | `electron/main/pptx/fontRename.js`        | renomeia pesos de fontes variáveis                  |
 | `electron/main/pptx/converters.js`        | PowerPoint (Win/Mac) e LibreOffice                  |
-| `electron/main/pptx/imagesPdf.js`         | PDF com uma imagem de slide por página (pdf-lib)    |
+| `electron/main/pptx/imagesPdf.js`         | PDF com uma imagem de slide por página             |
 | `electron/main/pptx/windowsScript.js`     | script PowerShell (fontes + COM)                    |
 | `src/modules/media_library/pptxImport.ts` | validação da resposta e textos de andamento         |
 

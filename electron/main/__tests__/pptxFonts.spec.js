@@ -98,27 +98,36 @@ describe("scripts embutidos", () => {
 });
 
 describe("imagesToPdf", () => {
-  it("monta uma página por imagem, no tamanho do slide", async () => {
+  // JPEG 4x3 vermelho
+  const JPG = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAADAAQDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDi6KKK+ZP3E//Z", "base64");
+
+  it("lê largura, altura e cor do JPEG", () => {
+    const { jpegInfo } = require("../pptx/imagesPdf.js");
+    expect(jpegInfo(JPG)).toEqual({ width: 4, height: 3, components: 3 });
+    expect(jpegInfo(Buffer.from("não é jpeg"))).toBeNull();
+  });
+
+  it("monta uma página por imagem, no tamanho do slide, e pula o que não é imagem", async () => {
     const { imagesToPdf } = require("../pptx/imagesPdf.js");
-    const { PDFDocument } = require("pdf-lib");
-    // PNG 1x1 vermelho
-    const png = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
-      "base64"
-    );
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "lj-pptx-img-"));
     try {
-      const a = path.join(dir, "slide_0001.png");
-      const b = path.join(dir, "slide_0002.png");
-      await fs.writeFile(a, png);
-      await fs.writeFile(b, png);
-      await fs.writeFile(path.join(dir, "lixo.png"), "não é imagem");
+      const a = path.join(dir, "slide_0001.jpg");
+      const b = path.join(dir, "slide_0002.jpg");
+      const lixo = path.join(dir, "lixo.png");
+      await fs.writeFile(a, JPG);
+      await fs.writeFile(b, JPG);
+      await fs.writeFile(lixo, "não é imagem");
       const out = path.join(dir, "saida.pdf");
-      const n = await imagesToPdf([a, path.join(dir, "lixo.png"), b], out, { width: 960, height: 540 });
-      expect(n).toBe(2);
-      const doc = await PDFDocument.load(await fs.readFile(out));
-      expect(doc.getPageCount()).toBe(2);
-      expect(doc.getPage(0).getSize()).toEqual({ width: 960, height: 540 });
+      expect(await imagesToPdf([a, lixo, b], out, { width: 960, height: 540 })).toBe(2);
+      const pdf = (await fs.readFile(out)).toString("latin1");
+      expect(pdf.startsWith("%PDF-1.4")).toBe(true);
+      expect(pdf).toContain("/Count 2");
+      expect(pdf).toContain("/MediaBox [0 0 960 540]");
+      expect(pdf.trimEnd().endsWith("%%EOF")).toBe(true);
+      // a tabela xref aponta para o começo de cada objeto
+      const xref = Number(/startxref\n(\d+)/.exec(pdf)[1]);
+      const linhas = pdf.slice(xref).split("\n").slice(3, 9);
+      linhas.forEach((l, i) => expect(pdf.slice(Number(l.slice(0, 10)))).toMatch(new RegExp(`^${i + 1} 0 obj`)));
     } finally {
       await fs.remove(dir);
     }
