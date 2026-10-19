@@ -1145,7 +1145,7 @@ async function importPowerPoint(
   });
   try {
     // Gerar de novo (substituir) sempre converte; importar usa o que já estiver pronto.
-    const result = parseConvertResult(await api.convert(filePath, !!substituir));
+    const result = parseConvertResult(await api.convert(filePath, !!substituir, motorApresentacao()));
     if (!result.ok) {
       backgroundTasks.updateTask(taskId, { status: "error", error: result.message });
       if (daJanela() && importacao.value) {
@@ -1295,8 +1295,36 @@ watch(arquivoNoPalco, async (file) => {
 const nativo = ref<PptxNativeState>({ active: false });
 const nativoAtivo = computed(() => nativo.value.active === true);
 const nativoAbrindo = ref(false);
-/** Este computador consegue apresentar pelo PowerPoint (Windows com PowerPoint). */
+/** Com o programa escolhido em Opções, este computador apresenta com animações? */
 const nativoNestePc = ref(false);
+/** Já perguntamos ao main (antes disso vale o que o item guardou). */
+const nativoConferido = ref(false);
+/** Nome do programa que apresenta: "PowerPoint" ou "LibreOffice". */
+const programaNativo = ref("PowerPoint");
+
+/** Programa escolhido em Opções → Player de Áudio/Vídeo. */
+function motorApresentacao(): "auto" | "powerpoint" | "libreoffice" {
+  const m = $userdata.get<string>(KEYS.OPTIONS.FILE_PROJECTION.PRESENTATION_ENGINE, "auto");
+  return m === "powerpoint" || m === "libreoffice" ? m : "auto";
+}
+
+/** Pergunta ao main o que dá para fazer com o programa escolhido agora. */
+async function conferirProgramaNativo(): Promise<void> {
+  const api = (Platform.api as LouvorjaApi | null)?.pptx;
+  if (!api?.status) return;
+  try {
+    const s = await api.status(motorApresentacao());
+    nativoNestePc.value = s?.native === true;
+    if (typeof s?.converter === "string" && s.converter) programaNativo.value = s.converter;
+    nativoConferido.value = true;
+  } catch {
+    /* fica o que o item guardou */
+  }
+}
+watch(
+  () => $userdata.get<string>(KEYS.OPTIONS.FILE_PROJECTION.PRESENTATION_ENGINE, "auto"),
+  () => void conferirProgramaNativo()
+);
 let pararEscutaNativo: (() => void) | null = null;
 
 /** O que o painel precisa saber do modo nativo (null = PDF comum, sem a opção). */
@@ -1304,8 +1332,9 @@ const painelNativo = computed(() => {
   const pptx = arquivoNoPalco.value?.pptx;
   if (!pptx && !nativoAtivo.value) return null;
   return {
-    // Itens adicionados antes do modo nativo não guardaram a flag: vale o que este PC tem.
-    available: !!pptx?.source && (pptx.nativeAvailable === true || nativoNestePc.value),
+    // Vale o que este PC tem com o programa escolhido; antes da resposta, o que o item guardou.
+    available: !!pptx?.source && (nativoConferido.value ? nativoNestePc.value : pptx.nativeAvailable === true),
+    app: nativo.value.engine === "libreoffice" ? "LibreOffice" : nativo.value.engine === "powerpoint" ? "PowerPoint" : programaNativo.value,
     active: nativoAtivo.value,
     black: !!nativo.value.black,
     busy: nativoAbrindo.value,
@@ -1444,10 +1473,13 @@ async function iniciarNativo(file: MediaFile | null | undefined): Promise<void> 
   painelOculto.value = false;
   nativoAbrindo.value = true;
   try {
-    const r = await api.nativeStart(file.pptx.source, inicio);
+    const r = await api.nativeStart(file.pptx.source, inicio, motorApresentacao());
     if (!r.ok) {
       palco.value = null;
-      $alert.error({ text: tm("pptx.native_failed", { message: r.message }), translate: false });
+      $alert.error({
+        text: tm("pptx.native_failed", { app: programaNativo.value, message: r.message }),
+        translate: false,
+      });
       return;
     }
     aoEstadoNativo(r.state);
@@ -1455,7 +1487,7 @@ async function iniciarNativo(file: MediaFile | null | undefined): Promise<void> 
   } catch (error) {
     palco.value = null;
     const message = (error as Error)?.message || String(error);
-    $alert.error({ text: tm("pptx.native_failed", { message }), translate: false });
+    $alert.error({ text: tm("pptx.native_failed", { app: programaNativo.value, message }), translate: false });
   } finally {
     nativoAbrindo.value = false;
   }
@@ -2228,10 +2260,7 @@ onMounted(async () => {
     void pptxApi.nativeState().then((st) => {
       if (st?.active) aoEstadoNativo(st);
     });
-    void pptxApi
-      .status()
-      .then((s) => (nativoNestePc.value = s?.native === true))
-      .catch(() => {});
+    void conferirProgramaNativo();
   }
   files.value = await loadLibrary();
   await loadCategories();

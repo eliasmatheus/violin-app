@@ -21,6 +21,7 @@
  */
 const fs = require("fs/promises");
 const fss = require("fs");
+const { execFile } = require("child_process");
 const path = require("path");
 const crypto = require("crypto");
 const paths = require("../paths.js");
@@ -263,12 +264,12 @@ function convert(rawPath, opts = {}) {
   return run;
 }
 
-async function _convert(rawPath, { onProgress = () => {}, log = console.log, force = false } = {}) {
+async function _convert(rawPath, { onProgress = () => {}, log = console.log, force = false, engine = "auto" } = {}) {
   const v = await validateInput(rawPath);
   if (!v.ok) return v;
   const { file } = v;
 
-  const converter = await detectConverter();
+  const converter = await detectConverter(process.platform, engine);
   if (!converter.id) {
     return {
       ok: false,
@@ -289,7 +290,7 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log, for
       /* só informativo */
     }
   }
-  const nativeAvailable = _nativeSupported(converter);
+  const nativeAvailable = await _nativeSupported(converter);
 
   onProgress({ phase: "fonts" });
   let report = { items: [], installed: 0, embedded: false };
@@ -444,10 +445,44 @@ async function installFontFiles(files) {
 
 /** @type {NativeShow|null} */
 let _native = null;
+let _nativeChave = "";
 let _nativeOnState = () => {};
 
-function _nativeSupported(converter) {
-  return process.platform === "win32" && converter?.id === "powerpoint";
+/** Python que entende `import uno`, por caminho do soffice (procura uma vez só). */
+const _pythonUno = new Map();
+
+async function _acharPythonUno(soffice) {
+  if (!soffice) return null;
+  if (_pythonUno.has(soffice)) return _pythonUno.get(soffice);
+  const dir = path.dirname(soffice);
+  const candidatos =
+    process.platform === "win32"
+      ? [path.join(dir, "python.exe")]
+      : process.platform === "darwin"
+        ? [path.join(dir, "..", "Resources", "python"), "python3"]
+        : ["python3", "/usr/bin/python3"];
+  let achado = null;
+  for (const py of candidatos) {
+    const ok = await new Promise((resolve) => {
+      execFile(py, ["-c", "import uno"], { timeout: 20000, windowsHide: true }, (err) => resolve(!err));
+    });
+    if (ok) {
+      achado = py;
+      break;
+    }
+  }
+  _pythonUno.set(soffice, achado);
+  return achado;
+}
+
+/**
+ * Dá para apresentar com animações aqui? PowerPoint: só no Windows (COM).
+ * LibreOffice: em qualquer sistema, desde que o Python dele fale com o UNO.
+ */
+async function _nativeSupported(converter) {
+  if (converter?.id === "powerpoint") return process.platform === "win32";
+  if (converter?.id === "libreoffice") return !!(await _acharPythonUno(converter.soffice));
+  return false;
 }
 
 /**
@@ -470,13 +505,23 @@ async function _nlog(...parts) {
   }
 }
 
-function _nativeShow() {
+/** A ponte do programa escolhido; trocar de programa encerra a ponte anterior. */
+function _nativeShow(converter, python) {
+  const chave = `${converter.id}|${converter.soffice || ""}`;
+  if (_native && _nativeChave !== chave) {
+    _native.dispose();
+    _native = null;
+  }
   if (!_native) {
+    _nativeChave = chave;
     _native = new NativeShow({
       tempDir: _tempDir(),
+      engine: converter.id,
+      soffice: converter.soffice || null,
+      python,
       onState: (st) => {
-        void _nlog("estado", st);
-        _nativeOnState(st);
+        void _nlog("estado", { programa: converter.id, ...st });
+        _nativeOnState({ ...st, engine: converter.id });
       },
     });
   }
@@ -501,15 +546,23 @@ function nativeStart(rawPath, opts = {}) {
   return run;
 }
 
-async function _nativeStart(rawPath, { bounds = null, startIndex = 0, onProgress = () => {}, log = console.log } = {}) {
+async function _nativeStart(
+  rawPath,
+  { bounds = null, display = 0, startIndex = 0, engine = "auto", onProgress = () => {}, log = console.log } = {}
+) {
   const v = await validateInput(rawPath);
   if (!v.ok) return v;
-  const converter = await detectConverter();
-  if (!_nativeSupported(converter)) {
+  const converter = await detectConverter(process.platform, engine);
+  if (!(await _nativeSupported(converter))) {
     return {
       ok: false,
       code: "native_unavailable",
-      message: "Apresentar com o PowerPoint precisa do Microsoft PowerPoint no Windows.",
+      message:
+        converter.id === "libreoffice"
+          ? process.platform === "linux"
+            ? "Para apresentar com o LibreOffice, instale a ligação dele com o Python: sudo apt install python3-uno"
+            : "Não foi possível falar com o LibreOffice deste computador."
+          : "Para apresentar com animações é preciso o Microsoft PowerPoint (Windows) ou o LibreOffice.",
     };
   }
   try {
@@ -520,22 +573,26 @@ async function _nativeStart(rawPath, { bounds = null, startIndex = 0, onProgress
   // Cópia sem a marca "baixado da internet" (Modo de Exibição Protegido trava a automação)
   const dir = path.join(_tempDir(), "native");
   await fs.mkdir(dir, { recursive: true });
-  // Nome novo a cada vez: uma apresentação anterior que o PowerPoint ainda segura
+  // Nome novo a cada vez: uma apresentação anterior que o programa ainda segura
   // aberta (app fechado no meio) travaria a cópia com EBUSY. As antigas saem quando der.
   for (const antigo of await fs.readdir(dir).catch(() => [])) {
     await fs.rm(path.join(dir, antigo), { force: true }).catch(() => {});
   }
   const copia = path.join(dir, `apresentacao-${Date.now()}${path.extname(v.file).toLowerCase()}`);
   await fs.writeFile(copia, await fs.readFile(v.file));
+  const python = converter.id === "libreoffice" ? await _acharPythonUno(converter.soffice) : null;
   try {
-    const st = await _nativeShow().start(copia, bounds, Math.max(0, Number(startIndex) || 0));
-    if (!st.active) return { ok: false, code: "native_failed", message: "O PowerPoint não iniciou a apresentação." };
-    log("[pptx] modo nativo no monitor", bounds, "janela:", JSON.stringify(st.diag || {}));
-    void _nlog("início", { bounds, startIndex, diag: st.diag || {} });
+    const show = _nativeShow(converter, python);
+    const st = await show.start(copia, bounds, Math.max(0, Number(startIndex) || 0), Number(display) || 0);
+    if (!st.active) {
+      return { ok: false, code: "native_failed", message: `O ${converter.label} não iniciou a apresentação.` };
+    }
+    log("[pptx] modo nativo:", converter.id, bounds, "janela:", JSON.stringify(st.diag || {}));
+    void _nlog("início", { programa: converter.id, bounds, display, startIndex, diag: st.diag || {} });
     const { diag: _diag, ...state } = st;
-    return { ok: true, state };
+    return { ok: true, state: { ...state, engine: converter.id }, engine: converter.id, fallback: converter.fallback };
   } catch (e) {
-    void _nlog("falha ao iniciar", String(e.message || e));
+    void _nlog("falha ao iniciar", converter.id, String(e.message || e));
     return { ok: false, code: "native_failed", message: String(e.message || e).slice(0, 500) };
   }
 }
@@ -578,10 +635,21 @@ async function features(rawPath) {
   }
 }
 
-/** O que este computador consegue fazer (para a interface explicar antes de tentar). */
-async function status() {
-  const c = await detectConverter();
-  return { ok: true, converter: c.label || null, platform: process.platform, native: _nativeSupported(c) };
+/**
+ * O que este computador consegue fazer, com o programa escolhido em Opções
+ * (para a interface explicar antes de tentar).
+ */
+async function status(engine = "auto") {
+  const c = await detectConverter(process.platform, engine);
+  return {
+    ok: true,
+    converter: c.label || null,
+    engine: c.id,
+    fallback: !!c.fallback,
+    available: c.disponiveis,
+    platform: process.platform,
+    native: await _nativeSupported(c),
+  };
 }
 
 module.exports = {

@@ -117,6 +117,8 @@ declare global {
   /** Estado da apresentação nativa (o próprio PowerPoint no PA). */
   interface PptxNativeState {
     active: boolean;
+    /** Quem está apresentando. */
+    engine?: "powerpoint" | "libreoffice";
     index?: number;
     total?: number;
     black?: boolean;
@@ -469,9 +471,17 @@ declare global {
      */
     pptx?: {
       /** `native`: dá para apresentar pelo próprio PowerPoint neste computador. */
-      status: () => Promise<{ ok: true; converter: string | null; platform: string; native?: boolean }>;
+      status: (engine?: "auto" | "powerpoint" | "libreoffice") => Promise<{
+        ok: true;
+        converter: string | null;
+        engine?: "powerpoint" | "libreoffice" | null;
+        fallback?: boolean;
+        available?: { powerpoint: boolean; libreoffice: boolean };
+        platform: string;
+        native?: boolean;
+      }>;
       /** Pendente durante a conversão (segundos a alguns minutos). */
-      convert: (path: string, force?: boolean) => Promise<PptxConvertResult>;
+      convert: (path: string, force?: boolean, engine?: "auto" | "powerpoint" | "libreoffice") => Promise<PptxConvertResult>;
       /** Diálogo nativo de fontes (.ttf/.otf); instala para o usuário. */
       installFonts: () => Promise<PptxFontInstallResult>;
       /** Animações e mídias de um .pptx (itens antigos, sem a contagem guardada). */
@@ -479,7 +489,11 @@ declare global {
         path: string
       ) => Promise<{ ok: true; features: unknown } | { ok: false; code: string; message: string }>;
       /** Modo nativo: o PowerPoint apresenta no PA, com animações e mídias. */
-      nativeStart: (path: string, startIndex?: number) => Promise<PptxNativeResult>;
+      nativeStart: (
+        path: string,
+        startIndex?: number,
+        engine?: "auto" | "powerpoint" | "libreoffice"
+      ) => Promise<PptxNativeResult>;
       nativeNav: (action: "next" | "prev" | "goto" | "black", index?: number) => Promise<PptxNativeResult>;
       nativeEnd: () => Promise<PptxNativeResult>;
       nativeState: () => Promise<PptxNativeState>;

@@ -85,16 +85,33 @@ async function _windowsHasPowerPoint() {
   }
 }
 
+/** Programas que o operador pode escolher em Opções. */
+const ENGINES = ["auto", "powerpoint", "libreoffice"];
+
 /**
- * Qual conversor este computador tem.
- * @returns {Promise<{id: "powerpoint"|"libreoffice"|null, label: string, soffice?: string}>}
+ * Qual programa vai gerar/apresentar, respeitando a escolha do operador.
+ *
+ * "auto" prefere o PowerPoint (é quem desenha o .pptx igual ao original) e cai
+ * no LibreOffice. Escolhido um programa que não está instalado, usa o outro e
+ * avisa por `fallback`.
+ * @param {string} [platform]
+ * @param {string} [preferencia]  "auto" | "powerpoint" | "libreoffice"
+ * @returns {Promise<{id: "powerpoint"|"libreoffice"|null, label: string, soffice?: string,
+ *   preferido: string, fallback: boolean, disponiveis: {powerpoint: boolean, libreoffice: boolean}}>}
  */
-async function detectConverter(platform = process.platform) {
-  if (platform === "win32" && (await _windowsHasPowerPoint())) return { id: "powerpoint", label: "PowerPoint" };
-  if (platform === "darwin" && _existe(MAC_PPT_APP)) return { id: "powerpoint", label: "PowerPoint" };
+async function detectConverter(platform = process.platform, preferencia = "auto") {
+  const pref = ENGINES.includes(preferencia) ? preferencia : "auto";
+  const temPowerPoint =
+    (platform === "win32" && (await _windowsHasPowerPoint())) || (platform === "darwin" && _existe(MAC_PPT_APP));
   const soffice = findSoffice(platform);
-  if (soffice) return { id: "libreoffice", label: "LibreOffice", soffice };
-  return { id: null, label: "" };
+  const disponiveis = { powerpoint: !!temPowerPoint, libreoffice: !!soffice };
+  const pp = { id: "powerpoint", label: "PowerPoint" };
+  const lo = { id: "libreoffice", label: "LibreOffice", soffice };
+  let escolha = null;
+  if (pref === "libreoffice") escolha = soffice ? lo : temPowerPoint ? pp : null;
+  else escolha = temPowerPoint ? pp : soffice ? lo : null;
+  if (!escolha) return { id: null, label: "", preferido: pref, fallback: false, disponiveis };
+  return { ...escolha, preferido: pref, fallback: pref !== "auto" && pref !== escolha.id, disponiveis };
 }
 
 // ── PowerPoint no Windows ──────────────────────────────────────────────────
@@ -273,4 +290,4 @@ async function convertToPdf(converter, input, output, opts) {
   throw new Error("Nenhum conversor disponível.");
 }
 
-module.exports = { detectConverter, convertToPdf, findSoffice, MAC_SCRIPT, SLIDE_WIDTH_PX };
+module.exports = { detectConverter, convertToPdf, findSoffice, ENGINES, MAC_SCRIPT, SLIDE_WIDTH_PX };

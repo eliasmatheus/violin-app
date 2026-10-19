@@ -355,15 +355,15 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
    * LibreOffice) salva o .pptx como PDF. Ver `electron/main/pptx/`.
    */
   pptx: {
-    status: () => ipcRenderer.invoke("pptx:status"),
+    status: (engine) => ipcRenderer.invoke("pptx:status", { engine }),
     /** Pendente durante a conversão; devolve `{ ok, path }` ou `{ ok: false, code, message }`. */
     /** `force`: ignora o PDF guardado ("Gerar de novo"). */
-    convert: (path, force) => ipcRenderer.invoke("pptx:convert", { path, force: force === true }),
+    convert: (path, force, engine) => ipcRenderer.invoke("pptx:convert", { path, force: force === true, engine }),
     /** Abre o diálogo nativo de fontes e instala as escolhidas. */
     installFonts: () => ipcRenderer.invoke("pptx:installFonts"),
     /** Modo nativo: o PowerPoint apresenta no PA (animações e mídias). */
     features: (path) => ipcRenderer.invoke("pptx:features", { path }),
-    nativeStart: (path, startIndex) => ipcRenderer.invoke("pptx:nativeStart", { path, startIndex }),
+    nativeStart: (path, startIndex, engine) => ipcRenderer.invoke("pptx:nativeStart", { path, startIndex, engine }),
     nativeNav: (action, index) => ipcRenderer.invoke("pptx:nativeNav", { action, index }),
     nativeEnd: () => ipcRenderer.invoke("pptx:nativeEnd"),
     nativeState: () => ipcRenderer.invoke("pptx:nativeState"),

@@ -46,7 +46,7 @@
       class="pdf-op__mode" :class="{ 'is-native': native.active }">
       <template v-if="native.active">
         <LjChip variant="primary" :icon="ICONS.PROJECTION.PRESENT">
-          {{ tm("pptx.native_on") }}
+          {{ tm("pptx.native_on", { app: native.app }) }}
         </LjChip>
         <span class="lj-u-spacer" />
         <LjButton
@@ -58,7 +58,7 @@
           {{ tm("pptx.native_black") }}
         </LjButton>
         <LjButton size="sm" variant="subtle" :icon="ICONS.PLAYER.STOP" @click="emit('nativeEnd')">
-          {{ tm("pptx.native_end") }}
+          {{ tm("pptx.native_end", { app: native.app }) }}
         </LjButton>
       </template>
       <template v-else>
@@ -72,7 +72,11 @@
           :disabled="native.busy"
           @click="emit('nativeStart')"
         >
-          {{ native.busy ? tm("pptx.native_opening") : tm("pptx.native_start") }}
+          {{
+            native.busy
+              ? tm("pptx.native_opening", { app: native.app })
+              : tm("pptx.native_start", { app: native.app })
+          }}
         </LjButton>
       </template>
     </div>
@@ -171,7 +175,7 @@ const props = defineProps<{
   fonts?: PptxFont[] | null;
   regenerating?: boolean;
   /** Modo nativo (PowerPoint no PA). null = não se aplica (PDF comum). */
-  native?: { available: boolean; active: boolean; black: boolean; busy: boolean } | null;
+  native?: { available: boolean; active: boolean; black: boolean; busy: boolean; app: string } | null;
   /** Animações e mídias do arquivo (o que o modo imagem não leva). */
   features?: PptxFeatures | null;
   tm: (_key: string, _named?: Record<string, unknown>) => string;
@@ -201,6 +205,7 @@ const resumoRecursos = computed(() => {
   if (!partes.length) return "";
   return props.tm(props.native?.available ? "pptx.feat_hint" : "pptx.feat_hint_no_native", {
     items: partes.join(", "),
+    app: props.native?.app ?? "PowerPoint",
   });
 });
 

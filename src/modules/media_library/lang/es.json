@@ -125,17 +125,17 @@
     "fonts_error": "No pude verificar las fuentes de esta computadora: {message}",
     "slides_count": "{done} de {total}",
     "converting_count": "Generando diapositiva {done} de {total}…",
-    "native_start": "Presentar con PowerPoint (animaciones y videos)",
-    "native_opening": "Abriendo PowerPoint…",
-    "native_on": "PowerPoint está presentando en la pantalla — animaciones y videos funcionando",
+    "native_start": "Presentar con {app} (animaciones y videos)",
+    "native_opening": "Abriendo {app}…",
+    "native_on": "{app} está presentando en la pantalla — animaciones y videos funcionando",
     "native_black": "Pantalla negra",
-    "native_end": "Cerrar PowerPoint",
-    "native_failed": "No se pudo presentar con PowerPoint: {message}",
+    "native_end": "Cerrar {app}",
+    "native_failed": "No se pudo presentar con {app}: {message}",
     "feat_animations": "animaciones en {count} diapositiva(s)",
     "feat_videos": "{count} video(s)",
     "feat_audios": "{count} audio(s)",
-    "feat_hint": "Este archivo tiene {items}. En el modo imagen quedan quietos — para verlos, usa Presentar con PowerPoint (el retorno muestra la diapositiva actual y la siguiente).",
-    "feat_hint_no_native": "Este archivo tiene {items}, que quedan quietos en el modo imagen. Para presentarlos se necesita Microsoft PowerPoint en Windows.",
-    "project_native": "Presentar con PowerPoint"
+    "feat_hint": "Este archivo tiene {items}. En el modo imagen quedan quietos — para verlos, usa Presentar con {app} (el retorno muestra la diapositiva actual y la siguiente).",
+    "feat_hint_no_native": "Este archivo tiene {items}, que quedan quietos en el modo imagen. Para presentarlos se necesita PowerPoint (Windows) o LibreOffice — ver Opciones → Reproductor de Audio/Vídeo.",
+    "project_native": "Presentar con {app}"
   }
 }

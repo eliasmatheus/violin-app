@@ -110,7 +110,30 @@ Nesse modo (`electron/main/pptx/nativeShow.js`, Windows + PowerPoint):
   vem na conta do PDF (slides ocultos ficam de fora), então casa com as
   miniaturas. A animação não aparece no retorno — ele mostra a imagem final do slide.
 
-IPC: `pptx:nativeStart` (`{ path, startIndex }`), `pptx:nativeNav`
+### Pelo LibreOffice
+
+O mesmo modo também roda pelo LibreOffice Impress — Linux, ou Windows/Mac sem
+PowerPoint. A ponte é um script Python (`libreShowScript.js`) com o mesmo
+protocolo da do PowerShell; ele abre um LibreOffice próprio (perfil e canal
+separados, para não mexer no que o operador tiver aberto), apresenta na tela do
+PA (`Display` na numeração do LibreOffice: a principal primeiro, depois a ordem
+do sistema) e responde com `gotoNextEffect`, `gotoPreviousEffect`, `gotoSlide`,
+`blankScreen`/`resume`. O Python é o que vem dentro do LibreOffice no Windows e
+no Mac; no Linux é o `python3` do sistema, que precisa do pacote `python3-uno`
+(o app avisa se faltar).
+
+### Qual programa
+
+Opções → Player de Áudio/Vídeo → **Programa para apresentações**
+(`options.file_projection.presentation_engine`): Automático (PowerPoint se
+instalado, senão LibreOffice), PowerPoint ou LibreOffice. Vale para o modo
+imagem e para o modo animado. Escolhido um programa que não está instalado, usa
+o outro (`fallback`). O aviso embaixo da opção explica o efeito colateral:
+`.pptx` no LibreOffice pode mudar animações, transições, posições de texto e
+fontes; `.odp` no PowerPoint pode perder efeitos. O PDF guardado leva o programa
+no nome, então trocar de programa gera de novo.
+
+IPC: `pptx:nativeStart` (`{ path, startIndex, engine }`), `pptx:nativeNav`
 (`{ action: next|prev|goto|black, index }`), `pptx:nativeEnd`,
 `pptx:nativeState` e o evento `pptx:native-state`.
 
@@ -118,6 +141,7 @@ IPC: `pptx:nativeStart` (`{ path, startIndex }`), `pptx:nativeNav`
 
 - No modo imagem, animações, transições e vídeos não passam para o PDF: cada
   slide vira uma página estática. Para eles existe o modo nativo (acima),
-  hoje só no Windows (o retorno mostra a imagem final de cada slide).
+  pelo PowerPoint no Windows ou pelo LibreOffice em qualquer sistema (o retorno
+  mostra a imagem final de cada slide).
 - Fontes pagas que não estão embutidas nem no Google Fonts continuam faltando;
   o operador recebe a lista para instalar à mão e adicionar de novo.

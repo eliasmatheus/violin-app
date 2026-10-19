@@ -17,6 +17,8 @@ const fs = require("fs/promises");
 const path = require("path");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
+const { pathToFileURL } = require("url");
+const { PY_SCRIPT } = require("./libreShowScript.js");
 
 const SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
@@ -267,15 +269,34 @@ while ($true) {
 }
 `;
 
-/** Ponte com um PowerShell que vive enquanto a apresentação nativa existe. */
+/** Mensagem para quando a ponte fecha sem ter ficado pronta. */
+function _motivoSaida(engine, erroTail) {
+  if (engine === "libreoffice") {
+    if (/No module named ['"]?uno/i.test(erroTail)) {
+      return "Falta a ligação do LibreOffice com o Python. No Linux: sudo apt install python3-uno";
+    }
+    return `O LibreOffice não respondeu.${erroTail ? " (" + erroTail.trim().split("\n").pop() + ")" : ""}`;
+  }
+  return "PowerShell encerrou.";
+}
+
+/**
+ * Ponte com o programa que apresenta, viva enquanto a apresentação existe:
+ * um PowerShell falando com o PowerPoint (COM) ou um Python falando com o
+ * LibreOffice (UNO, `libreShowScript.js`). Os dois falam o mesmo protocolo.
+ */
 class NativeShow {
   /**
-   * @param {{tempDir: string, onState?: (s: object) => void, log?: (...a: any[]) => void}} opts
+   * @param {{tempDir: string, onState?: (s: object) => void, log?: (...a: any[]) => void,
+   *   engine?: "powerpoint"|"libreoffice", soffice?: string|null, python?: string|null}} opts
    */
-  constructor({ tempDir, onState = () => {}, log = console.log }) {
+  constructor({ tempDir, onState = () => {}, log = console.log, engine = "powerpoint", soffice = null, python = null }) {
     this.tempDir = tempDir;
     this.onState = onState;
     this.log = log;
+    this.engine = engine;
+    this.soffice = soffice;
+    this.python = python;
     this.ps = null;
     this.pronto = null;
     this.seq = 0;
@@ -285,26 +306,46 @@ class NativeShow {
   }
 
   get supported() {
-    return process.platform === "win32";
+    return this.engine === "libreoffice" ? !!(this.soffice && this.python) : process.platform === "win32";
   }
 
   async _script() {
-    const hash = crypto.createHash("sha1").update(SCRIPT).digest("hex").slice(0, 10);
-    const file = path.join(this.tempDir, `louvorja-pptx-show-${hash}.ps1`);
+    const libre = this.engine === "libreoffice";
+    const texto = libre ? PY_SCRIPT : SCRIPT;
+    const hash = crypto.createHash("sha1").update(texto).digest("hex").slice(0, 10);
+    const file = path.join(this.tempDir, `louvorja-${libre ? "lo" : "pptx"}-show-${hash}.${libre ? "py" : "ps1"}`);
     await fs.mkdir(this.tempDir, { recursive: true });
-    await fs.writeFile(file, "﻿" + SCRIPT, "utf8");
+    // O PowerShell 5 só lê acentos em UTF-8 com BOM; o Python não quer o BOM.
+    await fs.writeFile(file, (libre ? "" : "\uFEFF") + texto, "utf8");
     return file;
+  }
+
+  _processo(script) {
+    if (this.engine !== "libreoffice") {
+      return spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script], {
+        windowsHide: true,
+      });
+    }
+    // LibreOffice próprio: perfil e canal separados dos do operador (e do conversor).
+    const perfil = pathToFileURL(path.join(this.tempDir, "lo-show-profile")).href;
+    const canal = `louvorja_show_${process.pid}`;
+    return spawn(this.python, ["-u", script, this.soffice, perfil, canal], {
+      windowsHide: true,
+      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+    });
   }
 
   _iniciar() {
     if (this.pronto) return this.pronto;
     this.pronto = (async () => {
       const script = await this._script();
-      const ps = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script], {
-        windowsHide: true,
-      });
+      const ps = this._processo(script);
       this.ps = ps;
       ps.stdout.setEncoding("utf8");
+      // O fim do stderr explica uma saída antes da hora (ex.: Python sem o módulo uno).
+      let erroTail = "";
+      ps.stderr?.setEncoding("utf8");
+      ps.stderr?.on("data", (t) => (erroTail = (erroTail + t).slice(-600)));
       let pendente = "";
       await new Promise((resolve, reject) => {
         const falha = (e) => reject(e instanceof Error ? e : new Error(String(e)));
@@ -340,7 +381,7 @@ class NativeShow {
           this.pronto = null;
           this._pararConsulta();
           this._publicar({ active: false });
-          falha(new Error("PowerShell encerrou."));
+          falha(new Error(_motivoSaida(this.engine, erroTail)));
         });
       });
     })();
@@ -393,8 +434,9 @@ class NativeShow {
    * @param {string} file  .pptx já sem a marca "baixado da internet"
    * @param {{x: number, y: number, width: number, height: number}|null} bounds  monitor do PA
    */
-  async start(file, bounds, startIndex = 0) {
-    const s = await this._chamar("start", { file, bounds, startIndex }, 3 * 60 * 1000);
+  /** `display`: tela do PA na numeração do LibreOffice (1 = primeira); o PowerPoint usa `bounds`. */
+  async start(file, bounds, startIndex = 0, display = 0) {
+    const s = await this._chamar("start", { file, bounds, startIndex, display }, 3 * 60 * 1000);
     this._publicar(s);
     if (s.active) this._consultar();
     return s;

@@ -87,7 +87,7 @@
           :icon="ICONS.PROJECTION.PRESENT"
           @click="emit('projectNative')"
         >
-          {{ tm("pptx.project_native") }}
+          {{ tm("pptx.project_native", { app: state?.converter || "PowerPoint" }) }}
         </LjButton>
         <LjButton size="sm" variant="primary" :icon="ICONS.PLAYER.PLAY" @click="emit('project')">
           {{ tm("pptx.project_now") }}
@@ -147,6 +147,7 @@ const resumoRecursos = computed(() => {
   if (f.audios) partes.push(props.tm("pptx.feat_audios", { count: f.audios }));
   return props.tm(props.state?.nativeAvailable ? "pptx.feat_hint" : "pptx.feat_hint_no_native", {
     items: partes.join(", "),
+    app: props.state?.converter || "PowerPoint",
   });
 });
 

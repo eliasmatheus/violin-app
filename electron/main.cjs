@@ -2552,7 +2552,25 @@ ipcMain.handle("canva:clearCachedPdfs", () => canva.clearCachedPdfs());
 // ---------------------------------------------------------------------------
 
 /** Conversor disponível neste computador (PowerPoint, LibreOffice ou nenhum). */
-ipcMain.handle("pptx:status", () => pptx.status());
+/** Programa escolhido em Opções → Player de Áudio/Vídeo (validado: só os três valores). */
+function _pptxEngine(payload) {
+  const e = payload && typeof payload === "object" ? payload.engine : undefined;
+  return e === "powerpoint" || e === "libreoffice" ? e : "auto";
+}
+
+/**
+ * Número da tela do PA na contagem do LibreOffice (1 = primeira). Ele põe a
+ * principal primeiro e segue a ordem do sistema — a mesma do Electron.
+ */
+function _telaLibreOffice(displayId) {
+  const todas = screen.getAllDisplays();
+  const principal = screen.getPrimaryDisplay();
+  const ordem = [principal, ...todas.filter((x) => x.id !== principal.id)];
+  const i = ordem.findIndex((x) => x.id === displayId);
+  return i >= 0 ? i + 1 : 0;
+}
+
+ipcMain.handle("pptx:status", (_event, payload) => pptx.status(_pptxEngine(payload)));
 
 /**
  * Converte e devolve o caminho do PDF. Fica pendente durante a conversão
@@ -2590,6 +2608,8 @@ ipcMain.handle("pptx:nativeStart", async (event, payload) => {
   const sender = event.sender;
   const r = await pptx.nativeStart(filePath, {
     bounds: d.bounds,
+    display: _telaLibreOffice(d.id),
+    engine: _pptxEngine(payload),
     startIndex,
     onProgress: (p) => safeSend(sender, "pptx:progress", { path: filePath, ...p }),
   });
@@ -2648,6 +2668,7 @@ ipcMain.handle("pptx:convert", (event, payload) => {
   const sender = event.sender;
   return pptx.convert(filePath, {
     force: payload.force === true,
+    engine: _pptxEngine(payload),
     onProgress: (p) => safeSend(sender, "pptx:progress", { path: filePath, ...p }),
   });
 });

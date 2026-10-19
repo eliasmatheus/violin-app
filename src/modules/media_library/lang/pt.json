@@ -125,17 +125,17 @@
     "fonts_error": "Não consegui conferir as fontes deste computador: {message}",
     "slides_count": "{done} de {total}",
     "converting_count": "Gerando slide {done} de {total}…",
-    "native_start": "Apresentar com o PowerPoint (animações e vídeos)",
-    "native_opening": "Abrindo o PowerPoint…",
-    "native_on": "O PowerPoint está apresentando no telão — animações e vídeos funcionando",
+    "native_start": "Apresentar com o {app} (animações e vídeos)",
+    "native_opening": "Abrindo o {app}…",
+    "native_on": "O {app} está apresentando no telão — animações e vídeos funcionando",
     "native_black": "Tela preta",
-    "native_end": "Encerrar PowerPoint",
-    "native_failed": "Não foi possível apresentar com o PowerPoint: {message}",
+    "native_end": "Encerrar {app}",
+    "native_failed": "Não foi possível apresentar com o {app}: {message}",
     "feat_animations": "animações em {count} slide(s)",
     "feat_videos": "{count} vídeo(s)",
     "feat_audios": "{count} áudio(s)",
-    "feat_hint": "Este arquivo tem {items}. No modo imagem eles ficam parados — para vê-los, use Apresentar com o PowerPoint (o retorno mostra o slide atual e o próximo).",
-    "feat_hint_no_native": "Este arquivo tem {items}, que ficam parados no modo imagem. Para apresentá-los é preciso o Microsoft PowerPoint no Windows.",
-    "project_native": "Apresentar com o PowerPoint"
+    "feat_hint": "Este arquivo tem {items}. No modo imagem eles ficam parados — para vê-los, use Apresentar com o {app} (o retorno mostra o slide atual e o próximo).",
+    "feat_hint_no_native": "Este arquivo tem {items}, que ficam parados no modo imagem. Para apresentá-los é preciso o PowerPoint (Windows) ou o LibreOffice — veja em Opções → Player de Áudio/Vídeo.",
+    "project_native": "Apresentar com o {app}"
   }
 }
