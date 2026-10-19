@@ -328,25 +328,73 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log } = 
   }
 }
 
+const FONT_FILE_RE = /\.(ttf|otf)$/i;
+const FONT_INPUT_RE = /\.(ttf|otf|zip)$/i;
+const MAX_FONT_INPUT = 200 * 1024 * 1024;
+
 /**
- * Instala arquivos de fonte escolhidos pelo operador (.ttf/.otf), para o caso
- * de uma fonte que não está embutida nem no Google Fonts.
- * @param {string[]} files  caminhos vindos do diálogo nativo do main
- * @returns {Promise<{ok: true, installed: number} | {ok: false, code: string, message: string}>}
+ * Tira de um .zip (o que o DaFont entrega) os arquivos .ttf/.otf, gravando em
+ * `files/pptx/fonts/manual/`. Pastas internas e o lixo de Mac (__MACOSX) são
+ * ignorados; o nome final não confia no caminho de dentro do zip.
+ */
+async function _extrairZip(zipPath) {
+  const JSZip = require("jszip");
+  const zip = await JSZip.loadAsync(await fs.readFile(zipPath));
+  const dir = path.join(_fontCacheDir(), "manual");
+  await fs.mkdir(dir, { recursive: true });
+  const out = [];
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir || entry.name.includes("__MACOSX") || !FONT_FILE_RE.test(entry.name)) continue;
+    const nome = path.basename(entry.name).replace(/[\\/:*?"<>|]/g, "_");
+    if (nome.startsWith("._")) continue;
+    const dest = path.join(dir, nome);
+    await fs.writeFile(dest, await entry.async("nodebuffer"));
+    out.push(dest);
+  }
+  return out;
+}
+
+/**
+ * Instala fontes que o operador escolheu ou arrastou: .ttf, .otf ou o .zip
+ * baixado do DaFont. Para a fonte que não está embutida nem no Google Fonts.
+ * Os caminhos são validados AQUI (extensão, existência, tamanho).
+ * @param {unknown} files
+ * @returns {Promise<{ok: true, installed: number, families: string[]} | {ok: false, code: string, message: string}>}
  */
 async function installFontFiles(files) {
-  const lista = (Array.isArray(files) ? files : []).filter(
-    (f) => typeof f === "string" && /\.(ttf|otf)$/i.test(f) && fss.existsSync(f)
-  );
-  if (!lista.length) return { ok: false, code: "no_fonts", message: "Nenhum arquivo .ttf ou .otf." };
+  const entradas = [];
+  for (const f of Array.isArray(files) ? files.slice(0, 50) : []) {
+    if (typeof f !== "string" || f.length > 4096 || f.includes("\0") || !FONT_INPUT_RE.test(f)) continue;
+    try {
+      const st = await fs.stat(f);
+      if (st.isFile() && st.size <= MAX_FONT_INPUT) entradas.push(path.resolve(f));
+    } catch {
+      /* sumiu: ignora */
+    }
+  }
+  const lista = [];
+  for (const f of entradas) {
+    if (/\.zip$/i.test(f)) {
+      try {
+        lista.push(...(await _extrairZip(f)));
+      } catch {
+        /* zip corrompido: ignora */
+      }
+    } else lista.push(f);
+  }
+  if (!lista.length) {
+    return { ok: false, code: "no_fonts", message: "Nenhum arquivo de fonte (.ttf, .otf ou .zip com fontes)." };
+  }
   const fonts = [];
+  const families = new Set();
   for (const f of lista) {
     const n = await readFontNames(f);
     fonts.push({ path: f, registryName: n.registryName, names: [n.family, n.full, n.typo].filter(Boolean) });
+    if (n.typo || n.family) families.add(n.typo || n.family);
   }
   try {
     const installed = await _systemFonts().install(fonts);
-    return { ok: true, installed };
+    return { ok: true, installed, families: [...families] };
   } catch (e) {
     return { ok: false, code: "install_failed", message: String(e.message || e).slice(0, 400) };
   }

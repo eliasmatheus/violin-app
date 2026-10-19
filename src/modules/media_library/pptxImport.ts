@@ -24,6 +24,11 @@ export function isPowerPointName(name: string | undefined | null): boolean {
   return !!ext && String(name).includes(".") && PPT_EXT.includes(ext);
 }
 
+/** Arquivo de fonte que pode ser arrastado: .ttf, .otf ou o .zip do DaFont. */
+export function isFontFileName(name: string | undefined | null): boolean {
+  return /\.(ttf|otf|zip)$/i.test(String(name || ""));
+}
+
 /** Fontes que o arquivo pede e que continuam faltando depois da conversão. */
 export function missingFonts(fonts: PptxFont[] | undefined): string[] {
   return (fonts || [])

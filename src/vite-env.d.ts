@@ -102,6 +102,10 @@ declare global {
       }
     | { ok: false; code: string; message: string };
 
+  type PptxFontInstallResult =
+    | { ok: true; installed: number; families?: string[] }
+    | { ok: false; code: string; message: string };
+
   interface PptxProgress {
     path: string;
     phase: "fonts" | "font" | "converting" | "done";
@@ -439,9 +443,9 @@ declare global {
       /** Pendente durante a conversão (segundos a alguns minutos). */
       convert: (path: string) => Promise<PptxConvertResult>;
       /** Diálogo nativo de fontes (.ttf/.otf); instala para o usuário. */
-      installFonts: () => Promise<
-        { ok: true; installed: number } | { ok: false; code: string; message: string }
-      >;
+      installFonts: () => Promise<PptxFontInstallResult>;
+      /** Instala fontes arrastadas (.ttf, .otf ou o .zip do DaFont). */
+      installFontPaths: (paths: string[]) => Promise<PptxFontInstallResult>;
       /** Andamento da conversão. Devolve a função de cleanup. */
       onProgress: (cb: (data: PptxProgress) => void) => () => void;
     };

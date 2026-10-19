@@ -331,8 +331,11 @@
       <PptxImportDialog
         :state="importacao"
         :tm="tm"
+        :regenerating="regerando"
         @close="importacao = null"
         @project="projetarImportado"
+        @install-font="instalarFonteManual"
+        @drop-fonts="instalarFontesArrastadas"
       />
 
       <!-- Rename dialog -->
@@ -442,6 +445,7 @@ import { useBackgroundTasks } from "@/composables/useBackgroundTasks";
 import {
   PPT_ACCEPT,
   applyProgress,
+  isFontFileName,
   isPowerPointName,
   missingFonts,
   parseConvertResult,
@@ -883,8 +887,16 @@ async function onDrop(e: DragEvent): Promise<void> {
   const droppedFiles = e.dataTransfer?.files;
   if (!droppedFiles?.length) return;
 
+  // Fonte arrastada (.ttf, .otf ou o .zip do DaFont): instala, não é mídia.
+  const fontes = Array.from(droppedFiles).filter((f) => isFontFileName(f.name));
+  if (fontes.length) {
+    void instalarFontesArrastadas(fontes);
+    if (fontes.length === droppedFiles.length) return;
+  }
+
   const valid: File[] = [];
   for (const f of Array.from(droppedFiles)) {
+    if (isFontFileName(f.name)) continue;
     const ext = f.name.split(".").pop()?.toLowerCase() || "";
     const isMedia =
       IMAGE_EXT.includes(ext) ||
@@ -893,7 +905,7 @@ async function onDrop(e: DragEvent): Promise<void> {
       isPowerPointName(f.name);
     if (isMedia) valid.push(f);
   }
-  if (valid.length < droppedFiles.length) noteUnsupported();
+  if (valid.length + fontes.length < droppedFiles.length) noteUnsupported();
   if (!valid.length) return;
 
   // Seleção de categoria (Sem categoria sempre disponível), depois importa.
@@ -1223,25 +1235,63 @@ function irParaPagina(n: number): void {
   broadcastPdfPage();
 }
 
+/** Botão "Instalar fonte…": diálogo nativo (.ttf, .otf ou .zip). */
 async function instalarFonteManual(): Promise<void> {
   const api = (Platform.api as LouvorjaApi | null)?.pptx;
   if (!api) return;
-  const r = await api.installFonts();
-  if (r.ok) $snackbar.success(tm("pptx.fonts_installed_count", { count: r.installed }));
-  else if (r.code !== "canceled") $alert.error({ text: r.message, translate: false });
+  await depoisDeInstalar(await api.installFonts());
 }
 
-/** "Gerar de novo": converte outra vez o .pptx de origem (ex.: depois de instalar uma fonte). */
-async function regerarNoPalco(): Promise<void> {
-  const file = arquivoNoPalco.value;
-  if (!file?.pptx?.source || regerando.value) return;
+/** Fontes arrastadas para a biblioteca, o painel ou a janela de andamento. */
+async function instalarFontesArrastadas(lista: File[]): Promise<void> {
+  const api = (Platform.api as LouvorjaApi | null)?.pptx;
+  const paths = lista.map((f) => localPathOf(f)).filter((p): p is string => !!p);
+  if (!api || !paths.length) {
+    $alert.error({ text: tm("pptx.desktop_only"), translate: false });
+    return;
+  }
+  await depoisDeInstalar(await api.installFontPaths(paths));
+}
+
+/**
+ * Fonte instalada: avisa quais famílias entraram e, se o PowerPoint aberto
+ * (no painel ou na janela de andamento) tinha fonte faltando, gera de novo
+ * sozinho — o operador arrasta o .zip e já vê o slide certo.
+ */
+async function depoisDeInstalar(r: PptxFontInstallResult): Promise<void> {
+  if (!r.ok) {
+    if (r.code !== "canceled") $alert.error({ text: r.message, translate: false });
+    return;
+  }
+  const nomes = (r.families ?? []).join(", ");
+  $snackbar.success(
+    nomes
+      ? tm("pptx.fonts_installed_names", { names: nomes })
+      : tm("pptx.fonts_installed_count", { count: r.installed })
+  );
+  const doDialogo = importacao.value?.phase === "done" ? importacao.value.fileId : undefined;
+  const alvo =
+    (doDialogo && files.value.find((f) => f.id === doDialogo)) || arquivoNoPalco.value || null;
+  if (alvo?.pptx && missingFonts(alvo.pptx.fonts).length) {
+    await regerarArquivo(alvo, alvo.id === arquivoNoPalco.value?.id);
+  }
+}
+
+/** Converte outra vez o .pptx de origem (ex.: depois de instalar uma fonte). */
+async function regerarArquivo(file: MediaFile, projetar: boolean): Promise<void> {
+  if (!file.pptx?.source || regerando.value) return;
   regerando.value = true;
   try {
     const novo = await importPowerPoint(file.pptx.source, file.name, file.categoryId ?? "", file);
-    if (novo) await tocarDaBiblioteca(novo);
+    if (novo && projetar) await tocarDaBiblioteca(novo);
   } finally {
     regerando.value = false;
   }
+}
+
+/** "Gerar de novo" do painel. */
+async function regerarNoPalco(): Promise<void> {
+  if (arquivoNoPalco.value) await regerarArquivo(arquivoNoPalco.value, true);
 }
 
 function buildThumbPath(filePath: string): string | undefined {

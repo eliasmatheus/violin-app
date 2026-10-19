@@ -2568,10 +2568,21 @@ ipcMain.handle("pptx:installFonts", async (event) => {
   const result = await dialog.showOpenDialog(win, {
     title: "Instalar fonte",
     properties: ["openFile", "multiSelections"],
-    filters: [{ name: "Fontes", extensions: ["ttf", "otf"] }],
+    filters: [{ name: "Fontes (.ttf, .otf ou .zip)", extensions: ["ttf", "otf", "zip"] }],
   });
   if (result.canceled || !result.filePaths?.length) return { ok: false, code: "canceled", message: "" };
   return pptx.installFontFiles(result.filePaths);
+});
+
+/**
+ * Fontes ARRASTADAS para a Biblioteca de Mídia (.ttf, .otf ou o .zip do
+ * DaFont). O caminho vem do renderer, então o `installFontFiles` aceita só
+ * essas extensões, confere que é arquivo e limita o tamanho.
+ */
+ipcMain.handle("pptx:installFontPaths", (_event, payload) => {
+  const paths = payload && typeof payload === "object" ? payload.paths : undefined;
+  if (!Array.isArray(paths)) return { ok: false, code: "no_fonts", message: "Nenhum arquivo." };
+  return pptx.installFontFiles(paths);
 });
 
 ipcMain.handle("pptx:convert", (event, payload) => {

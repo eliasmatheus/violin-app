@@ -9,7 +9,14 @@
     "
     @update:model-value="(v: boolean) => !v && emit('close')"
   >
-    <div v-if="state" class="pptx-import">
+    <div
+      v-if="state"
+      class="pptx-import"
+      :class="{ 'pptx-import--drop': arrastando }"
+      @dragover.prevent="arrastando = true"
+      @dragleave="arrastando = false"
+      @drop.prevent.stop="soltar"
+    >
       <div class="pptx-import__file" :title="state.name">{{ state.name }}</div>
 
       <ol class="pptx-import__steps">
@@ -38,9 +45,20 @@
         {{ tm("pptx.checking_fonts") }}
       </p>
       <PptxFontList v-else :fonts="state.fonts" :tm="tm" />
-      <p v-if="state.phase === 'done' && faltando" class="pptx-import__hint">
-        {{ tm("pptx.missing_hint") }}
-      </p>
+      <template v-if="state.phase === 'done' && faltando">
+        <p class="pptx-import__hint">{{ tm("pptx.missing_hint_drop") }}</p>
+        <div>
+          <LjButton
+            size="sm"
+            variant="subtle"
+            :icon="ICONS.ACTIONS.UPLOAD"
+            :disabled="regenerating"
+            @click="emit('installFont')"
+          >
+            {{ tm("pptx.install_font") }}
+          </LjButton>
+        </div>
+      </template>
     </div>
 
     <template #footer>
@@ -59,11 +77,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { LjButton, LjDialog, LjIcon, LjProgress, LjSpinner } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import PptxFontList from "./PptxFontList.vue";
-import { missingFonts, type PptxImportState } from "../pptxImport";
+import { isFontFileName, missingFonts, type PptxImportState } from "../pptxImport";
 
 /**
  * Andamento de um PowerPoint sendo preparado: fontes, geração dos slides e o
@@ -72,10 +90,24 @@ import { missingFonts, type PptxImportState } from "../pptxImport";
  */
 const props = defineProps<{
   state: PptxImportState | null;
+  regenerating?: boolean;
   tm: (_key: string, _named?: Record<string, unknown>) => string;
 }>();
 
-const emit = defineEmits<{ close: []; project: [] }>();
+const emit = defineEmits<{
+  close: [];
+  project: [];
+  installFont: [];
+  dropFonts: [files: File[]];
+}>();
+
+/** A janela fica num portal: soltar a fonte aqui não chega ao drop da biblioteca. */
+const arrastando = ref(false);
+function soltar(e: DragEvent): void {
+  arrastando.value = false;
+  const lista = Array.from(e.dataTransfer?.files ?? []).filter((f) => isFontFileName(f.name));
+  if (lista.length) emit("dropFonts", lista);
+}
 
 const ORDEM = ["fonts", "converting", "done"] as const;
 
@@ -141,6 +173,11 @@ function classeEtapa(etapa: (typeof ORDEM)[number]): string {
 .pptx-import__error {
   margin: 0;
   color: var(--lj-danger);
+}
+.pptx-import--drop {
+  border-radius: var(--lj-ui-radius, 6px);
+  outline: 2px dashed var(--lj-ui-accent);
+  outline-offset: 6px;
 }
 .pptx-import__hint {
   margin: 0;

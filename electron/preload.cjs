@@ -360,6 +360,8 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     convert: (path) => ipcRenderer.invoke("pptx:convert", { path }),
     /** Abre o diálogo nativo de fontes e instala as escolhidas. */
     installFonts: () => ipcRenderer.invoke("pptx:installFonts"),
+    /** Instala fontes arrastadas (.ttf, .otf ou .zip). */
+    installFontPaths: (paths) => ipcRenderer.invoke("pptx:installFontPaths", { paths }),
     /** Andamento (fontes, conversão). Devolve a função de cleanup. */
     onProgress: (cb) => {
       const handler = (_e, data) => cb?.(data);

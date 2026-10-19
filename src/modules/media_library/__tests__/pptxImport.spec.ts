@@ -3,6 +3,7 @@ import {
   PPT_ACCEPT,
   applyProgress,
   fontTone,
+  isFontFileName,
   isPowerPointName,
   missingFonts,
   parseConvertResult,
@@ -115,5 +116,15 @@ describe("pptxImport — lista inicial de fontes", () => {
       }
     );
     expect(s.fonts.map((f) => f.name)).toEqual(["Arial", "Brich"]);
+  });
+});
+
+describe("pptxImport — arquivo de fonte arrastado", () => {
+  it("aceita .ttf, .otf e o .zip do DaFont", () => {
+    expect(isFontFileName("Komika.TTF")).toBe(true);
+    expect(isFontFileName("fonte.otf")).toBe(true);
+    expect(isFontFileName("komika_axis.zip")).toBe(true);
+    expect(isFontFileName("slides.pptx")).toBe(false);
+    expect(isFontFileName("")).toBe(false);
   });
 });

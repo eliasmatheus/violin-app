@@ -63,7 +63,7 @@
         <div v-if="fonts" class="pdf-op__fonts">
           <div class="pdf-op__fonts-title">{{ tm("pptx.fonts_title") }}</div>
           <PptxFontList :fonts="fonts" :tm="tm" />
-          <p v-if="faltando" class="pdf-op__hint">{{ tm("pptx.missing_hint") }}</p>
+          <p v-if="faltando" class="pdf-op__hint">{{ tm("pptx.missing_hint_drop") }}</p>
           <div class="pdf-op__fonts-actions">
             <LjButton
               size="sm"

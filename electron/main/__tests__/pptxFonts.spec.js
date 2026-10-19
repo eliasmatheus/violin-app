@@ -133,3 +133,24 @@ describe("imagesToPdf", () => {
     }
   });
 });
+
+describe("installFontFiles — validação da fronteira", () => {
+  it("recusa o que não é fonte nem zip, e caminho que não existe", async () => {
+    const Module = require("node:module");
+    const original = Module._load;
+    Module._load = function (req, ...rest) {
+      if (req === "electron") return { app: { getPath: () => os.tmpdir() } };
+      return original.call(this, req, ...rest);
+    };
+    try {
+      delete require.cache[require.resolve("../pptx/index.js")];
+      const pptx = require("../pptx/index.js");
+      const r = await pptx.installFontFiles(["/etc/passwd", "/nao/existe.zip", 42, null]);
+      expect(r.ok).toBe(false);
+      expect(r.code).toBe("no_fonts");
+      expect((await pptx.installFontFiles("não é lista")).ok).toBe(false);
+    } finally {
+      Module._load = original;
+    }
+  });
+});

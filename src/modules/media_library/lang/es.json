@@ -119,6 +119,8 @@
     "panel_end": "Fin de la presentación",
     "panel_slide": "Diapositiva {page} de {total}",
     "panel_loading": "Cargando las diapositivas…",
-    "panel_slides": "Diapositivas"
+    "panel_slides": "Diapositivas",
+    "missing_hint_drop": "¿Falta alguna? Arrastra aquí el archivo de la fuente (.ttf, .otf o el .zip de DaFont) o haz clic en Instalar fuente… — el PowerPoint se genera de nuevo solo.",
+    "fonts_installed_names": "Fuente(s) instalada(s): {names}."
   }
 }

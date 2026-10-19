@@ -23,6 +23,7 @@ export default [
         PptxFont: "readonly",
         PptxProgress: "readonly",
         PptxConvertResult: "readonly",
+        PptxFontInstallResult: "readonly",
       },
       parserOptions: {
         parser: tseslint.parser,
