@@ -431,6 +431,7 @@ import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
 import { isOpen as isProjectionOpen } from "@/helpers/Projection";
 import { PROJECTION_TYPE } from "@/constants/Projection";
+import { nextFileProjectionEpoch } from "@/presentation/FileProjectionActivation";
 import {
   closeFileProjectionWindows,
   closeProjectionWindows,
@@ -1315,7 +1316,12 @@ let retornoNativoBase: Record<string, unknown> | null = null;
 /** Manda o PDF inteiro para o retorno (abre ou reativa) na página atual. */
 function enviarRetornoNativo(): void {
   if (!retornoNativoBase) return;
-  const atual = { ...retornoNativoBase, page: currentPdfPage.value };
+  // Época nova a cada envio: depois de um "clear" o retorno só aceita uma seleção nova.
+  const atual = {
+    ...retornoNativoBase,
+    page: currentPdfPage.value,
+    stage_epoch: nextFileProjectionEpoch(),
+  };
   try {
     localStorage.setItem(KEYS.PROJECTION.LJ_FILE_PROJECTION, JSON.stringify(atual));
   } catch {
@@ -1346,12 +1352,15 @@ async function abrirRetornoNativo(file: MediaFile, pagina: number): Promise<void
   for (const espera of [0, 1500, 3000]) {
     if (espera) await new Promise((r) => setTimeout(r, espera));
     if (retornoNativoId !== id || (!nativoAtivo.value && !nativoAbrindo.value)) return;
-    currentPdfPlaybackId = id;
-    if (!(await isProjectionOpen(PROJECTION_TYPE.FILE_RETURN))) {
+    const aberto = await isProjectionOpen(PROJECTION_TYPE.FILE_RETURN);
+    if (!aberto) {
       console.info("[pptx] abrindo o retorno do modo nativo", { espera });
       await openMediaWindow("return", "file");
     }
-    enviarRetornoNativo();
+    // Primeira vez, reabertura, ou um "clear" atrasado zerou o id: manda o PDF de novo.
+    const reenviar = !espera || !aberto || currentPdfPlaybackId !== id;
+    currentPdfPlaybackId = id;
+    if (reenviar) enviarRetornoNativo();
   }
 }
 

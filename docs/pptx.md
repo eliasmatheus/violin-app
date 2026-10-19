@@ -101,6 +101,9 @@ Nesse modo (`electron/main/pptx/nativeShow.js`, Windows + PowerPoint):
   o slide), Tela preta e Encerrar; o main consulta o slide atual a cada 700 ms
   e publica `pptx:native-state`, então avançar pelo próprio PowerPoint também
   aparece no painel;
+- cada início, falha e mudança de estado vai para `files/pptx/modo-nativo.log`
+  (corta sozinho em ~200 KB): é o que pedir ao operador quando o PowerPoint se
+  comportar diferente no computador dele.
 - **o retorno continua sendo o do LouvorJA** (se "Exibir na tela de retorno" estiver
   ligado): a mesma janela do modo imagem, com o slide atual e o próximo tirados do
   PDF já gerado. A página acompanha o PowerPoint pela consulta de estado; o índice

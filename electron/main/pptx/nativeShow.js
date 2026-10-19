@@ -105,7 +105,10 @@ function Start-Show($a) {
     } catch {
         throw ('O PowerPoint nao conseguiu abrir este arquivo. (' + $_.Exception.Message + ')')
     }
-    if ($script:owns) { try { $app.WindowState = 2 } catch { } }   # minimizado
+    # A janela de edição do arquivo fica minimizada (o PowerPoint pode já estar aberto
+    # pelo operador: aí só esta janela, não o programa inteiro).
+    try { $pres.Windows.Item(1).WindowState = 2 } catch { }      # ppWindowMinimized
+    if ($script:owns) { try { $app.WindowState = 2 } catch { } }
     $s = $pres.SlideShowSettings
     $s.ShowType = 1                 # ppShowTypeSpeaker (tela cheia)
     try { $s.ShowPresenterView = 0 } catch { }
@@ -125,13 +128,25 @@ function Start-Show($a) {
     # Sem isso a barra de tarefas do Windows fica por cima do PA quando o foco volta ao
     # LouvorJA: a janela da apresentação fica "sempre no topo", como o telão do LouvorJA.
     try { $w.Activate() } catch { }
+    $script:diag = @{}
     try {
         if (-not ('LouvorJA.Win32' -as [type])) {
-            Add-Type -Namespace LouvorJA -Name Win32 -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetWindowPos(System.IntPtr h, System.IntPtr after, int x, int y, int cx, int cy, uint flags);'
+            Add-Type -Namespace LouvorJA -Name Win32 -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool SetWindowPos(System.IntPtr h, System.IntPtr after, int x, int y, int cx, int cy, uint flags);
+[DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+'@
         }
+        $h = [IntPtr][long]$w.HWND
+        $script:diag.hwnd = [long]$w.HWND
         # HWND_TOPMOST = -1; SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE = 0x13
-        [void][LouvorJA.Win32]::SetWindowPos([IntPtr][long]$w.HWND, [IntPtr](-1), 0, 0, 0, 0, 0x13)
-    } catch { }
+        $script:diag.topmost = [LouvorJA.Win32]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x13)
+        $r = New-Object LouvorJA.Win32+RECT
+        [void][LouvorJA.Win32]::GetWindowRect($h, [ref]$r)
+        $script:diag.rect = @($r.Left, $r.Top, $r.Right, $r.Bottom)
+    } catch { $script:diag.error = $_.Exception.Message }
+    try { $script:diag.points = @($w.Left, $w.Top, $w.Width, $w.Height) } catch { }
     $script:pres = $pres
     $script:win = $w
     $script:visiveis = @()
@@ -144,7 +159,9 @@ function Start-Show($a) {
     $script:pagina = 1
     $i = [int]$a.startIndex
     if ($i -gt 0 -and $i -lt $script:visiveis.Count) { try { $w.View.GotoSlide($script:visiveis[$i]) } catch { } }
-    return (Get-State)
+    $st = Get-State
+    $st.diag = $script:diag
+    return $st
 }
 
 function Nav($a) {

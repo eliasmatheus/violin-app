@@ -450,8 +450,36 @@ function _nativeSupported(converter) {
   return process.platform === "win32" && converter?.id === "powerpoint";
 }
 
+/**
+ * Diário curto do modo nativo em `files/pptx/modo-nativo.log`: quando o
+ * PowerPoint se comporta diferente no computador de alguém, é o que dá para
+ * pedir ao operador. Corta sozinho ao passar de ~200 KB.
+ */
+async function _nlog(...parts) {
+  const file = path.join(_outDir(), "modo-nativo.log");
+  const linha = `${new Date().toISOString()} ${parts
+    .map((p) => (typeof p === "string" ? p : JSON.stringify(p)))
+    .join(" ")}\n`;
+  try {
+    await fs.mkdir(_outDir(), { recursive: true });
+    const st = await fs.stat(file).catch(() => null);
+    if (st && st.size > 200 * 1024) await fs.writeFile(file, linha);
+    else await fs.appendFile(file, linha);
+  } catch {
+    /* diário é opcional */
+  }
+}
+
 function _nativeShow() {
-  if (!_native) _native = new NativeShow({ tempDir: _tempDir(), onState: (st) => _nativeOnState(st) });
+  if (!_native) {
+    _native = new NativeShow({
+      tempDir: _tempDir(),
+      onState: (st) => {
+        void _nlog("estado", st);
+        _nativeOnState(st);
+      },
+    });
+  }
   return _native;
 }
 
@@ -497,8 +525,12 @@ async function _nativeStart(rawPath, { bounds = null, startIndex = 0, onProgress
   try {
     const st = await _nativeShow().start(copia, bounds, Math.max(0, Number(startIndex) || 0));
     if (!st.active) return { ok: false, code: "native_failed", message: "O PowerPoint não iniciou a apresentação." };
-    return { ok: true, state: st };
+    log("[pptx] modo nativo no monitor", bounds, "janela:", JSON.stringify(st.diag || {}));
+    void _nlog("início", { bounds, startIndex, diag: st.diag || {} });
+    const { diag: _diag, ...state } = st;
+    return { ok: true, state };
   } catch (e) {
+    void _nlog("falha ao iniciar", String(e.message || e));
     return { ok: false, code: "native_failed", message: String(e.message || e).slice(0, 500) };
   }
 }
