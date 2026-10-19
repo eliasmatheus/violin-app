@@ -145,12 +145,16 @@ function Start-Show($a) {
             Add-Type -Namespace LouvorJA -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool SetWindowPos(System.IntPtr h, System.IntPtr after, int x, int y, int cx, int cy, uint flags);
 [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindow(string cls, string title);
 [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
 public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 '@
         }
-        $h = [IntPtr][long]$w.HWND
-        $script:diag.hwnd = [long]$w.HWND
+        $h = [IntPtr]::Zero
+        try { $h = [IntPtr][long]$w.HWND } catch { }
+        # Em algumas versões o HWND vem 0: a janela da apresentação tem a classe "screenClass"
+        if ($h -eq [IntPtr]::Zero) { $h = [LouvorJA.Win32]::FindWindow('screenClass', $null) }
+        $script:diag.hwnd = [long]$h
         # HWND_TOPMOST = -1; SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE = 0x13
         $script:diag.topmost = [LouvorJA.Win32]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x13)
         $r = New-Object LouvorJA.Win32+RECT
