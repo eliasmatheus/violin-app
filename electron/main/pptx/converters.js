@@ -3,9 +3,14 @@
 /**
  * converters — quem transforma o .pptx em PDF.
  *
- * O PDF é desenhado pelo PRÓPRIO programa de apresentação, então sai igual ao
- * que o operador vê no PowerPoint (desde que as fontes estejam instaladas —
- * é o que o `index.js` resolve antes de chamar aqui).
+ * Quem desenha é o PRÓPRIO programa de apresentação, então sai igual ao que o
+ * operador vê no PowerPoint (desde que as fontes estejam instaladas — é o que
+ * o `index.js` resolve antes de chamar aqui).
+ *
+ * Com o PowerPoint, cada slide sai como imagem e o PDF é montado só com essas
+ * imagens. Um PDF "normal" do PowerPoint traz as fontes embutidas num formato
+ * (CID TrueType) que o pdf.js da projeção não desenhou direito no Electron 41
+ * — o título caía numa fonte qualquer. Com imagens não existe fonte a ler.
  *
  *   Windows → PowerPoint por PowerShell/COM;  sem PowerPoint → LibreOffice
  *   macOS   → PowerPoint por AppleScript;     sem PowerPoint → LibreOffice
@@ -18,6 +23,10 @@ const os = require("os");
 const { execFile } = require("child_process");
 const { pathToFileURL } = require("url");
 const { runWindowsTask } = require("./windowsScript.js");
+const { imagesToPdf } = require("./imagesPdf.js");
+
+/** Largura das imagens dos slides (a altura segue a proporção do slide). */
+const SLIDE_WIDTH_PX = 1920;
 
 const MAC_PPT_APP = "/Applications/Microsoft PowerPoint.app";
 /** O PowerPoint do Mac roda em sandbox: só lê/grava sem pedir permissão dentro do próprio container. */
@@ -90,12 +99,27 @@ async function detectConverter(platform = process.platform) {
 
 // ── PowerPoint no Windows ──────────────────────────────────────────────────
 async function _windowsPowerPoint(input, output, opts) {
-  const res = await runWindowsTask(
-    "convert",
-    { input, output, withWindow: !!opts.withWindow, restartIfIdle: !!opts.fontsChanged },
-    { tempDir: opts.tempDir, timeoutMs: 10 * 60 * 1000 }
-  );
-  return { staleFonts: !!res.staleFonts };
+  const outDir = path.join(opts.tempDir, `png-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  try {
+    const res = await runWindowsTask(
+      "convert",
+      {
+        input,
+        outDir,
+        width: SLIDE_WIDTH_PX,
+        withWindow: !!opts.withWindow,
+        restartIfIdle: !!opts.fontsChanged,
+      },
+      { tempDir: opts.tempDir, timeoutMs: 10 * 60 * 1000 }
+    );
+    const nomes = Array.isArray(res.files) ? res.files : res.files ? [res.files] : [];
+    const imagens = nomes.map((n) => path.join(outDir, path.basename(String(n))));
+    if (!imagens.length) throw new Error("O PowerPoint não exportou nenhum slide.");
+    await imagesToPdf(imagens, output, { width: Number(res.slideWidth), height: Number(res.slideHeight) });
+    return { staleFonts: !!res.staleFonts };
+  } finally {
+    fs.rm(outDir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 // ── PowerPoint no Mac ──────────────────────────────────────────────────────
@@ -121,7 +145,7 @@ on run argv
   tell application "Microsoft PowerPoint"
     open inFile
     set pres to active presentation
-    save pres in outFile as save as PDF
+    save pres in outFile as save as PNG
     close pres saving no
     if not wasRunning then quit
   end tell
@@ -130,17 +154,21 @@ end run
 `;
 
 async function _macPowerPoint(input, output, opts) {
+  // Igual ao Windows: cada slide vira PNG e o PDF é montado aqui.
   // Copia para dentro do container do PowerPoint: fora dele o macOS pede
   // "Conceder acesso" a cada arquivo novo e a automação fica parada esperando.
   const base = _existe(MAC_PPT_CONTAINER) ? path.join(MAC_PPT_CONTAINER, "tmp", "louvorja") : opts.tempDir;
   await fs.mkdir(base, { recursive: true });
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const tmpIn = path.join(base, `${id}${path.extname(input).toLowerCase()}`);
-  const tmpOut = path.join(base, `${id}.pdf`);
+  const tmpOut = path.join(base, `${id}-slides`);
   await fs.copyFile(input, tmpIn);
   try {
     const out = await _exec("osascript", ["-e", MAC_SCRIPT, tmpIn, tmpOut, opts.fontsChanged ? "1" : "0"], 10 * 60 * 1000);
-    await fs.copyFile(tmpOut, output);
+    // O PowerPoint do Mac cria uma pasta com "Slide1.png", "Slide2.png"…
+    const imagens = (await _listarPngs(base)).filter((f) => f.startsWith(tmpOut));
+    if (!imagens.length) throw new Error("O PowerPoint não exportou nenhum slide.");
+    await imagesToPdf(imagens, output);
     return { staleFonts: out.trim() === "1" };
   } catch (e) {
     if (/-1743|not authori[sz]ed|não autorizado/i.test(e.message)) {
@@ -151,8 +179,19 @@ async function _macPowerPoint(input, output, opts) {
     throw e;
   } finally {
     fs.unlink(tmpIn).catch(() => {});
-    fs.unlink(tmpOut).catch(() => {});
+    fs.rm(tmpOut, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/** PNGs de uma pasta (recursivo), na ordem natural: Slide2 antes de Slide10. */
+async function _listarPngs(dir) {
+  const out = [];
+  for (const it of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const p = path.join(dir, it.name);
+    if (it.isDirectory()) out.push(...(await _listarPngs(p)));
+    else if (/\.png$/i.test(it.name)) out.push(p);
+  }
+  return out.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
 // ── LibreOffice (Linux, ou quem não tem PowerPoint) ───────────────────────
@@ -209,4 +248,4 @@ async function convertToPdf(converter, input, output, opts) {
   throw new Error("Nenhum conversor disponível.");
 }
 
-module.exports = { detectConverter, convertToPdf, findSoffice, MAC_SCRIPT };
+module.exports = { detectConverter, convertToPdf, findSoffice, MAC_SCRIPT, SLIDE_WIDTH_PX };

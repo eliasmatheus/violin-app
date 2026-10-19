@@ -135,16 +135,35 @@ function Do-Convert($a) {
     if ($a.withWindow) { $withWindow = -1 }
     $pres = $app.Presentations.Open([string]$a.input, -1, 0, $withWindow)
     if ($a.withWindow -and $owns) { try { $app.WindowState = 2 } catch { } }
+    # Cada slide vira uma imagem desenhada pelo proprio PowerPoint (fonte certa,
+    # efeitos, transparencias). O PDF com essas imagens e montado no Node: o
+    # leitor de PDF da projecao so precisa desenhar figuras, nunca fontes.
+    $dir = [string]$a.outDir
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $files = @()
     try {
-        $total = [int]$pres.Slides.Count
-        $pres.SaveAs([string]$a.output, 32)   # 32 = ppSaveAsPDF
+        $sw = [double]$pres.PageSetup.SlideWidth
+        $sh = [double]$pres.PageSetup.SlideHeight
+        $width = [int]$a.width
+        if ($width -lt 640) { $width = 1920 }
+        $height = [int][Math]::Round($width * $sh / $sw)
+        $i = 0
+        foreach ($s in $pres.Slides) {
+            $i++
+            $hidden = $false
+            try { $hidden = ([int]$s.SlideShowTransition.Hidden -eq -1) } catch { }
+            if ($hidden) { continue }
+            $name = ('slide_{0:D4}.png' -f $i)
+            $s.Export((Join-Path $dir $name), 'PNG', $width, $height)
+            $files += $name
+        }
     } finally {
         try { $pres.Close() } catch { }
     }
     if ($owns) {
         try { if ($app.Presentations.Count -eq 0) { $app.Quit() } } catch { }
     }
-    return @{ total = $total; staleFonts = $stale }
+    return @{ files = $files; slideWidth = $sw; slideHeight = $sh; staleFonts = $stale }
 }
 
 try {

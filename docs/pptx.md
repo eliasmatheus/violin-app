@@ -15,7 +15,9 @@ A Biblioteca de Mídia aceita PowerPoint (`.pptx`, `.ppsx`, `.pptm`, `.ppt`,
 3. as que ainda faltam são buscadas no **Google Fonts** e instaladas — com a
    tabela `name` reescrita para os nomes que o Windows espera
    ("Bricolage Grotesque ExtraBold");
-4. o **próprio programa de apresentação** salva o arquivo como PDF;
+4. o **próprio programa de apresentação** desenha os slides: o PowerPoint
+   exporta cada slide como imagem (1920 px, JPEG 92) e o PDF é montado só com
+   essas imagens (`imagesPdf.js`); o LibreOffice salva direto como PDF;
 5. o PDF entra na biblioteca com o nome do `.pptx` e segue pela projeção de
    arquivo que já existe: telão (`file_projection`) e retorno (`file_return`).
 
@@ -41,11 +43,20 @@ dele antes de abrir, senão o sistema pede "Conceder acesso" a cada arquivo. Na
 primeira vez o macOS pergunta se o LouvorJA pode controlar o PowerPoint
 (Ajustes → Privacidade e Segurança → Automação).
 
+### Por que imagens, e não o PDF do PowerPoint
+
+O PDF que o PowerPoint salva traz as fontes embutidas como CID TrueType. O
+pdf.js 6 da projeção, no Electron 41, não desenhou essas fontes (o título caiu
+numa fonte genérica) e perdeu formas do slide — o worker do pdf.js chama
+`Math.sumPrecise`, que o Chromium do Electron 41 ainda não tem. Com uma imagem
+por página não existe fonte nem vetor a interpretar: o telão mostra o pixel que
+o PowerPoint gerou.
+
 ## Onde fica
 
 ```
 <dados>/files/pptx/
-├── <hash do arquivo>-<assinatura das fontes>-<conversor>.pdf
+├── <hash do arquivo>-<assinatura das fontes>-<conversor>-v2.pdf
 ├── <mesmo nome>.json      metadado (arquivo de origem, fontes, data)
 └── fonts/                 fontes extraídas/baixadas (embedded/, google/)
 ```
@@ -65,6 +76,7 @@ apagam.
 | `electron/main/pptx/googleFonts.js`       | catálogo e download do Google Fonts                 |
 | `electron/main/pptx/fontRename.js`        | renomeia pesos de fontes variáveis                  |
 | `electron/main/pptx/converters.js`        | PowerPoint (Win/Mac) e LibreOffice                  |
+| `electron/main/pptx/imagesPdf.js`         | PDF com uma imagem de slide por página (pdf-lib)    |
 | `electron/main/pptx/windowsScript.js`     | script PowerShell (fontes + COM)                    |
 | `src/modules/media_library/pptxImport.ts` | validação da resposta e textos de andamento         |
 

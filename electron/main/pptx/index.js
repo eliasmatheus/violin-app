@@ -39,6 +39,9 @@ const MAX_BYTES = 1024 * 1024 * 1024; // 1 GB — apresentação com vídeo pesa
 
 const FETCH_TIMEOUT_MS = 20000;
 
+/** Sobe quando o formato do PDF muda (v2: slides como imagem) — o cache antigo deixa de valer. */
+const CACHE_VERSION = 2;
+
 /** `fetch` do Node com tempo limite (regra do AGENTS.md para o processo main). */
 async function fetchWithTimeout(url, init = {}) {
   const ctrl = new AbortController();
@@ -283,7 +286,7 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log } = 
   const outDir = _outDir();
   await fs.mkdir(outDir, { recursive: true });
   const hash = (await _sha1File(file)).slice(0, 16);
-  const base = `${hash}-${_signature(report.items)}-${converter.id}`;
+  const base = `${hash}-${_signature(report.items)}-${converter.id}-v${CACHE_VERSION}`;
   const pdf = path.join(outDir, `${base}.pdf`);
   const meta = path.join(outDir, `${base}.json`);
   if (fss.existsSync(pdf) && fss.existsSync(meta)) {

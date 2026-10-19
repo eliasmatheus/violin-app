@@ -86,13 +86,41 @@ describe("fontRename", () => {
 });
 
 describe("scripts embutidos", () => {
-  it("o script do PowerShell não tem crase (quebraria o template do JS)", () => {
+  it("o script do PowerShell não tem crase e exporta os slides como imagem", () => {
     expect(SCRIPT.includes("`")).toBe(false);
-    expect(SCRIPT).toContain("ppSaveAsPDF");
+    expect(SCRIPT).toContain(".Export(");
   });
 
-  it("o AppleScript salva como PDF e fecha sem salvar o original", () => {
-    expect(MAC_SCRIPT).toContain("save as PDF");
+  it("o AppleScript exporta os slides como imagem e fecha sem salvar o original", () => {
+    expect(MAC_SCRIPT).toContain("save as PNG");
     expect(MAC_SCRIPT).toContain("saving no");
+  });
+});
+
+describe("imagesToPdf", () => {
+  it("monta uma página por imagem, no tamanho do slide", async () => {
+    const { imagesToPdf } = require("../pptx/imagesPdf.js");
+    const { PDFDocument } = require("pdf-lib");
+    // PNG 1x1 vermelho
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+      "base64"
+    );
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "lj-pptx-img-"));
+    try {
+      const a = path.join(dir, "slide_0001.png");
+      const b = path.join(dir, "slide_0002.png");
+      await fs.writeFile(a, png);
+      await fs.writeFile(b, png);
+      await fs.writeFile(path.join(dir, "lixo.png"), "não é imagem");
+      const out = path.join(dir, "saida.pdf");
+      const n = await imagesToPdf([a, path.join(dir, "lixo.png"), b], out, { width: 960, height: 540 });
+      expect(n).toBe(2);
+      const doc = await PDFDocument.load(await fs.readFile(out));
+      expect(doc.getPageCount()).toBe(2);
+      expect(doc.getPage(0).getSize()).toEqual({ width: 960, height: 540 });
+    } finally {
+      await fs.remove(dir);
+    }
   });
 });
