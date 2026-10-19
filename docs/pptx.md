@@ -83,9 +83,34 @@ apagam.
 IPC: `pptx:status`, `pptx:convert` (`{ path }`) e o evento `pptx:progress`.
 O caminho é validado no main (extensão, existência, tamanho).
 
+## Modo nativo: animações, vídeos e áudios
+
+O modo imagem não leva animações nem mídias: cada slide é uma página parada.
+Ao preparar o arquivo, o LouvorJA conta os slides com animação (`presetClass`
+entr/exit/emph/path) e as mídias em `ppt/media/`; se houver, a janela de
+andamento e o painel do operador oferecem **Apresentar com o PowerPoint**.
+
+Nesse modo (`electron/main/pptx/nativeShow.js`, Windows + PowerPoint):
+
+- um PowerShell fica aberto durante a apresentação, falando com o PowerPoint
+  por COM (comandos em JSON pela entrada padrão);
+- o PowerPoint abre o `.pptx` original (cópia sem a marca "baixado da
+  internet", com as fontes já resolvidas) em tela cheia **no monitor do PA**
+  (`file_projection`) — sem monitor de projeção definido, não abre;
+- o painel continua servindo: Próximo/Anterior, clique na miniatura (vai para
+  o slide), Tela preta e Encerrar; o main consulta o slide atual a cada 700 ms
+  e publica `pptx:native-state`, então avançar pelo próprio PowerPoint também
+  aparece no painel;
+- **não há retorno** nesse modo: o PowerPoint apresenta em uma tela só.
+
+IPC: `pptx:nativeStart` (`{ path, startIndex }`), `pptx:nativeNav`
+(`{ action: next|prev|goto|black, index }`), `pptx:nativeEnd`,
+`pptx:nativeState` e o evento `pptx:native-state`.
+
 ## Limites
 
-- Animações, transições e vídeos embutidos no `.pptx` não passam para o PDF:
-  cada slide vira uma página estática.
+- No modo imagem, animações, transições e vídeos não passam para o PDF: cada
+  slide vira uma página estática. Para eles existe o modo nativo (acima),
+  hoje só no Windows e sem retorno.
 - Fontes pagas que não estão embutidas nem no Google Fonts continuam faltando;
   o operador recebe a lista para instalar à mão e adicionar de novo.

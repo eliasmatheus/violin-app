@@ -24,6 +24,9 @@ export default [
         PptxProgress: "readonly",
         PptxConvertResult: "readonly",
         PptxFontInstallResult: "readonly",
+        PptxFeatures: "readonly",
+        PptxNativeState: "readonly",
+        PptxNativeResult: "readonly",
       },
       parserOptions: {
         parser: tseslint.parser,

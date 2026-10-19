@@ -154,3 +154,31 @@ describe("installFontFiles — validação da fronteira", () => {
     }
   });
 });
+
+describe("readPptxFeatures", () => {
+  it("conta slides animados e mídias de vídeo e áudio", async () => {
+    const { readPptxFeatures } = require("../pptx/pptxFonts.js");
+    const { file, dir } = await pptxCom({
+      "ppt/slides/slide1.xml": '<p:sld><p:timing><p:cTn presetClass="entr"/></p:timing></p:sld>',
+      "ppt/slides/slide2.xml": "<p:sld/>",
+      "ppt/slides/slide3.xml": '<p:sld><p:cTn presetClass="emph"/></p:sld>',
+      "ppt/media/media1.mp4": "x",
+      "ppt/media/media2.m4a": "x",
+      "ppt/media/image1.png": "x",
+    });
+    try {
+      expect(await readPptxFeatures(file)).toEqual({ animatedSlides: 2, videos: 1, audios: 1 });
+    } finally {
+      await fs.remove(dir);
+    }
+  });
+});
+
+describe("nativeShow", () => {
+  it("o script do modo nativo não tem crase e posiciona no monitor do PA", () => {
+    const { SCRIPT } = require("../pptx/nativeShow.js");
+    expect(SCRIPT.includes("`")).toBe(false);
+    expect(SCRIPT).toContain("SlideShowSettings");
+    expect(SCRIPT).toContain("GotoSlide");
+  });
+});

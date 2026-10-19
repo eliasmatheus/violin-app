@@ -83,4 +83,29 @@ async function extractEmbeddedFonts(filePath, onlyTypefaces = null) {
   return out;
 }
 
-module.exports = { readPptxFonts, extractEmbeddedFonts };
+const VIDEO_RE = /\.(mp4|m4v|mov|wmv|avi|mpg|mpeg|mkv|webm|asf)$/i;
+const AUDIO_RE = /\.(mp3|wav|m4a|wma|aac|ogg|mid|midi|aiff?)$/i;
+
+/**
+ * O que o modo imagem perde: slides com animação (entrada, saída, ênfase ou
+ * trajetória) e mídias (vídeo/áudio) dentro do arquivo. Serve para o LouvorJA
+ * sugerir "Apresentar com o PowerPoint" quando faz diferença.
+ * @returns {Promise<{animatedSlides: number, videos: number, audios: number}>}
+ */
+async function readPptxFeatures(filePath) {
+  const zip = await JSZip.loadAsync(await fs.readFile(filePath));
+  let animatedSlides = 0;
+  for (const name of Object.keys(zip.files)) {
+    if (!/^ppt\/slides\/slide\d+\.xml$/.test(name)) continue;
+    const xml = await zip.file(name).async("string");
+    if (/presetClass="(entr|exit|emph|path)"/.test(xml)) animatedSlides++;
+  }
+  const midias = Object.keys(zip.files).filter((n) => n.startsWith("ppt/media/"));
+  return {
+    animatedSlides,
+    videos: midias.filter((n) => VIDEO_RE.test(n)).length,
+    audios: midias.filter((n) => AUDIO_RE.test(n)).length,
+  };
+}
+
+module.exports = { readPptxFonts, extractEmbeddedFonts, readPptxFeatures };

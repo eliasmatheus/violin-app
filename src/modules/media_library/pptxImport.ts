@@ -53,6 +53,8 @@ export function parseConvertResult(raw: unknown): PptxConvertResult {
         : [],
       staleFonts: !!r.staleFonts,
       fontsError: typeof r.fontsError === "string" ? r.fontsError : "",
+      features: parseFeatures(r.features),
+      nativeAvailable: r.nativeAvailable === true,
     };
   }
   const fail = r as { code?: unknown; message?: unknown } | null;
@@ -62,6 +64,19 @@ export function parseConvertResult(raw: unknown): PptxConvertResult {
     message:
       typeof fail?.message === "string" && fail.message ? fail.message : "falha desconhecida",
   };
+}
+
+/** Animações e mídias vindas do main, validadas (números inteiros ≥ 0). */
+export function parseFeatures(raw: unknown): PptxFeatures {
+  const f = (raw ?? {}) as Record<string, unknown>;
+  const n = (v: unknown) =>
+    typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+  return { animatedSlides: n(f.animatedSlides), videos: n(f.videos), audios: n(f.audios) };
+}
+
+/** O arquivo tem algo que o modo imagem deixa parado? */
+export function hasRichContent(f: PptxFeatures | null | undefined): boolean {
+  return !!f && f.animatedSlides + f.videos + f.audios > 0;
 }
 
 /** Texto curto do andamento, para a lista de tarefas em segundo plano. */
@@ -111,6 +126,9 @@ export interface PptxImportState {
   fontsError?: string;
   /** id do item já salvo na biblioteca, para "Projetar agora". */
   fileId?: string;
+  /** Animações/mídias do arquivo e se dá para usar o modo nativo aqui. */
+  features?: PptxFeatures;
+  nativeAvailable?: boolean;
 }
 
 /** Aplica um evento de andamento ao estado (função pura, testável). */

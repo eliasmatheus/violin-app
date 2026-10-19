@@ -40,6 +40,41 @@
       </div>
     </header>
 
+    <!-- Modo de apresentação: imagens (PA + retorno) ou o próprio PowerPoint (animações) -->
+    <div v-if="native" class="pdf-op__mode" :class="{ 'is-native': native.active }">
+      <template v-if="native.active">
+        <LjChip variant="primary" :icon="ICONS.PROJECTION.PRESENT">
+          {{ tm("pptx.native_on") }}
+        </LjChip>
+        <span class="lj-u-spacer" />
+        <LjButton
+          size="sm"
+          :variant="native.black ? 'primary' : 'subtle'"
+          :icon="ICONS.UI.EYE_OFF"
+          @click="emit('black')"
+        >
+          {{ tm("pptx.native_black") }}
+        </LjButton>
+        <LjButton size="sm" variant="subtle" :icon="ICONS.PLAYER.STOP" @click="emit('nativeEnd')">
+          {{ tm("pptx.native_end") }}
+        </LjButton>
+      </template>
+      <template v-else>
+        <p v-if="resumoRecursos" class="pdf-op__hint">{{ resumoRecursos }}</p>
+        <span class="lj-u-spacer" />
+        <LjButton
+          v-if="native.available"
+          size="sm"
+          :variant="resumoRecursos ? 'primary' : 'subtle'"
+          :icon="ICONS.PROJECTION.PRESENT"
+          :disabled="native.busy"
+          @click="emit('nativeStart')"
+        >
+          {{ native.busy ? tm("pptx.native_opening") : tm("pptx.native_start") }}
+        </LjButton>
+      </template>
+    </div>
+
     <!-- No telão + próximo -->
     <div class="pdf-op__stage">
       <figure class="pdf-op__now">
@@ -112,7 +147,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { LjButton, LjSpinner } from "@/components/ui";
+import { LjButton, LjChip, LjSpinner } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import { loadPdfDocument, type PDFDocumentProxy } from "@/helpers/PdfRuntime";
 import PptxFontList from "./PptxFontList.vue";
@@ -133,6 +168,10 @@ const props = defineProps<{
   total: number;
   fonts?: PptxFont[] | null;
   regenerating?: boolean;
+  /** Modo nativo (PowerPoint no PA). null = não se aplica (PDF comum). */
+  native?: { available: boolean; active: boolean; black: boolean; busy: boolean } | null;
+  /** Animações e mídias do arquivo (o que o modo imagem não leva). */
+  features?: PptxFeatures | null;
   tm: (_key: string, _named?: Record<string, unknown>) => string;
 }>();
 
@@ -144,7 +183,24 @@ const emit = defineEmits<{
   back: [];
   installFont: [];
   regenerate: [];
+  nativeStart: [];
+  nativeEnd: [];
+  black: [];
 }>();
+
+/** "Este arquivo tem animações em 7 slides e 2 vídeos…" — só quando há o que perder. */
+const resumoRecursos = computed(() => {
+  const f = props.features;
+  if (!f) return "";
+  const partes: string[] = [];
+  if (f.animatedSlides) partes.push(props.tm("pptx.feat_animations", { count: f.animatedSlides }));
+  if (f.videos) partes.push(props.tm("pptx.feat_videos", { count: f.videos }));
+  if (f.audios) partes.push(props.tm("pptx.feat_audios", { count: f.audios }));
+  if (!partes.length) return "";
+  return props.tm(props.native?.available ? "pptx.feat_hint" : "pptx.feat_hint_no_native", {
+    items: partes.join(", "),
+  });
+});
 
 /** Largura das miniaturas: dá para ler o slide no "próximo" sem pesar. */
 const THUMB_WIDTH = 480;
@@ -261,6 +317,22 @@ onBeforeUnmount(() => {
 }
 .pdf-op__stop :deep(svg) {
   color: var(--lj-danger);
+}
+.pdf-op__mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lj-space-4);
+  padding: var(--lj-space-4);
+  border: 1px solid var(--lj-ui-border, rgba(127, 127, 127, 0.3));
+  border-radius: var(--lj-ui-radius, 6px);
+  background: var(--lj-surface-bg-soft);
+}
+.pdf-op__mode.is-native {
+  border-color: var(--lj-ui-accent);
+}
+.pdf-op__mode .pdf-op__hint {
+  flex: 1 1 260px;
 }
 .pdf-op__stage {
   display: grid;

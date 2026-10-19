@@ -2559,6 +2559,48 @@ ipcMain.handle("pptx:status", () => pptx.status());
  * (segundos a alguns minutos); o andamento chega por `pptx:progress`.
  * O caminho é validado no `pptx/index.js` (extensão, existência, tamanho).
  */
+/*
+ * Modo nativo: o próprio PowerPoint apresenta no monitor do PA (animações,
+ * vídeos e áudios). O LouvorJA só manda os comandos e repassa o estado.
+ */
+pptx.onNativeState((state) => {
+  for (const w of BrowserWindow.getAllWindows()) safeSend(w, "pptx:native-state", state);
+});
+
+ipcMain.handle("pptx:nativeStart", (event, payload) => {
+  const filePath = payload && typeof payload === "object" ? payload.path : undefined;
+  if (typeof filePath !== "string") return { ok: false, code: "invalid_file", message: "Arquivo inválido." };
+  const startIndex = Number.isInteger(payload.startIndex) ? payload.startIndex : 0;
+  // Monitor do PA: o mesmo da projeção de arquivo. Sem ele, não abre na tela do
+  // operador (a mesma regra das outras projeções).
+  const d = displays.getPreferred("file_projection");
+  if (!d) {
+    return {
+      ok: false,
+      code: "no_display",
+      message: "Escolha o monitor de projeção em Opções → Player de Áudio/Vídeo → Projetar arquivos em.",
+    };
+  }
+  const sender = event.sender;
+  return pptx.nativeStart(filePath, {
+    bounds: d.bounds,
+    startIndex,
+    onProgress: (p) => safeSend(sender, "pptx:progress", { path: filePath, ...p }),
+  });
+});
+
+ipcMain.handle("pptx:nativeNav", (_event, payload) => {
+  const action = payload && typeof payload === "object" ? payload.action : undefined;
+  const index = payload && typeof payload === "object" ? payload.index : undefined;
+  if (typeof action !== "string") return { ok: false, code: "invalid_action", message: "Ação inválida." };
+  return pptx.nativeNav(action, Number.isInteger(index) ? index : undefined);
+});
+
+ipcMain.handle("pptx:nativeEnd", () => pptx.nativeEnd());
+ipcMain.handle("pptx:nativeState", () => pptx.nativeState());
+
+app.on("will-quit", () => pptx.disposeNative());
+
 /**
  * "Instalar fonte…" do painel do PowerPoint. O arquivo é escolhido no diálogo
  * nativo AQUI — nenhum caminho vem do renderer.

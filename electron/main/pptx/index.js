@@ -24,13 +24,14 @@ const fss = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const paths = require("../paths.js");
-const { readPptxFonts, extractEmbeddedFonts } = require("./pptxFonts.js");
+const { readPptxFonts, extractEmbeddedFonts, readPptxFeatures } = require("./pptxFonts.js");
 const { norm, isInstalled, isOfficeCloud } = require("./fontNames.js");
 const { readFontNames } = require("./fontFiles.js");
 const { GoogleFontsSource } = require("./googleFonts.js");
 const { renameFont } = require("./fontRename.js");
 const { SystemFonts } = require("./systemFonts.js");
 const { detectConverter, convertToPdf } = require("./converters.js");
+const { NativeShow } = require("./nativeShow.js");
 
 /** Extensões aceitas. Só as baseadas em ZIP (OOXML) têm leitura de fontes. */
 const PPT_EXT = [".pptx", ".ppsx", ".pptm", ".ppt", ".pps", ".odp"];
@@ -279,6 +280,17 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log, for
     };
   }
 
+  // Animações e mídias: o modo imagem não leva; a interface sugere o modo nativo.
+  let features = { animatedSlides: 0, videos: 0, audios: 0 };
+  if (OOXML_EXT.includes(path.extname(file).toLowerCase())) {
+    try {
+      features = await readPptxFeatures(file);
+    } catch {
+      /* só informativo */
+    }
+  }
+  const nativeAvailable = _nativeSupported(converter);
+
   onProgress({ phase: "fonts" });
   let report = { items: [], installed: 0, embedded: false };
   let fontsError = "";
@@ -300,7 +312,17 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log, for
   const meta = path.join(outDir, `${base}.json`);
   // force = "Gerar de novo": o operador pediu outra conversão, não o que já está guardado.
   if (!force && fss.existsSync(pdf) && fss.existsSync(meta)) {
-    return { ok: true, path: pdf, cached: true, converter: converter.label, fonts: report.items, staleFonts: false, fontsError };
+    return {
+      ok: true,
+      path: pdf,
+      cached: true,
+      converter: converter.label,
+      fonts: report.items,
+      staleFonts: false,
+      fontsError,
+      features,
+      nativeAvailable,
+    };
   }
 
   onProgress({ phase: "converting", converter: converter.label });
@@ -336,6 +358,8 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log, for
       fonts: report.items,
       staleFonts: r.staleFonts,
       fontsError,
+      features,
+      nativeAvailable,
     };
   } catch (e) {
     fs.unlink(tmp).catch(() => {});
@@ -416,10 +440,111 @@ async function installFontFiles(files) {
   }
 }
 
+// ── Modo nativo: o próprio PowerPoint apresenta (animações, vídeos, áudios) ──
+
+/** @type {NativeShow|null} */
+let _native = null;
+let _nativeOnState = () => {};
+
+function _nativeSupported(converter) {
+  return process.platform === "win32" && converter?.id === "powerpoint";
+}
+
+function _nativeShow() {
+  if (!_native) _native = new NativeShow({ tempDir: _tempDir(), onState: (st) => _nativeOnState(st) });
+  return _native;
+}
+
+/** Quem recebe o estado da apresentação nativa (o main repassa às janelas). */
+function onNativeState(cb) {
+  _nativeOnState = typeof cb === "function" ? cb : () => {};
+}
+
+/**
+ * Abre o .pptx no PowerPoint em tela cheia no monitor do PA.
+ * As fontes passam pelo mesmo cuidado do modo imagem antes de abrir.
+ * @param {string} rawPath
+ * @param {{bounds?: {x: number, y: number, width: number, height: number}|null, startIndex?: number,
+ *   onProgress?: (p: object) => void, log?: (...a: any[]) => void}} [opts]
+ */
+function nativeStart(rawPath, opts = {}) {
+  const run = _fila.then(() => _nativeStart(rawPath, opts));
+  _fila = run.catch(() => {});
+  return run;
+}
+
+async function _nativeStart(rawPath, { bounds = null, startIndex = 0, onProgress = () => {}, log = console.log } = {}) {
+  const v = await validateInput(rawPath);
+  if (!v.ok) return v;
+  const converter = await detectConverter();
+  if (!_nativeSupported(converter)) {
+    return {
+      ok: false,
+      code: "native_unavailable",
+      message: "Apresentar com o PowerPoint precisa do Microsoft PowerPoint no Windows.",
+    };
+  }
+  try {
+    await ensureFonts(v.file, onProgress, log);
+  } catch (e) {
+    log("[pptx] fontes antes do modo nativo:", e.message);
+  }
+  // Cópia sem a marca "baixado da internet" (Modo de Exibição Protegido trava a automação)
+  const dir = path.join(_tempDir(), "native");
+  await fs.mkdir(dir, { recursive: true });
+  const copia = path.join(dir, `apresentacao${path.extname(v.file).toLowerCase()}`);
+  await fs.writeFile(copia, await fs.readFile(v.file));
+  try {
+    const st = await _nativeShow().start(copia, bounds, Math.max(0, Number(startIndex) || 0));
+    if (!st.active) return { ok: false, code: "native_failed", message: "O PowerPoint não iniciou a apresentação." };
+    return { ok: true, state: st };
+  } catch (e) {
+    return { ok: false, code: "native_failed", message: String(e.message || e).slice(0, 500) };
+  }
+}
+
+const NAV_ACTIONS = ["next", "prev", "goto", "black"];
+
+async function nativeNav(action, index) {
+  if (!NAV_ACTIONS.includes(action)) return { ok: false, code: "invalid_action", message: "Ação inválida." };
+  if (!_native) return { ok: true, state: { active: false } };
+  try {
+    return { ok: true, state: await _native.nav(action, Number.isInteger(index) ? index : 0) };
+  } catch (e) {
+    return { ok: false, code: "native_failed", message: String(e.message || e).slice(0, 300) };
+  }
+}
+
+async function nativeEnd() {
+  if (!_native) return { ok: true, state: { active: false } };
+  return { ok: true, state: await _native.end() };
+}
+
+function nativeState() {
+  return _native ? _native.state() : { active: false };
+}
+
+function disposeNative() {
+  _native?.dispose();
+}
+
 /** O que este computador consegue fazer (para a interface explicar antes de tentar). */
 async function status() {
   const c = await detectConverter();
-  return { ok: true, converter: c.label || null, platform: process.platform };
+  return { ok: true, converter: c.label || null, platform: process.platform, native: _nativeSupported(c) };
 }
 
-module.exports = { convert, status, installFontFiles, validateInput, fetchWithTimeout, PPT_EXT };
+module.exports = {
+  convert,
+  status,
+  installFontFiles,
+  nativeStart,
+  nativeNav,
+  nativeEnd,
+  nativeState,
+  onNativeState,
+  disposeNative,
+  validateInput,
+  fetchWithTimeout,
+  PPT_EXT,
+};

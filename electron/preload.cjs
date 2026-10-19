@@ -361,6 +361,16 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     convert: (path, force) => ipcRenderer.invoke("pptx:convert", { path, force: force === true }),
     /** Abre o diálogo nativo de fontes e instala as escolhidas. */
     installFonts: () => ipcRenderer.invoke("pptx:installFonts"),
+    /** Modo nativo: o PowerPoint apresenta no PA (animações e mídias). */
+    nativeStart: (path, startIndex) => ipcRenderer.invoke("pptx:nativeStart", { path, startIndex }),
+    nativeNav: (action, index) => ipcRenderer.invoke("pptx:nativeNav", { action, index }),
+    nativeEnd: () => ipcRenderer.invoke("pptx:nativeEnd"),
+    nativeState: () => ipcRenderer.invoke("pptx:nativeState"),
+    onNativeState: (cb) => {
+      const handler = (_e, data) => cb?.(data);
+      ipcRenderer.on("pptx:native-state", handler);
+      return () => ipcRenderer.off("pptx:native-state", handler);
+    },
     /** Instala fontes arrastadas (.ttf, .otf ou .zip). */
     installFontPaths: (paths) => ipcRenderer.invoke("pptx:installFontPaths", { paths }),
     /** Andamento (fontes, conversão). Devolve a função de cleanup. */

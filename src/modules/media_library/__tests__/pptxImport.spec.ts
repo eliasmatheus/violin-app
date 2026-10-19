@@ -3,7 +3,9 @@ import {
   PPT_ACCEPT,
   applyProgress,
   fontTone,
+  hasRichContent,
   isFontFileName,
+  parseFeatures,
   isPowerPointName,
   missingFonts,
   parseConvertResult,
@@ -152,5 +154,19 @@ describe("pptxImport — contagem dos slides", () => {
     const info = progressDetail({ path: "p", phase: "converting", done: 40, total: 40 }, tm);
     expect(info?.progress).toBe(95);
     expect(info?.detail).toContain("converting_count");
+  });
+});
+
+describe("pptxImport — animações e mídias", () => {
+  it("valida o que vem do main e diz se há o que perder no modo imagem", () => {
+    expect(parseFeatures({ animatedSlides: 7, videos: 2.9, audios: -1 })).toEqual({
+      animatedSlides: 7,
+      videos: 2,
+      audios: 0,
+    });
+    expect(parseFeatures(null)).toEqual({ animatedSlides: 0, videos: 0, audios: 0 });
+    expect(hasRichContent({ animatedSlides: 0, videos: 1, audios: 0 })).toBe(true);
+    expect(hasRichContent({ animatedSlides: 0, videos: 0, audios: 0 })).toBe(false);
+    expect(hasRichContent(null)).toBe(false);
   });
 });

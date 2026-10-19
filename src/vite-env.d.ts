@@ -101,7 +101,29 @@ declare global {
         staleFonts: boolean;
         /** A conferência das fontes falhou (a conversão seguiu sem ela). */
         fontsError?: string;
+        /** O que o modo imagem não leva: slides animados e mídias no arquivo. */
+        features?: PptxFeatures;
+        /** Este computador pode "Apresentar com o PowerPoint" (Windows + PowerPoint). */
+        nativeAvailable?: boolean;
       }
+    | { ok: false; code: string; message: string };
+
+  interface PptxFeatures {
+    animatedSlides: number;
+    videos: number;
+    audios: number;
+  }
+
+  /** Estado da apresentação nativa (o próprio PowerPoint no PA). */
+  interface PptxNativeState {
+    active: boolean;
+    index?: number;
+    total?: number;
+    black?: boolean;
+  }
+
+  type PptxNativeResult =
+    | { ok: true; state: PptxNativeState }
     | { ok: false; code: string; message: string };
 
   type PptxFontInstallResult =
@@ -451,6 +473,12 @@ declare global {
       convert: (path: string, force?: boolean) => Promise<PptxConvertResult>;
       /** Diálogo nativo de fontes (.ttf/.otf); instala para o usuário. */
       installFonts: () => Promise<PptxFontInstallResult>;
+      /** Modo nativo: o PowerPoint apresenta no PA, com animações e mídias. */
+      nativeStart: (path: string, startIndex?: number) => Promise<PptxNativeResult>;
+      nativeNav: (action: "next" | "prev" | "goto" | "black", index?: number) => Promise<PptxNativeResult>;
+      nativeEnd: () => Promise<PptxNativeResult>;
+      nativeState: () => Promise<PptxNativeState>;
+      onNativeState: (cb: (state: PptxNativeState) => void) => () => void;
       /** Instala fontes arrastadas (.ttf, .otf ou o .zip do DaFont). */
       installFontPaths: (paths: string[]) => Promise<PptxFontInstallResult>;
       /** Andamento da conversão. Devolve a função de cleanup. */

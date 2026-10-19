@@ -50,6 +50,10 @@
 
       <p v-if="state.phase === 'error'" class="pptx-import__error">{{ state.error }}</p>
 
+      <p v-if="state.phase === 'done' && resumoRecursos" class="pptx-import__rich">
+        {{ resumoRecursos }}
+      </p>
+
       <div class="pptx-import__fonts-title">{{ tm("pptx.fonts_title") }}</div>
       <p v-if="state.fontsError" class="pptx-import__error">
         {{ tm("pptx.fonts_error", { message: state.fontsError }) }}
@@ -77,6 +81,14 @@
     <template #footer>
       <template v-if="state?.phase === 'done'">
         <LjButton size="sm" @click="emit('close')">{{ tm("pptx.close") }}</LjButton>
+        <LjButton
+          v-if="state?.nativeAvailable && hasRichContent(state?.features)"
+          size="sm"
+          :icon="ICONS.PROJECTION.PRESENT"
+          @click="emit('projectNative')"
+        >
+          {{ tm("pptx.project_native") }}
+        </LjButton>
         <LjButton size="sm" variant="primary" :icon="ICONS.PLAYER.PLAY" @click="emit('project')">
           {{ tm("pptx.project_now") }}
         </LjButton>
@@ -94,7 +106,7 @@ import { computed, ref } from "vue";
 import { LjButton, LjDialog, LjIcon, LjProgress, LjSpinner } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
 import PptxFontList from "./PptxFontList.vue";
-import { isFontFileName, missingFonts, type PptxImportState } from "../pptxImport";
+import { hasRichContent, isFontFileName, missingFonts, type PptxImportState } from "../pptxImport";
 
 /**
  * Andamento de um PowerPoint sendo preparado: fontes, geração dos slides e o
@@ -110,6 +122,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
   project: [];
+  projectNative: [];
   installFont: [];
   dropFonts: [files: File[]];
 }>();
@@ -123,6 +136,19 @@ function soltar(e: DragEvent): void {
 }
 
 const ORDEM = ["fonts", "converting", "done"] as const;
+
+/** Animações e mídias que o modo imagem deixa paradas. */
+const resumoRecursos = computed(() => {
+  const f = props.state?.features;
+  if (!hasRichContent(f) || !f) return "";
+  const partes: string[] = [];
+  if (f.animatedSlides) partes.push(props.tm("pptx.feat_animations", { count: f.animatedSlides }));
+  if (f.videos) partes.push(props.tm("pptx.feat_videos", { count: f.videos }));
+  if (f.audios) partes.push(props.tm("pptx.feat_audios", { count: f.audios }));
+  return props.tm(props.state?.nativeAvailable ? "pptx.feat_hint" : "pptx.feat_hint_no_native", {
+    items: partes.join(", "),
+  });
+});
 
 const titulo = computed(() => {
   if (props.state?.phase === "done") return props.tm("pptx.dialog_ready");
@@ -196,6 +222,14 @@ function classeEtapa(etapa: (typeof ORDEM)[number]): string {
   border-radius: var(--lj-ui-radius, 6px);
   outline: 2px dashed var(--lj-ui-accent);
   outline-offset: 6px;
+}
+.pptx-import__rich {
+  margin: 0;
+  padding: var(--lj-space-4);
+  border-left: 3px solid var(--lj-ui-accent);
+  border-radius: var(--lj-ui-radius, 6px);
+  background: var(--lj-surface-bg-soft);
+  font-size: 0.875rem;
 }
 .pptx-import__hint {
   margin: 0;

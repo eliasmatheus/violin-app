@@ -68,18 +68,23 @@
             v-else-if="painelVisivel && palco"
             :url="palco.url"
             :title="palco.title"
-            :page="currentPdfPage"
-            :total="currentPdfTotalPages"
+            :page="nativoAtivo ? (nativo.index ?? 0) + 1 : currentPdfPage"
+            :total="nativoAtivo ? (nativo.total ?? 0) : currentPdfTotalPages"
             :fonts="fontesNoPalco"
             :regenerating="regerando"
+            :native="painelNativo"
+            :features="arquivoNoPalco?.pptx?.features ?? null"
             :tm="tm"
-            @goto="irParaPagina"
-            @prev="prev"
-            @next="next"
-            @stop="stop"
+            @goto="painelIrPara"
+            @prev="painelAnterior"
+            @next="painelProximo"
+            @stop="pararTudo"
             @back="painelOculto = true"
             @install-font="instalarFonteManual"
             @regenerate="regerarNoPalco"
+            @native-start="iniciarNativo(arquivoNoPalco)"
+            @native-end="encerrarNativo"
+            @black="nativoNav('black')"
           />
 
           <template v-else>
@@ -334,6 +339,7 @@
         :regenerating="regerando"
         @close="importacao = null"
         @project="projetarImportado"
+        @project-native="projetarImportadoNativo"
         @install-font="instalarFonteManual"
         @drop-fonts="instalarFontesArrastadas"
       />
@@ -477,7 +483,14 @@ interface MediaFile {
   mime?: string;
   categoryId?: string;
   /** PDF gerado de um PowerPoint: o .pptx de origem e a situação das fontes. */
-  pptx?: { source: string; fonts: PptxFont[] };
+  pptx?: {
+    source: string;
+    fonts: PptxFont[];
+    /** Animações e mídias: o que o modo imagem deixa parado. */
+    features?: PptxFeatures;
+    /** Este PC pode apresentar com o próprio PowerPoint. */
+    nativeAvailable?: boolean;
+  };
 }
 
 interface PlaylistItem {
@@ -1134,7 +1147,14 @@ async function importPowerPoint(
       return null;
     }
     backgroundTasks.completeTask(taskId);
-    const pptx = { source: filePath, fonts: result.fonts };
+    const pptx = {
+      source: filePath,
+      fonts: result.fonts,
+      features: result.features,
+      nativeAvailable: result.nativeAvailable,
+    };
+    // IndexedDB não aceita Proxy do Vue: grava uma cópia simples.
+    const pptxPlano = () => JSON.parse(JSON.stringify(pptx)) as NonNullable<MediaFile["pptx"]>;
     let file: MediaFile;
     if (substituir) {
       file = substituir;
@@ -1142,7 +1162,7 @@ async function importPowerPoint(
       file.pptx = pptx;
       await saveFile({
         ...file,
-        pptx: { source: pptx.source, fonts: pptx.fonts.map((f) => ({ ...f })) },
+        pptx: pptxPlano(),
       });
       files.value = [...files.value];
     } else {
@@ -1157,7 +1177,7 @@ async function importPowerPoint(
       };
       await saveFile({
         ...file,
-        pptx: { source: pptx.source, fonts: pptx.fonts.map((f) => ({ ...f })) },
+        pptx: pptxPlano(),
       });
       files.value.unshift(file);
     }
@@ -1169,6 +1189,8 @@ async function importPowerPoint(
         fonts: result.fonts.map((f) => ({ ...f })),
         fontsError: result.fontsError || importacao.value.fontsError,
         fileId: file.id,
+        features: result.features,
+        nativeAvailable: result.nativeAvailable,
       };
       if (result.staleFonts) $alert.info({ text: tm("pptx.stale_fonts"), translate: false });
     } else {
@@ -1223,12 +1245,117 @@ const painelOculto = ref(false);
 const regerando = ref(false);
 
 const painelVisivel = computed(
-  () => !!palco.value && pdfNoPalco.value && !painelOculto.value && libraryFilter.value !== "canva"
+  () =>
+    !!palco.value &&
+    (pdfNoPalco.value || nativoAtivo.value) &&
+    !painelOculto.value &&
+    libraryFilter.value !== "canva"
 );
 const arquivoNoPalco = computed(() =>
   palco.value?.fileId ? (files.value.find((f) => f.id === palco.value?.fileId) ?? null) : null
 );
 const fontesNoPalco = computed(() => arquivoNoPalco.value?.pptx?.fonts ?? null);
+
+/* ---------------- Modo nativo: o PowerPoint apresenta no PA ---------------- */
+
+/** Estado da apresentação nativa, vindo do main. */
+const nativo = ref<PptxNativeState>({ active: false });
+const nativoAtivo = computed(() => nativo.value.active === true);
+const nativoAbrindo = ref(false);
+let pararEscutaNativo: (() => void) | null = null;
+
+/** O que o painel precisa saber do modo nativo (null = PDF comum, sem a opção). */
+const painelNativo = computed(() => {
+  const pptx = arquivoNoPalco.value?.pptx;
+  if (!pptx && !nativoAtivo.value) return null;
+  return {
+    available: !!pptx?.nativeAvailable,
+    active: nativoAtivo.value,
+    black: !!nativo.value.black,
+    busy: nativoAbrindo.value,
+  };
+});
+
+function aoEstadoNativo(st: PptxNativeState): void {
+  const estava = nativoAtivo.value;
+  nativo.value = st && typeof st === "object" ? st : { active: false };
+  // O PowerPoint terminou (Esc nele ou fim dos slides): o painel some com ele.
+  if (estava && !nativo.value.active && !pdfNoPalco.value) palco.value = null;
+}
+
+/**
+ * "Apresentar com o PowerPoint": tira o PDF do telão do LouvorJA e pede ao
+ * PowerPoint para apresentar o .pptx original no monitor do PA, a partir do
+ * slide em que o operador estava.
+ */
+async function iniciarNativo(file: MediaFile | null | undefined): Promise<void> {
+  const api = (Platform.api as LouvorjaApi | null)?.pptx;
+  if (!api || !file?.pptx?.source || nativoAbrindo.value) return;
+  const inicio = palco.value?.fileId === file.id ? Math.max(0, currentPdfPage.value - 1) : 0;
+  const manter = { url: resolvePath(file.path), title: file.name, fileId: file.id };
+  stop();
+  palco.value = manter;
+  painelOculto.value = false;
+  nativoAbrindo.value = true;
+  try {
+    const r = await api.nativeStart(file.pptx.source, inicio);
+    if (!r.ok) {
+      palco.value = null;
+      $alert.error({ text: tm("pptx.native_failed", { message: r.message }), translate: false });
+      return;
+    }
+    aoEstadoNativo(r.state);
+  } catch (error) {
+    palco.value = null;
+    const message = (error as Error)?.message || String(error);
+    $alert.error({ text: tm("pptx.native_failed", { message }), translate: false });
+  } finally {
+    nativoAbrindo.value = false;
+  }
+}
+
+async function nativoNav(
+  action: "next" | "prev" | "goto" | "black",
+  index?: number
+): Promise<void> {
+  const api = (Platform.api as LouvorjaApi | null)?.pptx;
+  if (!api || !nativoAtivo.value) return;
+  const r = await api.nativeNav(action, index);
+  if (r.ok) aoEstadoNativo(r.state);
+}
+
+async function encerrarNativo(): Promise<void> {
+  const api = (Platform.api as LouvorjaApi | null)?.pptx;
+  if (!api) return;
+  const r = await api.nativeEnd();
+  aoEstadoNativo(r.ok ? r.state : { active: false });
+  palco.value = null;
+}
+
+/** "Apresentar com o PowerPoint" da janela de importação. */
+async function projetarImportadoNativo(): Promise<void> {
+  const id = importacao.value?.fileId;
+  importacao.value = null;
+  await iniciarNativo(files.value.find((f) => f.id === id));
+}
+
+/* O painel serve aos dois modos: cada botão vai para quem está no telão. */
+function painelIrPara(n: number): void {
+  if (nativoAtivo.value) void nativoNav("goto", n - 1);
+  else irParaPagina(n);
+}
+function painelProximo(): void {
+  if (nativoAtivo.value) void nativoNav("next");
+  else void next();
+}
+function painelAnterior(): void {
+  if (nativoAtivo.value) void nativoNav("prev");
+  else void prev();
+}
+function pararTudo(): void {
+  if (nativoAtivo.value) void encerrarNativo();
+  else stop();
+}
 
 function irParaPagina(n: number): void {
   const total = currentPdfTotalPages.value;
@@ -1871,7 +1998,7 @@ useBroadcastListener(BROADCAST_TYPE.FILE_PROJECTION, (payload) => {
 
   if (decisao.acao === "limpar") {
     pdfExterno.value = null;
-    palco.value = null;
+    if (!nativoAtivo.value) palco.value = null;
     avisoContagemDado = false;
     if (decisao.encerrada) currentPdfPlaybackId = undefined;
     return;
@@ -1893,7 +2020,7 @@ useBroadcastListener(BROADCAST_TYPE.FILE_PROJECTION, (payload) => {
 
 useBroadcastListener(BROADCAST_TYPE.MEDIA_CLOSE, () => {
   pdfExterno.value = null;
-  palco.value = null;
+  if (!nativoAtivo.value) palco.value = null;
   avisoContagemDado = false;
   currentPdfPlaybackId = undefined;
 });
@@ -1932,6 +2059,13 @@ useBroadcastListener(BROADCAST_TYPE.FILE_PROJECTION_PAGE, (payload) => {
 /* ------------------------------------------------------------------ */
 
 onMounted(async () => {
+  const pptxApi = (Platform.api as LouvorjaApi | null)?.pptx;
+  if (pptxApi?.onNativeState) {
+    pararEscutaNativo = pptxApi.onNativeState(aoEstadoNativo);
+    void pptxApi.nativeState().then((st) => {
+      if (st?.active) aoEstadoNativo(st);
+    });
+  }
   files.value = await loadLibrary();
   await loadCategories();
   selectAllCategoriesAndUncategorized();
@@ -1967,6 +2101,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  pararEscutaNativo?.();
   _cancelarFilaMiniaturas();
   for (const url of createdObjectUrls.values()) {
     URL.revokeObjectURL(url);
