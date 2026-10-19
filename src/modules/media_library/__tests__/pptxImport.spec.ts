@@ -128,3 +128,29 @@ describe("pptxImport — arquivo de fonte arrastado", () => {
     expect(isFontFileName("")).toBe(false);
   });
 });
+
+describe("pptxImport — contagem dos slides", () => {
+  it("guarda 'slide X de Y' e avança a tarefa em segundo plano", () => {
+    const base = {
+      name: "a",
+      path: "p",
+      phase: "fonts" as const,
+      converter: "",
+      fonts: [],
+      error: "",
+    };
+    const s = applyProgress(base, {
+      path: "p",
+      phase: "converting",
+      converter: "PowerPoint",
+      done: 12,
+      total: 40,
+    });
+    expect(s.slidesDone).toBe(12);
+    expect(s.slidesTotal).toBe(40);
+    const tm = (k: string, n?: Record<string, unknown>) => `${k}${n ? JSON.stringify(n) : ""}`;
+    const info = progressDetail({ path: "p", phase: "converting", done: 40, total: 40 }, tm);
+    expect(info?.progress).toBe(95);
+    expect(info?.detail).toContain("converting_count");
+  });
+});

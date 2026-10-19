@@ -134,7 +134,7 @@ async function _windowsPowerPoint(input, output, opts) {
         withWindow: !!opts.withWindow,
         restartIfIdle: !!opts.fontsChanged,
       },
-      { tempDir: opts.tempDir, timeoutMs: 10 * 60 * 1000 }
+      { tempDir: opts.tempDir, timeoutMs: 10 * 60 * 1000, onProgress: opts.onSlide }
     );
     const nomes = Array.isArray(res.files) ? res.files : res.files ? [res.files] : [];
     const imagens = nomes.map((n) => path.join(outDir, path.basename(String(n))));
@@ -259,7 +259,8 @@ async function _libreOffice(input, output, opts) {
  * @param {{id: string, soffice?: string}} converter  vindo de `detectConverter`
  * @param {string} input
  * @param {string} output
- * @param {{tempDir: string, fontsChanged?: boolean, withWindow?: boolean, platform?: string}} opts
+ * @param {{tempDir: string, fontsChanged?: boolean, withWindow?: boolean, platform?: string,
+ *   onSlide?: (p: {done: number, total: number}) => void}} opts  onSlide: contagem dos slides (PowerPoint no Windows)
  * @returns {Promise<{staleFonts: boolean}>}  staleFonts = o PowerPoint já estava com
  *   apresentação aberta e não pôde reiniciar para ler as fontes recém-instaladas
  */

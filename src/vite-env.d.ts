@@ -119,6 +119,9 @@ declare global {
     fonts?: PptxFont[];
     /** Na fase "fonts": a conferência das fontes falhou, com o motivo. */
     error?: string;
+    /** Na fase "converting": slides já gerados e o total (quando o conversor informa). */
+    done?: number;
+    total?: number;
   }
 
   interface LouvorjaApi {

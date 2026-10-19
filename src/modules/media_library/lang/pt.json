@@ -122,6 +122,8 @@
     "panel_slides": "Slides",
     "missing_hint_drop": "Falta alguma? Arraste para cá o arquivo da fonte (.ttf, .otf ou o .zip do DaFont) ou clique em Instalar fonte… — o PowerPoint é gerado de novo sozinho.",
     "fonts_installed_names": "Fonte(s) instalada(s): {names}.",
-    "fonts_error": "Não consegui conferir as fontes deste computador: {message}"
+    "fonts_error": "Não consegui conferir as fontes deste computador: {message}",
+    "slides_count": "{done} de {total}",
+    "converting_count": "Gerando slide {done} de {total}…"
   }
 }

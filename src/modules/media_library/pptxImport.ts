@@ -74,6 +74,13 @@ export function progressDetail(
     return { detail: tm("pptx.font_searching", { name: p.name }), progress: 25 };
   if (p.phase === "font" && p.status === "installed")
     return { detail: tm("pptx.font_installed", { name: p.name }), progress: 40 };
+  if (p.phase === "converting" && p.total && p.total > 0) {
+    const done = Math.min(p.done ?? 0, p.total);
+    return {
+      detail: tm("pptx.converting_count", { done, total: p.total }),
+      progress: 45 + Math.round((50 * done) / p.total),
+    };
+  }
   if (p.phase === "converting")
     return { detail: tm("pptx.converting", { converter: p.converter || "" }), progress: 60 };
   return null;
@@ -97,6 +104,9 @@ export interface PptxImportState {
   converter: string;
   fonts: { name: string; status: string; source?: string | null }[];
   error: string;
+  /** Contagem da geração dos slides (0/0 enquanto o conversor não informa). */
+  slidesDone?: number;
+  slidesTotal?: number;
   /** A conferência das fontes falhou: o motivo, para o operador ver. */
   fontsError?: string;
   /** id do item já salvo na biblioteca, para "Projetar agora". */
@@ -112,8 +122,14 @@ export function applyProgress(state: PptxImportState, p: PptxProgress): PptxImpo
     if (typeof p.error === "string" && p.error) next.fontsError = p.error;
     return next;
   }
-  if (p.phase === "converting")
-    return { ...state, phase: "converting", converter: p.converter || "" };
+  if (p.phase === "converting") {
+    const next: PptxImportState = { ...state, phase: "converting", converter: p.converter || "" };
+    if (Number.isFinite(p.total) && (p.total as number) > 0) {
+      next.slidesTotal = p.total;
+      next.slidesDone = Math.min(Number(p.done) || 0, p.total as number);
+    }
+    return next;
+  }
   if (p.phase === "font" && p.name) {
     const fonts = [...state.fonts];
     const i = fonts.findIndex((f) => f.name === p.name);

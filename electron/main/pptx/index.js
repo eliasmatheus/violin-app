@@ -309,6 +309,8 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log } = 
       tempDir: _tempDir(),
       fontsChanged: report.installed > 0,
       withWindow: report.embedded,
+      onSlide: ({ done, total }) =>
+        onProgress({ phase: "converting", converter: converter.label, done, total }),
     });
     const head = Buffer.alloc(5);
     const fd = await fs.open(tmp, "r");

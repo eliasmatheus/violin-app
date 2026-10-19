@@ -29,6 +29,9 @@
           <LjSpinner v-if="state.phase === 'converting'" :size="14" />
           <LjIcon v-else :icon="ICONS.UI.CHECK_CIRCLE" :size="16" />
           {{ tm("pptx.step_slides", { converter: state.converter || "PowerPoint" }) }}
+          <span v-if="state.slidesTotal" class="pptx-import__count">
+            {{ tm("pptx.slides_count", { done: state.slidesDone ?? 0, total: state.slidesTotal }) }}
+          </span>
         </li>
         <li :class="classeEtapa('done')">
           <LjIcon :icon="ICONS.UI.CHECK_CIRCLE" :size="16" />
@@ -36,7 +39,14 @@
         </li>
       </ol>
 
-      <LjProgress v-if="state.phase === 'fonts' || state.phase === 'converting'" indeterminate />
+      <LjProgress
+        v-if="state.phase === 'converting' && state.slidesTotal"
+        :value="(100 * (state.slidesDone ?? 0)) / state.slidesTotal"
+      />
+      <LjProgress
+        v-else-if="state.phase === 'fonts' || state.phase === 'converting'"
+        indeterminate
+      />
 
       <p v-if="state.phase === 'error'" class="pptx-import__error">{{ state.error }}</p>
 
@@ -165,6 +175,11 @@ function classeEtapa(etapa: (typeof ORDEM)[number]): string {
 }
 .pptx-import__steps li.is-active {
   font-weight: 600;
+}
+.pptx-import__count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
 }
 .pptx-import__fonts-title {
   font-size: 0.75rem;

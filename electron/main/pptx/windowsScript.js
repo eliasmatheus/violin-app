@@ -155,14 +155,19 @@ function Do-Convert($a) {
         if ($width -lt 640) { $width = 1920 }
         $height = [int][Math]::Round($width * $sh / $sw)
         $i = 0
+        $total = [int]$pres.Slides.Count
+        Send @{ progress = @{ done = 0; total = $total } }
         foreach ($s in $pres.Slides) {
             $i++
             $hidden = $false
             try { $hidden = ([int]$s.SlideShowTransition.Hidden -eq -1) } catch { }
-            if ($hidden) { continue }
-            $name = ('slide_{0:D4}.png' -f $i)
-            $s.Export((Join-Path $dir $name), 'PNG', $width, $height)
-            $files += $name
+            if (-not $hidden) {
+                $name = ('slide_{0:D4}.png' -f $i)
+                $s.Export((Join-Path $dir $name), 'PNG', $width, $height)
+                $files += $name
+            }
+            # Contagem para a tela do operador: "slide 12 de 40"
+            Send @{ progress = @{ done = $i; total = $total } }
         }
     } finally {
         try { $pres.Close() } catch { }
@@ -205,7 +210,7 @@ async function _ensureScript(tempDir) {
  *
  * @param {"list"|"install"|"convert"} action
  * @param {object} args
- * @param {{tempDir?: string, timeoutMs?: number}} [opts]
+ * @param {{tempDir?: string, timeoutMs?: number, onProgress?: (p: {done: number, total: number}) => void}} [opts]
  */
 async function runWindowsTask(action, args = {}, opts = {}) {
   const tempDir = opts.tempDir || path.join(os.tmpdir(), "louvorja-pptx");
@@ -222,18 +227,42 @@ async function runWindowsTask(action, args = {}, opts = {}) {
       );
       let out = "";
       let err = "";
+      let pendente = "";
+      // Linhas {"progress":{...}} chegam durante o trabalho; a última linha é a resposta.
+      const lerLinhas = (texto) => {
+        pendente += texto;
+        let i;
+        while ((i = pendente.indexOf("\n")) >= 0) {
+          const linha = pendente.slice(0, i).trim();
+          pendente = pendente.slice(i + 1);
+          if (!linha) continue;
+          if (linha.startsWith('{"progress"') && opts.onProgress) {
+            try {
+              const p = JSON.parse(linha).progress;
+              if (p && Number.isFinite(p.done) && Number.isFinite(p.total)) opts.onProgress(p);
+            } catch {
+              /* linha cortada: ignora */
+            }
+            continue;
+          }
+          out += linha + "\n";
+        }
+      };
       const timer = setTimeout(() => {
         ps.kill();
         reject(new Error("O PowerPoint demorou demais para responder."));
       }, timeoutMs);
-      ps.stdout.on("data", (d) => (out += d.toString("utf8")));
-      ps.stderr.on("data", (d) => (err += d.toString("utf8")));
+      ps.stdout.setEncoding("utf8");
+      ps.stderr.setEncoding("utf8");
+      ps.stdout.on("data", lerLinhas);
+      ps.stderr.on("data", (d) => (err += d));
       ps.on("error", (e) => {
         clearTimeout(timer);
         reject(e);
       });
       ps.on("close", () => {
         clearTimeout(timer);
+        lerLinhas("\n");
         const linha = out.trim().split(/\r?\n/).pop() || "";
         try {
           resolve(JSON.parse(linha));
