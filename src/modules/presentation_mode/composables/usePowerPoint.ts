@@ -13,12 +13,11 @@ import { i18nAtual } from "@/i18n";
 const PPT_EXT = ["ppt", "pptx", "pps", "ppsx", "pptm", "ppsm"];
 
 /**
- * Desligado por enquanto: a conversão desconfigurava os textos dos slides.
- * Só PDF — o PowerPoint some da biblioteca e, vindo do programa, o operador
- * é orientado a exportar como PDF. A conversão (no main) fica pronta para
- * voltar.
+ * Ligado: a conversão agora é a mesma da Biblioteca de Mídia (`main/pptx`):
+ * fontes instaladas antes, cada slide desenhado como imagem pelo próprio
+ * PowerPoint (ou pelo LibreOffice), então os textos saem como no original.
  */
-export const POWERPOINT_ENABLED = false;
+export const POWERPOINT_ENABLED = true;
 /** Só avisa "convertendo" se demorar: a conversão em cache volta na hora. */
 const NOTICE_AFTER_MS = 400;
 
@@ -55,7 +54,14 @@ export async function powerPointAsPdf(path: string, name: string): Promise<strin
   const notice = setTimeout(() => $snackbar.info(tm("converting", { name })), NOTICE_AFTER_MS);
   const res = await Platform.convertPresentation(path).catch(() => null);
   clearTimeout(notice);
-  if (res?.ok) return res.pdf;
+  if (res?.ok) {
+    // Fonte que não deu para instalar sozinha: o slide sai, mas com outra letra.
+    const faltam = (res as { missingFonts?: unknown }).missingFonts;
+    if (Array.isArray(faltam) && faltam.length) {
+      $snackbar.warning(tm("missing_fonts", { name, fonts: faltam.join(", ") }), { timeout: 10000 });
+    }
+    return res.pdf;
+  }
   const error = res?.error ?? "exception";
   Telemetry.track("presentation_pptx_failed", { error });
   $snackbar.error(tm(error === "unsupported" ? "unsupported" : "failed", { name }), {

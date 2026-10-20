@@ -86,7 +86,6 @@ const cloudFiles = require("./main/cloudFiles.js").createCloudFiles();
 const seriesFile = require("./main/seriesFile.js");
 const fileActions = require("./main/fileActions.js");
 const churchFolder = require("./main/churchFolder.js");
-const { createPresentationConverter } = require("./main/presentationConvert.js");
 const mediaVariants = require("./main/mediaVariants.js");
 const mediaResolver = require("./main/mediaResolver.js");
 const classicLibrary = require("./main/classicLibrary.js");
@@ -2807,11 +2806,39 @@ ipcMain.handle("files:church", (_e, op, ...args) =>
   Object.prototype.hasOwnProperty.call(CHURCH_OPS, op) ? CHURCH_OPS[op](...args) : { ok: false, error: "invalid" }
 );
 ipcMain.handle("files:computerName", () => churchFolder.computerName());
-// PowerPoint → PDF pelo PowerPoint instalado; o PDF é cache, refeito se o arquivo mudar.
-const presentationConverter = createPresentationConverter({
-  cacheDir: path.join(paths.dataDir(), "cache", "presentations"),
+/*
+ * PowerPoint → PDF para o modo apresentação. Passa pelo mesmo caminho da
+ * Biblioteca de Mídia (`main/pptx`, docs/pptx.md): instala as fontes que faltam
+ * (embutidas, Google Fonts), o próprio PowerPoint desenha cada slide como imagem
+ * — o PDF "de texto" do PowerPoint desconfigurava os títulos no pdf.js — e, sem
+ * PowerPoint, o LibreOffice. O programa é o escolhido em Opções. A resposta
+ * mantém o contrato do módulo: `{ ok, pdf, cached }` ou `{ ok: false, error }`.
+ */
+ipcMain.handle("files:convertPresentation", async (event, filePath) => {
+  if (typeof filePath !== "string" || !path.isAbsolute(filePath)) return { ok: false, error: "invalid_path" };
+  const sender = event.sender;
+  const engine = _pptxEngine({ engine: _userDataMain?.options?.file_projection?.presentation_engine });
+  try {
+    const r = await pptx.convert(filePath, {
+      engine,
+      onProgress: (p) => safeSend(sender, "pptx:progress", { path: filePath, ...p }),
+    });
+    if (r && r.ok) {
+      const faltando = (r.fonts || [])
+        .filter((f) => f.status === "missing" || f.status === "unmatched")
+        .map((f) => f.name);
+      return { ok: true, pdf: r.path, cached: !!r.cached, converter: r.converter, missingFonts: faltando };
+    }
+    const code = r?.code;
+    return {
+      ok: false,
+      error: code === "no_converter" ? "unsupported" : code === "not_found" ? "not_found" : "conversion_failed",
+      message: r?.message || "",
+    };
+  } catch (e) {
+    return { ok: false, error: "conversion_failed", message: String(e?.message || e).slice(0, 300) };
+  }
 });
-ipcMain.handle("files:convertPresentation", (_e, filePath) => presentationConverter.toPdf(filePath));
 
 ipcMain.handle("storage:chooseDir", async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);

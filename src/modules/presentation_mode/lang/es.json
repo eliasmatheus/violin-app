@@ -354,7 +354,8 @@
     "converting": "Convirtiendo \"{name}\" con PowerPoint…",
     "failed": "No se pudo convertir \"{name}\" con PowerPoint. Abre el archivo en PowerPoint y expórtalo como PDF (Archivo → Exportar → PDF).",
     "unsupported": "Esta computadora no convierte PowerPoint. Exporta \"{name}\" como PDF en PowerPoint y usa el PDF.",
-    "disabled": "PowerPoint todavía no se acepta aquí. Abre \"{name}\" en PowerPoint, expórtalo como PDF (Archivo → Exportar → PDF) y usa el PDF."
+    "disabled": "PowerPoint todavía no se acepta aquí. Abre \"{name}\" en PowerPoint, expórtalo como PDF (Archivo → Exportar → PDF) y usa el PDF.",
+    "missing_fonts": "\"{name}\" usa fuentes que no están en esta computadora: {fonts}. Instálalas desde la Biblioteca de Medios (Instalar fuente…) para que la diapositiva salga igual al original."
   },
   "cloud": {
     "badge": "NUBE",
