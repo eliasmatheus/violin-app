@@ -152,6 +152,7 @@
 </template>
 
 <script setup lang="ts">
+import { fetchWithTimeout, NET_TIMEOUT } from "@/helpers/Http";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { LjButton, LjChip, LjSpinner } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
@@ -235,7 +236,7 @@ async function carregar(url: string): Promise<void> {
   if (!url) return;
   loading.value = true;
   try {
-    const resp = await fetch(url);
+    const resp = await fetchWithTimeout(url, { timeout: NET_TIMEOUT.MEDIA, source: "pptx-panel" });
     const data = new Uint8Array(await resp.arrayBuffer());
     if (minha !== geracao) return;
     const aberto = await loadPdfDocument({ data });
