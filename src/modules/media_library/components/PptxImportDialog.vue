@@ -81,16 +81,8 @@
     <template #footer>
       <template v-if="state?.phase === 'done'">
         <LjButton size="sm" @click="emit('close')">{{ tm("pptx.close") }}</LjButton>
-        <LjButton
-          v-if="state?.nativeAvailable && hasRichContent(state?.features)"
-          size="sm"
-          :icon="ICONS.PROJECTION.PRESENT"
-          @click="emit('projectNative')"
-        >
-          {{ tm("pptx.project_native", { app: state?.converter || "PowerPoint" }) }}
-        </LjButton>
         <LjButton size="sm" variant="primary" :icon="ICONS.PLAYER.PLAY" @click="emit('project')">
-          {{ tm("pptx.project_now") }}
+          {{ tm("pptx.open_presentation") }}
         </LjButton>
       </template>
       <LjButton v-else-if="state?.phase === 'error'" size="sm" @click="emit('close')">

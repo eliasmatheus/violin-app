@@ -134,8 +134,9 @@
     "feat_animations": "animações em {count} slide(s)",
     "feat_videos": "{count} vídeo(s)",
     "feat_audios": "{count} áudio(s)",
-    "feat_hint": "Este arquivo tem {items}. No modo imagem eles ficam parados — para vê-los, use Apresentar com o {app} (o retorno mostra o slide atual e o próximo).",
+    "feat_hint": "Este arquivo tem {items}. No modo apresentação, use \"Apresentar com animações\" para vê-los.",
     "feat_hint_no_native": "Este arquivo tem {items}, que ficam parados no modo imagem. Para apresentá-los é preciso o PowerPoint (Windows) ou o LibreOffice — veja em Opções → Player de Áudio/Vídeo.",
-    "project_native": "Apresentar com o {app}"
+    "project_native": "Apresentar com o {app}",
+    "open_presentation": "Abrir no modo apresentação"
   }
 }

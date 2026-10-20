@@ -426,6 +426,7 @@ import { LjButton, LjDialog, LjDivider, LjEmpty, LjIcon, LjInput, LjTabs } from 
 import CanvaTab from "./CanvaTab.vue";
 import PdfOperatorPanel from "./PdfOperatorPanel.vue";
 import PptxImportDialog from "./PptxImportDialog.vue";
+import { openInPresentationMode } from "@/modules/presentation_mode/composables/openInPresentationMode";
 import $broadcast from "@/helpers/Broadcast";
 import { BROADCAST_TYPE } from "@/helpers/BroadcastTypes";
 import { useBroadcastListener } from "@/composables/useBroadcastListener";
@@ -1930,6 +1931,15 @@ async function playIndex(index: number): Promise<void> {
  * daria um flash com a projeção anterior fechando.
  */
 async function tocarDaBiblioteca(file: MediaFile): Promise<void> {
+  /*
+   * PowerPoint é executado no modo apresentação: a biblioteca adiciona e
+   * remove (com as fontes e a conversão); o controle dos slides, a prévia e o
+   * modo com animações ficam lá.
+   */
+  if (file.pptx?.source) {
+    openInPresentationMode(file.pptx.source, file.name.replace(/\.[^.]+$/, ""));
+    return;
+  }
   currentIndex.value = -1;
   isPlaying.value = false;
   $media.unregisterNavigationDelegate();
