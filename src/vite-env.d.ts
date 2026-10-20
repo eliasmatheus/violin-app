@@ -122,6 +122,8 @@ declare global {
     index?: number;
     total?: number;
     black?: boolean;
+    /** Por que parou: "fim" = passou do último slide. */
+    motivo?: string;
   }
 
   type PptxNativeResult =

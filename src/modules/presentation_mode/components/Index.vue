@@ -762,6 +762,36 @@ const livePptxPath = computed(() => {
   return p && isPowerPoint(p) ? p : null;
 });
 
+/*
+ * Pasta de anúncios com vários PowerPoints: quem apresentava com animações e
+ * passou do último slide continua com animações no próximo PowerPoint, assim
+ * que o PDF dele estiver no ar (antes disso, a troca de PDF encerraria o modo).
+ */
+let keepNative: { from: string | null; until: number; unloaded: boolean } | null = null;
+onBeforeUnmount(
+  pptxNative.onFinished(
+    () => (keepNative = { from: livePptxPath.value, until: Date.now() + 60_000, unloaded: false })
+  )
+);
+// O próximo da fila não é PowerPoint: a continuação acaba ali.
+watch(
+  () => pathOf(stage.sent.value?.playable ?? null),
+  (p) => {
+    if (keepNative && p && !isPowerPoint(p)) keepNative = null;
+  }
+);
+watch(
+  () => [livePptxPath.value, pdfDeck.active.value] as const,
+  ([path, ready]) => {
+    if (!keepNative || Date.now() > keepNative.until) return void (keepNative = null);
+    // O PDF antigo sai antes de o novo carregar: só então o modo pode voltar.
+    if (!ready) keepNative.unloaded = true;
+    if (!path || !ready || !keepNative.unloaded || path === keepNative.from) return;
+    keepNative = null;
+    void pptxNative.start(path, 0);
+  }
+);
+
 /** PowerPoint gerado de novo: o PDF novo entra no lugar, na mesma página. */
 function reprojectPowerPoint(pdf: string): void {
   pdfDeck.openNextAtPage(pdfDeck.page.value);
@@ -771,12 +801,32 @@ function reprojectPowerPoint(pdf: string): void {
 useSeriesRecorder(() => pathOf(liveOrigin.value));
 
 // Arquivos do programa que estão só na nuvem descem antes do culto.
-useProgramDownloads(() => [
+const programNeededPaths = () => [
   ...programFilePaths(program.value),
   ...program.value.sessions
     .flatMap((s) => s.items)
     .flatMap((i) => (i.kind === "folder" && i.folder ? folders.neededPathsOf(i.folder) : [])),
-]);
+];
+useProgramDownloads(programNeededPaths);
+
+/*
+ * Os PowerPoints do programa — itens, momentos e pastas (a de anúncios) — já
+ * convertem antes do culto: no meio da pasta, o passador não espera o PowerPoint.
+ * Não com o PowerPoint apresentando: a conversão usa o mesmo programa.
+ */
+const preparedPptx = new Set<string>();
+watch(
+  () => [programNeededPaths().filter(isPowerPoint), pptxNative.active.value] as const,
+  ([paths, presenting]) => {
+    if (presenting) return;
+    for (const p of paths) {
+      if (preparedPptx.has(p)) continue;
+      preparedPptx.add(p);
+      preparePowerPoint(p);
+    }
+  },
+  { immediate: true }
+);
 
 // PowerPoint no palco já começa a converter: na hora de mandar, o PDF está pronto.
 watch(stage.preview, (p) =>

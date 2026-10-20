@@ -26,6 +26,8 @@ const appName = ref("PowerPoint");
 let installed = false;
 /** Um toque de tecla chega por mais de um caminho: o mesmo passo em < 350 ms vale um. */
 let lastStep = { action: "", at: 0 };
+/** Quem quer saber quando a apresentação chegou ao fim pelo passador. */
+const finishedListeners = new Set<() => void>();
 
 function api() {
   return (Platform.api as LouvorjaApi | null)?.pptx ?? null;
@@ -43,7 +45,12 @@ function tm(key: string, params?: Record<string, unknown>): string {
 }
 
 function apply(next: PptxNativeState | null | undefined): void {
+  const wasActive = state.value.active === true;
   state.value = next && typeof next === "object" ? next : { active: false };
+  // Passou do último slide (não foi o Encerrar nem o Esc): o passador segue para o
+  // próximo arquivo da pasta ou do momento, como faria no fim do PDF.
+  if (wasActive && !state.value.active && state.value.motivo === "fim")
+    for (const cb of finishedListeners) cb();
   if (state.value.engine === "libreoffice") appName.value = "LibreOffice";
   else if (state.value.engine === "powerpoint") appName.value = "PowerPoint";
 }
@@ -128,5 +135,10 @@ export function usePptxNative() {
     goto: (index: number) => nav("goto", index),
     toggleBlack: () => nav("black"),
     end,
+    /** Avisa quando o passador passa do último slide. Devolve a função que desliga. */
+    onFinished(cb: () => void): () => void {
+      finishedListeners.add(cb);
+      return () => finishedListeners.delete(cb);
+    },
   };
 }
