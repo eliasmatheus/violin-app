@@ -355,7 +355,14 @@
     "failed": "Não deu para converter \"{name}\" pelo PowerPoint. Abra o arquivo no PowerPoint e exporte como PDF (Arquivo → Exportar → PDF).",
     "unsupported": "Este computador não converte PowerPoint. Exporte \"{name}\" como PDF no PowerPoint e use o PDF.",
     "disabled": "PowerPoint ainda não é aceito aqui. Abra \"{name}\" no PowerPoint, exporte como PDF (Arquivo → Exportar → PDF) e use o PDF.",
-    "missing_fonts": "\"{name}\" usa fontes que não estão neste computador: {fonts}. Instale-as pela Biblioteca de Mídia (Instalar fonte…) para o slide sair igual ao original."
+    "missing_fonts": "\"{name}\" usa fontes que não estão neste computador: {fonts}. Instale-as pela Biblioteca de Mídia (Instalar fonte…) para o slide sair igual ao original.",
+    "native_hint": "Este slide veio de um PowerPoint: no ar ele passa sem animações e sem vídeo.",
+    "native_start": "Apresentar com animações ({app})",
+    "native_opening": "Abrindo o {app}…",
+    "native_on": "O {app} está apresentando no telão — o passador anda nas animações",
+    "native_black": "Tela preta",
+    "native_end": "Encerrar {app}",
+    "native_failed": "Não foi possível apresentar com o {app}: {message}"
   },
   "cloud": {
     "badge": "NUVEM",

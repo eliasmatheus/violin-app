@@ -355,7 +355,14 @@
     "failed": "No se pudo convertir \"{name}\" con PowerPoint. Abre el archivo en PowerPoint y expórtalo como PDF (Archivo → Exportar → PDF).",
     "unsupported": "Esta computadora no convierte PowerPoint. Exporta \"{name}\" como PDF en PowerPoint y usa el PDF.",
     "disabled": "PowerPoint todavía no se acepta aquí. Abre \"{name}\" en PowerPoint, expórtalo como PDF (Archivo → Exportar → PDF) y usa el PDF.",
-    "missing_fonts": "\"{name}\" usa fuentes que no están en esta computadora: {fonts}. Instálalas desde la Biblioteca de Medios (Instalar fuente…) para que la diapositiva salga igual al original."
+    "missing_fonts": "\"{name}\" usa fuentes que no están en esta computadora: {fonts}. Instálalas desde la Biblioteca de Medios (Instalar fuente…) para que la diapositiva salga igual al original.",
+    "native_hint": "Esta diapositiva viene de un PowerPoint: al aire pasa sin animaciones ni video.",
+    "native_start": "Presentar con animaciones ({app})",
+    "native_opening": "Abriendo {app}…",
+    "native_on": "{app} está presentando en la pantalla — el control avanza las animaciones",
+    "native_black": "Pantalla negra",
+    "native_end": "Cerrar {app}",
+    "native_failed": "No se pudo presentar con {app}: {message}"
   },
   "cloud": {
     "badge": "NUBE",

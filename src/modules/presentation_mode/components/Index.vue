@@ -132,6 +132,7 @@
           <PdfStage
             v-else-if="pdfDeck.active.value && liveZoom.scale.value <= 1"
             :locked="outputLocked"
+            :pptx-path="livePptxPath"
           />
           <!-- Vídeo, imagem, versículo, anúncio: o visor mostra o que está na tela. -->
           <StageVisor v-else-if="liveKind" />
@@ -264,7 +265,8 @@ import SeriesDialog from "./SeriesDialog.vue";
 import UpNextBlock from "./UpNextBlock.vue";
 import ReturnPlayerBar from "./ReturnPlayerBar.vue";
 import PdfStage from "./PdfStage.vue";
-import { preparePowerPoint } from "../composables/usePowerPoint";
+import { isPowerPoint, preparePowerPoint } from "../composables/usePowerPoint";
+import { usePptxNative } from "../composables/usePptxNative";
 import { takeOffAir } from "../composables/takeOffAir";
 import { returnOverrideFor } from "../composables/returnTarget";
 import { useProgramDownloads } from "../composables/useCloudFiles";
@@ -736,7 +738,8 @@ const livePipProgress = computed(() => {
 
 useClicker({
   navigate,
-  toggleBlack: () => setCleared(!cleared.value),
+  // PowerPoint com animações por cima do PA: a tela preta é a dele.
+  toggleBlack: () => (pptxNative.active.value ? void pptxNative.toggleBlack() : setCleared(!cleared.value)),
   send: onEnter,
   zoomIn: () => liveZoom.zoomIn(),
   zoomOut: () => liveZoom.zoomOut(),
@@ -747,6 +750,13 @@ useClicker({
 });
 
 const pathOf = (p: Playable | null) => filePathOf(p, itemOf(p));
+
+/** O PowerPoint por trás do PDF no ar (para apresentar com animações), ou null. */
+const pptxNative = usePptxNative();
+const livePptxPath = computed(() => {
+  const p = pathOf(liveOrigin.value);
+  return p && isPowerPoint(p) ? p : null;
+});
 
 useSeriesRecorder(() => pathOf(liveOrigin.value));
 
