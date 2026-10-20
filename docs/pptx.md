@@ -137,6 +137,23 @@ IPC: `pptx:nativeStart` (`{ path, startIndex, engine }`), `pptx:nativeNav`
 (`{ action: next|prev|goto|black, index }`), `pptx:nativeEnd`,
 `pptx:nativeState` e o evento `pptx:native-state`.
 
+## No modo apresentação
+
+O modo apresentação (`src/modules/presentation_mode`) usa este mesmo caminho:
+
+- `files:convertPresentation` (o `Platform.convertPresentation` do módulo) chama
+  `pptx.convert` com o programa escolhido em Opções e devolve `{ ok, pdf }` —
+  com as fontes resolvidas antes; fonte que faltou vira aviso no módulo
+  (`missingFonts`). `POWERPOINT_ENABLED` voltou a `true`.
+- A Biblioteca de Mídia adiciona e remove o PowerPoint (janela de preparo,
+  fontes); clicar nele abre o modo apresentação com o arquivo na prévia
+  (`openInPresentationMode`).
+- Com o PDF no ar, a grade (`PdfStage`) oferece **Apresentar com animações**
+  (`usePptxNative`): o PowerPoint/LibreOffice abre por cima do PA, o passador e a
+  grade mandam nele, e a página do PDF segue o slide em que ele está — retorno e
+  grade certos, e a tela por baixo já no slide certo se o programa fechar.
+  Trocar o que está no ar encerra o programa.
+
 ## Limites
 
 - No modo imagem, animações, transições e vídeos não passam para o PDF: cada
