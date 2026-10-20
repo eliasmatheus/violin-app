@@ -33,6 +33,8 @@ const thumbs = reactive(new Map<number, string>());
 let installed = false;
 /** O próximo PDF a abrir começa no fim (o operador voltou para ele). */
 let startAtEnd = false;
+/** O próximo PDF a abrir começa nesta página (o mesmo PowerPoint, gerado de novo). */
+let startAtPage = 0;
 let loadSeq = 0;
 
 function install(): void {
@@ -47,7 +49,9 @@ function install(): void {
       if (next === url.value) return;
       const seq = ++loadSeq;
       const atEnd = startAtEnd;
+      const atPage = startAtPage;
       startAtEnd = false;
+      startAtPage = 0;
       url.value = next;
       page.value = 1;
       total.value = 0;
@@ -61,6 +65,7 @@ function install(): void {
         doc.value = loaded;
         total.value = loaded.numPages;
         if (atEnd) moveTo(loaded.numPages);
+        else if (atPage > 1) moveTo(Math.min(atPage, loaded.numPages));
       } catch (e) {
         Telemetry.captureException(e, { source: "presentation_mode.pdf_deck" });
       }
@@ -176,5 +181,6 @@ export function usePdfDeck() {
     goTo,
     source,
     openNextAtEnd: () => (startAtEnd = true),
+    openNextAtPage: (n: number) => (startAtPage = n),
   };
 }

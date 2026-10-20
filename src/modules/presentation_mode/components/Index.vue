@@ -100,6 +100,8 @@
             />
           </div>
         </header>
+        <!-- PowerPoint convertendo: o que está acontecendo e quanto falta. -->
+        <PptxProgress />
         <div class="pm-stage__main">
           <!-- Prévia: o que está no ar fica em miniatura no canto; clicar volta para ele. -->
           <LivePip
@@ -133,6 +135,7 @@
             v-else-if="pdfDeck.active.value && liveZoom.scale.value <= 1"
             :locked="outputLocked"
             :pptx-path="livePptxPath"
+            @regenerated="reprojectPowerPoint"
           />
           <!-- Vídeo, imagem, versículo, anúncio: o visor mostra o que está na tela. -->
           <StageVisor v-else-if="liveKind" />
@@ -265,6 +268,7 @@ import SeriesDialog from "./SeriesDialog.vue";
 import UpNextBlock from "./UpNextBlock.vue";
 import ReturnPlayerBar from "./ReturnPlayerBar.vue";
 import PdfStage from "./PdfStage.vue";
+import PptxProgress from "./PptxProgress.vue";
 import { isPowerPoint, preparePowerPoint } from "../composables/usePowerPoint";
 import { usePptxNative } from "../composables/usePptxNative";
 import { takeOffAir } from "../composables/takeOffAir";
@@ -354,7 +358,7 @@ const {
   setOutputLocked,
   prepare,
 } = useProgram();
-const { execute, executeChild, projectPath, sendBible } = useProgramExecution();
+const { execute, executeChild, projectPath, projectPdf, sendBible } = useProgramExecution();
 const { importFromLiturgy, saveAsLiturgy } = useProgramLiturgy();
 const stage = useStage();
 const folders = useFolderItems();
@@ -757,6 +761,12 @@ const livePptxPath = computed(() => {
   const p = pathOf(liveOrigin.value);
   return p && isPowerPoint(p) ? p : null;
 });
+
+/** PowerPoint gerado de novo: o PDF novo entra no lugar, na mesma página. */
+function reprojectPowerPoint(pdf: string): void {
+  pdfDeck.openNextAtPage(pdfDeck.page.value);
+  projectPdf(pdf, liveTitle.value);
+}
 
 useSeriesRecorder(() => pathOf(liveOrigin.value));
 

@@ -390,8 +390,8 @@ export default {
   },
 
   /** PowerPoint → PDF pelo PowerPoint do computador. No navegador: `{ ok: false }`. */
-  convertPresentation(filePath) {
-    return api?.storage?.convertPresentation?.(filePath) ?? _unsupported();
+  convertPresentation(filePath, opts) {
+    return api?.storage?.convertPresentation?.(filePath, opts) ?? _unsupported();
   },
 
   /** Aplica uma operação ao histórico da série, sobre o que está no disco agora. */

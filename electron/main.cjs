@@ -2814,20 +2814,35 @@ ipcMain.handle("files:computerName", () => churchFolder.computerName());
  * PowerPoint, o LibreOffice. O programa é o escolhido em Opções. A resposta
  * mantém o contrato do módulo: `{ ok, pdf, cached }` ou `{ ok: false, error }`.
  */
-ipcMain.handle("files:convertPresentation", async (event, filePath) => {
+ipcMain.handle("files:convertPresentation", async (event, filePath, opts) => {
   if (typeof filePath !== "string" || !path.isAbsolute(filePath)) return { ok: false, error: "invalid_path" };
   const sender = event.sender;
+  const force = !!(opts && typeof opts === "object" && opts.force === true);
   const engine = _pptxEngine({ engine: _userDataMain?.options?.file_projection?.presentation_engine });
   try {
     const r = await pptx.convert(filePath, {
       engine,
+      force,
       onProgress: (p) => safeSend(sender, "pptx:progress", { path: filePath, ...p }),
     });
     if (r && r.ok) {
       const faltando = (r.fonts || [])
         .filter((f) => f.status === "missing" || f.status === "unmatched")
         .map((f) => f.name);
-      return { ok: true, pdf: r.path, cached: !!r.cached, converter: r.converter, missingFonts: faltando };
+      // "Gerar de novo" grava no mesmo arquivo: a tela e a grade guardariam o PDF
+      // antigo pelo endereço. Uma cópia com nome novo obriga as duas a recarregar.
+      const pdf = force ? await _pptxCopiaNova(r.path) : r.path;
+      return {
+        ok: true,
+        pdf,
+        cached: !!r.cached,
+        converter: r.converter,
+        missingFonts: faltando,
+        fonts: r.fonts || [],
+        staleFonts: !!r.staleFonts,
+        fontsError: r.fontsError || "",
+        features: r.features || null,
+      };
     }
     const code = r?.code;
     return {
@@ -2839,6 +2854,23 @@ ipcMain.handle("files:convertPresentation", async (event, filePath) => {
     return { ok: false, error: "conversion_failed", message: String(e?.message || e).slice(0, 300) };
   }
 });
+
+/** `<base>.pdf` → `<base>.r<tempo>.pdf`, apagando as cópias de antes do mesmo arquivo. */
+async function _pptxCopiaNova(pdf) {
+  const dir = path.dirname(pdf);
+  const base = path.basename(pdf, ".pdf");
+  try {
+    for (const nome of await fs.readdir(dir)) {
+      if (nome.startsWith(`${base}.r`) && nome.endsWith(".pdf"))
+        await fs.unlink(path.join(dir, nome)).catch(() => {});
+    }
+    const novo = path.join(dir, `${base}.r${Date.now().toString(36)}.pdf`);
+    await fs.copyFile(pdf, novo);
+    return novo;
+  } catch {
+    return pdf;
+  }
+}
 
 ipcMain.handle("storage:chooseDir", async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);

@@ -545,7 +545,9 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     /** Nome deste computador, para "salvo no computador X". */
     computerName: () => ipcRenderer.invoke("files:computerName"),
     /** PowerPoint → PDF pelo PowerPoint instalado (com cache). */
-    convertPresentation: (filePath) => ipcRenderer.invoke("files:convertPresentation", filePath),
+    /** `opts.force`: "Gerar de novo" (ignora o PDF guardado). */
+    convertPresentation: (filePath, opts) =>
+      ipcRenderer.invoke("files:convertPresentation", filePath, opts && opts.force === true ? { force: true } : undefined),
     /** Verifica quais arquivos remotos já estão no disco. */
     checkLocal: (remotePaths) => ipcRenderer.invoke("storage:checkLocal", remotePaths),
     /** Remove arquivos de mídia do cache local (paths remotos relativos). */

@@ -299,9 +299,24 @@ declare global {
       ) => Promise<{ ok: true; series: import("./types/Series").SeriesDoc } | { ok: false; error: string }>;
       church?: (op: string, ...args: unknown[]) => Promise<unknown>;
       computerName?: () => Promise<string>;
+      /** `force`: ignora o PDF guardado ("Gerar de novo") e devolve um endereço novo. */
       convertPresentation?: (
-        filePath: string
-      ) => Promise<{ ok: true; pdf: string; cached: boolean } | { ok: false; error: string }>;
+        filePath: string,
+        opts?: { force?: boolean }
+      ) => Promise<
+        | {
+            ok: true;
+            pdf: string;
+            cached: boolean;
+            converter?: string;
+            missingFonts?: string[];
+            fonts?: PptxFont[];
+            staleFonts?: boolean;
+            fontsError?: string;
+            features?: PptxFeatures | null;
+          }
+        | { ok: false; error: string; message?: string }
+      >;
       cloudStates?: (paths: string[]) => Promise<Record<string, "local" | "cloud">>;
       cloudDownload?: (filePath: string) => Promise<{ ok: true } | { ok: false; error: string }>;
       onCloudProgress?: (cb: (data: { path: string; percent: number }) => void) => () => void;
