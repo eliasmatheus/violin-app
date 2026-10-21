@@ -76,6 +76,7 @@ const youtubeReferer = require("./main/youtubeReferer.js");
 const onlineVideo = require("./main/onlineVideo/index.js");
 const shortcuts = require("./main/shortcuts.js");
 const updater = require("./main/updater.js");
+const updateChannel = require("./main/updateChannel.js");
 const powerBlocker = require("./main/powerBlocker.js");
 const fileOpen = require("./main/fileOpen.js");
 const splash = require("./main/splash.js");
@@ -1016,15 +1017,20 @@ function createWindow() {
     // Lê as opções da tela Atualizações (persistidas em user_data).
     // O check ao iniciar NÃO roda aqui — o renderer (Shell.vue) dispara o
     // check no boot para poder mostrar o dialog quando encontrar versão nova.
-    let ud = {};
-    try {
-      ud = userStore.read("user_data") || {};
-    } catch (_) { /* userStore indisponível no boot */ }
-    const opts = (ud && ud.options) || {};
-    // TODO: remover o default true abaixo quando a versão estável for publicada.
-    // "Usar versões beta" fica ativo por padrão durante o ciclo de preview.
-    const useBeta = opts.use_beta_updates == null ? true : opts.use_beta_updates;
-    console.info("[main] updater.init → isPackaged:", app.isPackaged, "| options:", JSON.stringify(opts));
+    const opts = _userDataMain?.options || {};
+    // Pré-versões: padrão ligado numa beta, desligado numa estável, e desligado de
+    // novo ao chegar numa estável vindo de uma beta (updateChannel.js).
+    const { useBeta, persist } = updateChannel.resolveUseBeta({
+      currentVersion: app.getVersion(),
+      lastRunVersion: updateChannel.readLastRunVersion(paths.bootstrapDir()),
+      saved: opts.use_beta_updates,
+    });
+    if (persist) {
+      _walkSet(_userDataMain, "options.use_beta_updates", useBeta);
+      void _persistUserDataFromMain("options.use_beta_updates").catch(() => {});
+    }
+    updateChannel.writeLastRunVersion(paths.bootstrapDir(), app.getVersion());
+    console.info("[main] updater.init → isPackaged:", app.isPackaged, "| useBeta:", useBeta, "| options:", JSON.stringify(opts));
     updater.init({
       channel: "latest",
       autoCheck: false,
@@ -1055,6 +1061,19 @@ function createWindow() {
 
 // Permite autoplay de vídeos (YouTube embarcado) sem gesto do usuário
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
+// No Windows o Chromium para de pintar a janela que julga coberta, e
+// `backgroundThrottling: false` não impede isso. Na telemetria de out/2026, 34
+// slides da projeção levaram ~1 s (985–1.015 ms) entre atualizar a tela e pintar,
+// todos em /projection no Windows e nenhum no macOS ou Linux. A projeção e a
+// captura do OBS precisam pintar mesmo com outra janela por cima.
+if (process.platform === "win32") {
+  app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+}
+
+// Placa de vídeo dedicada no PC de mesa e integrada no notebook (gpuPreference.js).
+const gpuPreference = require("./main/gpuPreference.js");
+const _gpuChoice = gpuPreference.apply(app, paths.bootstrapDir());
 
 // ---------------------------------------------------------------------------
 // Linux — Forçar X11 e desabilitar sandbox
@@ -1201,6 +1220,8 @@ async function _bootstrapMonitorConfig() {
 }
 
 app.whenReady().then(async () => {
+  // Vale a partir da próxima abertura; longe da abertura atual para não disputar CPU.
+  setTimeout(() => gpuPreference.detect(paths.bootstrapDir()), 60_000).unref?.();
   powerMonitor.on("resume", handleSystemResume);
   powerMonitor.on("unlock-screen", handleScreenUnlock);
   if (backgroundWindows && process.platform === "darwin") app.dock?.hide();
@@ -1444,11 +1465,10 @@ app.on("before-quit", (event) => {
       console.log("[before-quit] user_data sincronizado com sucesso");
     }
 
-    // Um yt-dlp em andamento seguiria baixando (e segurando o vídeo) depois do app fechar.
-    onlineVideo.shutdown();
-    // O acervo usa um processo utilitário separado. Cancela e espera no máximo
-    // dois segundos para limpar temporários; nunca prende o encerramento.
-    await downloader.shutdown();
+    // Um yt-dlp em andamento seguiria baixando (e segurando o vídeo) depois do app
+    // fechar. Vídeos e acervo usam processos utilitários separados: os dois cancelam
+    // e esperam no máximo dois segundos; nunca prendem o encerramento.
+    await Promise.all([onlineVideo.shutdown(), downloader.shutdown()]);
 
     try {
       await httpServer.stop();
@@ -1549,7 +1569,10 @@ ipcMain.handle("telemetry:system-info", () => (systemInfoPromise ??= collectSyst
 // Qual placa o Chromium escolheu e a taxa de cada monitor: "aceleração ligada"
 // não distingue a placa dedicada da integrada num computador com as duas.
 ipcMain.handle("telemetry:graphics", async () => {
-  const info = { gpu_feature_status: {}, gpu_devices: [], displays: [], cpu_model: "", cpu_cores: 0, memory_gb: 0 };
+  const info = {
+    gpu_feature_status: {}, gpu_devices: [], displays: [], cpu_model: "", cpu_cores: 0, memory_gb: 0,
+    device_class: _gpuChoice.device_class, gpu_high_performance: _gpuChoice.high_performance,
+  };
   try {
     const cpus = require("node:os").cpus();
     info.cpu_model = String(cpus[0]?.model || "").trim().slice(0, 80);

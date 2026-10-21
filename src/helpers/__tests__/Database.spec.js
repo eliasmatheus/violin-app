@@ -27,6 +27,9 @@ vi.mock("@/helpers/IndexedDB", () => ({
     getAllByPrefix: vi.fn(async (t, prefix) =>
       Array.from(tbl(t).values()).filter((value) => value.id.startsWith(prefix))
     ),
+    getAllKeysByPrefix: vi.fn(async (t, prefix) =>
+      Array.from(tbl(t).keys()).filter((key) => key.startsWith(prefix))
+    ),
     put: vi.fn(async (t, v) => {
       tbl(t).set(v.id, v);
     }),
@@ -94,6 +97,37 @@ it("recupera pela rede quando a leitura do IndexedDB falha", async () => {
   fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true })));
   expect(await database.get("recovery_test", { silent: true })).toEqual({ ok: true });
   expect(fetchMock).toHaveBeenCalledOnce();
+});
+
+it("o controle remoto lê as faixas instaladas no banco sem buscar a rede", async () => {
+  const database = await importDatabase();
+  const { readRemoteMusicAlbum } = await import("@/helpers/RemoteMusicAlbum");
+  await database.seed("album_9", {
+    id_album: 9,
+    name: "Álbum instalado",
+    musics: [
+      { id_music: 2, name: "Faixa dois", duration: 95, has_instrumental_music: 1 },
+      null,
+      { id_music: 0, name: "Inválida" },
+      { id_music: "1", name: "Faixa um", duration: "00:03:39" },
+    ],
+  });
+  expect(await readRemoteMusicAlbum({ albumId: 9 })).toEqual({
+    album: {
+      id_album: 9,
+      name: "Álbum instalado",
+      musics: [
+        { id_music: 2, name: "Faixa dois", duration: 95, has_instrumental_music: 1 },
+        { id_music: 1, name: "Faixa um", duration: "00:03:39", has_instrumental_music: 0 },
+      ],
+    },
+  });
+  expect(await readRemoteMusicAlbum({ albumId: 10 })).toEqual({ album: null });
+  for (const albumId of ["../config", "9", 0, -1, 1.5, Infinity]) {
+    expect(await readRemoteMusicAlbum({ albumId })).toEqual({ album: null });
+  }
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(alertError).not.toHaveBeenCalled();
 });
 
 beforeEach(() => {
@@ -461,6 +495,40 @@ describe("Database — seed do bundle do banco (needsSeed/seed)", () => {
 
     const stored = await db.getStoredIdsForPrefix("bible_chapters", "bible_2_");
     expect(stored.has("bible_2_1_1")).toBe(true);
+  });
+
+  it("getStoredIdsForPrefix lista só as chaves, sem ler o texto dos capítulos", async () => {
+    const db = await importDatabase();
+    await db.seed("bible_2_39_5", { 1: "texto" });
+    const idb = (await import("@/helpers/IndexedDB")).default;
+    idb.getAll.mockClear();
+    idb.getAllByPrefix.mockClear();
+
+    const stored = await db.getStoredIdsForPrefix("bible_chapters", "bible_2_");
+
+    expect(stored.has("bible_2_39_5")).toBe(true);
+    expect(idb.getAll).not.toHaveBeenCalled();
+    expect(idb.getAllByPrefix).not.toHaveBeenCalled();
+  });
+
+  it("invalidar um catálogo apaga as linhas dele numa só transação", async () => {
+    const db = await importDatabase();
+    await db.seed("pt_hymnal", [
+      { id_music: 1, name: "A" },
+      { id_music: 2, name: "B" },
+    ]);
+    await db.seed("es_hymnal", [{ id_music: 3, name: "C" }]);
+    const idb = (await import("@/helpers/IndexedDB")).default;
+    idb.del.mockClear();
+    idb.putMany.mockClear();
+
+    db.invalidate("pt_hymnal");
+    await vi.waitFor(() => expect(idb.putMany).toHaveBeenCalled());
+
+    expect(idb.del).not.toHaveBeenCalled();
+    const restantes = Array.from(tbl("hymnal").keys());
+    expect(restantes.some((k) => k.startsWith("pt_hymnal:"))).toBe(false);
+    expect(restantes.some((k) => k.startsWith("es_hymnal:"))).toBe(true);
   });
 });
 

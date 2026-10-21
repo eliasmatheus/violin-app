@@ -32,7 +32,7 @@ const HTTP_RENDERER_RESPONSE_CHANNEL = "http:renderer-response";
  * pessoais. O `preloadIpcContract.spec` cobre a lista de prefixos justamente
  * para o próximo esquecimento falhar no teste e não em produção.
  */
-const HTTP_RENDERER_REQUEST_ID_RE = /^(slides|announcements|libras|online-videos|custom-music|background-sound|volume|media-library):[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const HTTP_RENDERER_REQUEST_ID_RE = /^(slides|announcements|libras|online-videos|custom-music|music-album|background-sound|volume|media-library):[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 contextBridge.exposeInMainWorld("louvorjaApi", {
   /** Resolve o caminho real de um File arrastado/selecionado (Electron 32+). */
@@ -49,6 +49,9 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
 
   /** Plataforma do sistema operacional: "win32" | "darwin" | "linux" */
   platform: process.platform,
+
+  /** Memória física em KB, lida na hora e sem IPC. `free` só é "disponível" no Windows; o macOS a deixa baixa de propósito. */
+  systemMemory: () => process.getSystemMemoryInfo(),
 
   /** true quando rodando em desenvolvimento (ELECTRON_DEV=1 ou executável não empacotado). */
   isDev: process.env.ELECTRON_DEV === "1" || process.defaultApp,
@@ -807,7 +810,7 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
    * Registra um callback para eventos emitidos pelo servidor HTTP ao renderer.
    * Eventos: "http:song-slides", "http:open-song", "http:drawing-number",
    * "http:drawing-name", "http:libras-bundle", "http:projections-close",
-   * "http:online-videos", "http:custom-music", "http:background-sound",
+   * "http:online-videos", "http:custom-music", "http:music-album", "http:background-sound",
    * "http:volume", "http:media-library"
    * Retorna função de cleanup que remove todos os listeners.
    *
@@ -824,6 +827,7 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
       "http:projections-close",
       "http:online-videos",
       "http:custom-music",
+      "http:music-album",
       "http:background-sound",
       "http:volume",
       "http:media-library",

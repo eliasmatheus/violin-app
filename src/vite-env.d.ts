@@ -152,6 +152,7 @@ declare global {
 
   interface LouvorjaApi {
     platform: string;
+    systemMemory?: () => { total: number; free: number };
     version: string;
     isDev: boolean;
     runtime?: {
@@ -210,6 +211,8 @@ declare global {
       graphics?: () => Promise<{
         gpu_feature_status: Record<string, string>;
         gpu_devices: Array<{ active: boolean; vendor_id: number; device_id: number }>;
+        device_class?: "desktop" | "laptop" | null;
+        gpu_high_performance?: boolean;
         displays: Array<{ width: number; height: number; scale: number; hz: number }>;
         cpu_model: string;
         cpu_cores: number;
