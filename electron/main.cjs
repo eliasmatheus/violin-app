@@ -2561,11 +2561,19 @@ function _pptxEngine(payload) {
  * Número da tela do PA na contagem do LibreOffice (1 = primeira). Ele põe a
  * principal primeiro e segue a ordem do sistema — a mesma do Electron.
  */
-function _telaLibreOffice(displayId) {
+function _telaLibreOffice(display) {
   const todas = screen.getAllDisplays();
   const principal = screen.getPrimaryDisplay();
   const ordem = [principal, ...todas.filter((x) => x.id !== principal.id)];
-  const i = ordem.findIndex((x) => x.id === displayId);
+  // Pela posição, não pelo id: com dois monitores iguais, `connected()` troca o id
+  // de um deles e ele não seria achado na lista do sistema. Dois monitores não
+  // ocupam o mesmo lugar na área de trabalho.
+  const b = display && display.bounds;
+  const i = b
+    ? ordem.findIndex(
+        (x) => x.bounds.x === b.x && x.bounds.y === b.y && x.bounds.width === b.width && x.bounds.height === b.height
+      )
+    : -1;
   return i >= 0 ? i + 1 : 0;
 }
 
@@ -2607,7 +2615,7 @@ ipcMain.handle("pptx:nativeStart", async (event, payload) => {
   const sender = event.sender;
   const r = await pptx.nativeStart(filePath, {
     bounds: d.bounds,
-    display: _telaLibreOffice(d.id),
+    display: _telaLibreOffice(d),
     engine: _pptxEngine(payload),
     startIndex,
     onProgress: (p) => safeSend(sender, "pptx:progress", { path: filePath, ...p }),
@@ -2855,15 +2863,22 @@ ipcMain.handle("files:convertPresentation", async (event, filePath, opts) => {
   }
 });
 
-/** `<base>.pdf` → `<base>.r<tempo>.pdf`, apagando as cópias de antes do mesmo arquivo. */
+/**
+ * `<base>.pdf` → `<base>.r<tempo>.pdf`. Das cópias anteriores do mesmo arquivo,
+ * a mais nova fica: é a que pode estar no ar agora, e a tela lê o PDF aos
+ * pedaços — apagá-la no meio do culto deixaria páginas sem desenhar.
+ */
 async function _pptxCopiaNova(pdf) {
   const dir = path.dirname(pdf);
   const base = path.basename(pdf, ".pdf");
+  const esc = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const copia = new RegExp(`^${esc}\\.r([0-9a-z]+)\\.pdf$`);
   try {
-    for (const nome of await fs.readdir(dir)) {
-      if (nome.startsWith(`${base}.r`) && nome.endsWith(".pdf"))
-        await fs.unlink(path.join(dir, nome)).catch(() => {});
-    }
+    const antigas = (await fs.readdir(dir))
+      .map((nome) => ({ nome, m: copia.exec(nome) }))
+      .filter((x) => x.m)
+      .sort((a, b) => parseInt(b.m[1], 36) - parseInt(a.m[1], 36));
+    for (const { nome } of antigas.slice(1)) await fs.unlink(path.join(dir, nome)).catch(() => {});
     const novo = path.join(dir, `${base}.r${Date.now().toString(36)}.pdf`);
     await fs.copyFile(pdf, novo);
     return novo;

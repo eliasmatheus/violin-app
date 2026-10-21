@@ -565,6 +565,15 @@ async function _nativeStart(
           : "Para apresentar com animações é preciso o Microsoft PowerPoint (Windows) ou o LibreOffice.",
     };
   }
+  // O LibreOffice escolhe a tela pelo número; sem ele, abriria onde quisesse —
+  // possivelmente na do operador. O PowerPoint vai pela posição (`bounds`).
+  if (converter.id === "libreoffice" && !(Number(display) > 0)) {
+    return {
+      ok: false,
+      code: "no_display",
+      message: "Não encontrei o monitor de projeção para o LibreOffice. Confira em Opções → Monitores.",
+    };
+  }
   try {
     await ensureFonts(v.file, onProgress, log);
   } catch (e) {
