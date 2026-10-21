@@ -42,6 +42,7 @@ import { MediaOpenParams } from "@/types/Media";
 import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import AudioLibrary from "@/helpers/AudioLibrary";
 import { slideTimes } from "@/helpers/CustomSongs";
+import { plainSlideText } from "@/helpers/SlideText";
 import Telemetry from "@/helpers/Telemetry";
 import { decodeOpusToWav, isOpusUrl, opusNeedsFallback } from "@/helpers/OpusFallback";
 import Platform from "@/helpers/Platform";
@@ -2073,8 +2074,8 @@ const _self = {
         if (superseded()) return false;
       }
       slidesArray.push({
-        lyric: s.letra || "",
-        aux_lyric: s.letra_aux || "",
+        lyric: plainSlideText(s.letra),
+        aux_lyric: plainSlideText(s.letra_aux),
         url_image: urlImage,
         image_position: typeof s.imagem_posicao === "number" ? s.imagem_posicao - 1 : 4,
         cover: s.tipo === "CAPA",
@@ -2083,7 +2084,7 @@ const _self = {
         color_aux: s.cor_letra_aux,
         font_size_pct: s.tamanho_letra,
         font_size_aux_pct: s.tamanho_letra_aux,
-        name: song.nome || "",
+        name: plainSlideText(song.nome),
         // Quem acompanha o que está no ar (modo apresentação) reconhece a música pelo UUID.
         custom_song_id: song.id,
       });
