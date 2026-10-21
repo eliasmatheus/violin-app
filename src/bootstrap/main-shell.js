@@ -54,6 +54,7 @@ import { musicCommandSessionRejectionReason } from "@/presentation/MusicPresenta
 import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import Broadcast from "@/helpers/Broadcast";
 import Database from "@/helpers/Database";
+import { readRemoteMusicAlbum } from "@/helpers/RemoteMusicAlbum";
 import Liturgy from "@/helpers/Liturgy";
 import { AUDIO_EXT } from "@/constants/FileTypes";
 import { openSlja, SLJA_EXT } from "@/helpers/SljaPlayer";
@@ -2083,6 +2084,16 @@ $storage.hydrate().then(async () => {
               break;
           }
           break;
+        case "http:music-album": {
+          let reply = { album: null };
+          try {
+            reply = await readRemoteMusicAlbum(data);
+          } catch (error) {
+            console.warn("[http:music-album] falha ao ler álbum local:", error?.message || error);
+          }
+          if (data?.requestId) Platform.httpServer?.respond?.(data.requestId, reply);
+          break;
+        }
         case "http:custom-music": {
           // Acervo pessoal mora no IndexedDB — só o renderer lê. A parte
           // pessoal é **adição**: qualquer falha aqui responde lista vazia e a
