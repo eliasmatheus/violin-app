@@ -1729,6 +1729,22 @@ function _walkSet(obj, path, value) {
 }
 
 let _userDataMain = userStore.read("user_data") || {};
+
+/*
+ * Estado das janelas COMUNS (hoje só a tela do operador), em
+ * `options.windows.<feature>` — o espelho de `KEYS.OPTIONS.WINDOWS` em
+ * `src/constants/UserDataKeys.ts`. Guarda modo (maximizada), tamanho e posição
+ * para a próxima abertura; `_flushUserData` grava direto no disco, sem
+ * broadcast, porque nenhum renderer lê isto.
+ */
+windowFactory.setWindowStateStore({
+  get: (feature) => _userDataMain?.options?.windows?.[feature] ?? null,
+  save: (feature, estado) => {
+    _walkSet(_userDataMain, `options.windows.${feature}`, estado);
+    void _flushUserData();
+  },
+});
+
 httpServer.setUserDataProvider(() => _userDataMain);
 runtimeJournalConsent = _userDataMain?.options?.telemetry !== false;
 downloader.setWorkerDiagnosticsEnabled(runtimeJournalConsent);

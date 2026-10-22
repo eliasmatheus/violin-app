@@ -9,6 +9,7 @@ type OpenArgs = {
   monitorId: number | null;
   fullscreen: boolean;
   alwaysOnTop: boolean;
+  focusOnOpen?: boolean;
 };
 
 const calls: string[] = [];
@@ -177,6 +178,17 @@ describe("openMediaWindow — a tabela de janelas por mídia", () => {
     }
     await windows.openMediaWindow("operator", "video");
     expect([lastOpen().fullscreen, lastOpen().alwaysOnTop]).toEqual([false, false]);
+  });
+
+  it("só a tela do operador pede o foco ao abrir; projeção e retorno não", async () => {
+    for (const media of ["music", "file", "video"] as const) {
+      await windows.openMediaWindow("operator", media);
+      expect(lastOpen().focusOnOpen).toBe(true);
+    }
+    await windows.openMediaWindow("projection", "music");
+    expect(lastOpen().focusOnOpen).toBe(false);
+    await windows.openMediaWindow("return", "music");
+    expect(lastOpen().focusOnOpen).toBe(false);
   });
 
   it("automático sem monitor para o papel não abre nada, mas o operador abre", async () => {

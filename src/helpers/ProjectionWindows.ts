@@ -40,14 +40,15 @@ async function _open(
   feature: string,
   monitorId: number | string | null,
   fullscreen: boolean,
-  alwaysOnTop = false
+  alwaysOnTop = false,
+  focusOnOpen = false
 ): Promise<void> {
   // The main process acknowledges `close` only after BrowserWindow `closed`.
   // A same-feature reopen must wait for that acknowledgement instead of
   // reusing a native window that is still in its close animation.
   const pendingClose = _pendingFeatureCloses.get(feature);
   if (pendingClose) await pendingClose;
-  await openWindow({ route, feature, monitorId, fullscreen, alwaysOnTop });
+  await openWindow({ route, feature, monitorId, fullscreen, alwaysOnTop, focusOnOpen });
 }
 
 /**
@@ -358,7 +359,10 @@ export async function openMediaWindow(
     plan.feature,
     monitorId ?? target.monitorId,
     plan.fullscreen,
-    plan.alwaysOnTop
+    plan.alwaysOnTop,
+    /* A tela do operador é onde ele vai operar: nasce com o foco. Projeção
+     * continua aparecendo sem roubar o foco da janela principal. */
+    kind === "operator"
   );
 }
 

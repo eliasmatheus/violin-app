@@ -14,6 +14,7 @@ const powerBlocker = require("./powerBlocker.js");
 const { createWindowCloseGate, DEFAULT_CLOSE_ACK_TIMEOUT_MS } = require("./windowCloseGate.js");
 const { backgroundWindows, prepareWindow } = require("./e2eWindowMode.js");
 const { isExternalRoute, loadTargetFor, webPreferencesFor } = require("./windowRoute.js");
+const { resolverPosicaoJanela } = require("./windowState.js");
 
 /**
  * Features da tela de loading da projeção de Site.
@@ -60,6 +61,19 @@ const _windowMeta = new Map();
 let _mainWindow = null;
 let _httpPort = null;
 let _windowObserver = null;
+/**
+ * Leitura/gravação do estado (modo/tamanho/posição) das janelas COMUNS.
+ *
+ * Injetado pelo `main.cjs` porque o estado vive no `user_data` — a factory não
+ * conhece persistência. Sem o store, a janela abre no comportamento antigo.
+ */
+let _windowStateStore = null;
+
+function setWindowStateStore(store) {
+  const get = store && typeof store.get === "function" ? store.get : null;
+  const save = store && typeof store.save === "function" ? store.save : null;
+  _windowStateStore = get && save ? { get, save } : null;
+}
 let _presentationActivityObserver = null;
 let _siteNavigationListener = null;
 let _siteReadyListener = null;
@@ -335,7 +349,7 @@ function willLoad(feature, route) {
  * @returns {BrowserWindow|null} null quando abrir significaria ocupar a tela do
  *   operador no lugar do monitor configurado — ver o bloco de decisão abaixo.
  */
-function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = false, preloadPath, devUrl, prodHtmlPath, width, height, alwaysOnTop = false, showInTaskbar = true, devTools = null }) {
+function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = false, preloadPath, devUrl, prodHtmlPath, width, height, alwaysOnTop = false, showInTaskbar = true, devTools = null, focusOnOpen = false }) {
   // Se já existe janela para essa feature, mostra-a sem roubar o foco da main.
   //
   // Quando ela está escondida é porque o monitor dela sumiu e o `reconcile` a
@@ -393,11 +407,36 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
   // cobrir Dock/menu bar. Em monitores secundários, kiosk é agressivo demais
   // e pode deixar o app preso no modo apresentação.
   const useDeferredFullscreen = fullscreen && (isWin || isLin) && !backgroundWindows;
-  const winOpts = {
+
+  /*
+   * Janela COMUM (hoje só a tela do operador): restaura modo, tamanho e posição
+   * da última vez. Projeção é fullscreen e não tem estado do usuário.
+   *
+   * O `padrao` é o comportamento antigo — 800x600 no canto do monitor — e é o
+   * que a primeira abertura usa como base antes de maximizar.
+   */
+  /* Site em janela (preferência do usuário) não entra: não é janela do app. */
+  const janelaComEstado = !fullscreen && !isExternal;
+  const colocacao = !janelaComEstado
+    ? null
+    : resolverPosicaoJanela({
+        estado: _windowStateStore ? _windowStateStore.get(feature) : null,
+        displayDestino: target,
+        displays: displays.connected(),
+        padrao: { x: bounds.x, y: bounds.y, width: width || 800, height: height || 600 },
+      });
+  const boundsJanela = colocacao?.bounds || {
     x: bounds.x,
     y: bounds.y,
     width: fullscreen ? bounds.width : (width || 800),
     height: fullscreen ? bounds.height : (height || 600),
+  };
+
+  const winOpts = {
+    x: boundsJanela.x,
+    y: boundsJanela.y,
+    width: boundsJanela.width,
+    height: boundsJanela.height,
     fullscreen: false,
     kiosk: useMacPrimaryKiosk,
     frame,
@@ -434,6 +473,40 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
   };
 
   const win = _operationMeasurer("window.construct", { feature }, () => new BrowserWindow(winOpts));
+
+  /*
+   * Guarda a geometria da janela COMUM a cada mudança. `getNormalBounds()` (e
+   * não `getBounds()`) é o que faz "desmaximizar" voltar ao tamanho e à posição
+   * de antes, inclusive quando a janela é fechada maximizada.
+   *
+   * Debounce no resize/move: arrastar a janela dispara dezenas de eventos, e
+   * cada gravação reescreve o user_data inteiro.
+   */
+  if (janelaComEstado && _windowStateStore) {
+    let _timerSalvar = null;
+    const salvar = () => {
+      if (win.isDestroyed()) return;
+      try {
+        _windowStateStore.save(feature, {
+          maximized: win.isMaximized(),
+          bounds: win.getNormalBounds(),
+        });
+      } catch (e) {
+        console.warn(`[windowFactory] salvar estado de ${feature}:`, e?.message || e);
+      }
+    };
+    const agendar = () => {
+      clearTimeout(_timerSalvar);
+      _timerSalvar = setTimeout(salvar, 400);
+      _timerSalvar.unref?.();
+    };
+    win.on("resize", agendar);
+    win.on("move", agendar);
+    win.on("maximize", salvar);
+    win.on("unmaximize", salvar);
+    win.on("close", salvar);
+    win.once("closed", () => clearTimeout(_timerSalvar));
+  }
   if (isWin) {
     // O título do HTML é igual em todas as rotas. Preserve no preview da
     // taskbar o papel de cada janela, mesmo após o renderer atualizar <title>.
@@ -620,7 +693,24 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
   const showOnce = () => {
     if (_shown || win.isDestroyed()) return;
     _shown = true;
-    _operationMeasurer("window.show", { feature }, () => win.showInactive());
+    /* Antes de revelar: a janela aparece já maximizada, sem o pulo de tamanho. */
+    if (colocacao?.maximized) {
+      try {
+        win.maximize();
+      } catch (e) {
+        console.warn(`[windowFactory] maximize ${feature}:`, e?.message || e);
+      }
+    }
+    /*
+     * A tela do operador nasce com o foco: é onde o operador vai trabalhar.
+     * As demais janelas auxiliares (projeção, Canva) só exibem — o operador
+     * segue na janela principal e não pode ser interrompido.
+     */
+    const mostrarComFoco = focusOnOpen && !backgroundWindows;
+    _operationMeasurer("window.show", { feature }, mostrarComFoco ? () => win.show() : () => win.showInactive());
+    if (mostrarComFoco) {
+      try { win.focus(); } catch (_) { /* ignore */ }
+    }
     /*
      * No MESMO turno do `showInactive`: esperar o evento `show` dava quadros
      * do Canva por cima antes do empurrão chegar.
@@ -649,7 +739,8 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
     // Não roubar foco do main window — `showInactive` já fez isso.
     // O operador navega pela janela principal (setas da Bíblia, atalhos);
     // a projeção apenas exibe e recebe estado via BroadcastChannel.
-    _refocusMainWindow();
+    // A tela do operador é a exceção: acabou de pedir o foco acima.
+    if (!mostrarComFoco) _refocusMainWindow();
   };
   win.webContents.once("did-finish-load", showOnce);
   win.once("ready-to-show", showOnce);
@@ -840,6 +931,15 @@ function _placeOnDisplay(win, display, meta) {
           width,
           height,
         });
+        /* O modo salvo manda: quem deixou a tela do operador maximizada a
+         * reencontra maximizada no monitor novo, junto com o tamanho. */
+        if (meta?.feature && _windowStateStore?.get(meta.feature)?.maximized === true) {
+          try {
+            win.maximize();
+          } catch (_) {
+            /* sem maximizar é melhor que não mostrar */
+          }
+        }
       }
       if (!win.isVisible()) win.showInactive();
 
@@ -1008,6 +1108,7 @@ module.exports = {
   getWindow,
   setMainWindow,
   setWindowObserver,
+  setWindowStateStore,
   setOperationMeasurer,
   setSiteNavigationListener,
   setSiteReadyListener,
