@@ -120,13 +120,15 @@ export function useLiturgyImport(library: Library, report: Report) {
         });
         return invalid;
       }
-      // Um `.ja` pode trazer várias liturgias salvas juntas (ex.: culto e escola
-      // sabatina); confirmar sobrescrita uma a uma travaria o import numa fila de
-      // diálogos. Cada uma entra como item novo na biblioteca.
-      //
-      // O nome vem da POSIÇÃO (1ª = sábado, 2ª = domingo, ...). O conjunto de
-      // nomes usados inclui a biblioteca inteira E as liturgias deste arquivo:
-      // sem isso, três grupos viravam três "Sábado".
+      /**
+       * Um `.ja` pode trazer várias liturgias salvas juntas (ex.: culto e escola
+       * sabatina); confirmar sobrescrita uma a uma travaria o import numa fila de
+       * diálogos. Cada uma entra como item novo na biblioteca.
+       *
+       * O nome vem da POSIÇÃO (1ª = domingo, 2ª = segunda, ...). O conjunto de
+       * nomes usados inclui a biblioteca inteira E as liturgias deste arquivo:
+       * sem isso, dois grupos do mesmo dia viravam duas liturgias com o mesmo nome.
+      **/
       const usados = new Set((await library.list()).map((liturgia) => liturgia.name.toLowerCase()));
       for (const [index, liturgy] of parsed.entries()) {
         const base = nomePelaPosicao(index);
