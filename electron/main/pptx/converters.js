@@ -194,6 +194,22 @@ on run argv
 end run
 `;
 
+/** Último recurso no Mac: o PDF do próprio PowerPoint (texto, não imagem). */
+const MAC_PDF_SCRIPT = `
+on run argv
+  set inFile to POSIX file (item 1 of argv)
+  set outFile to (POSIX file (item 2 of argv)) as text
+  set wasRunning to application "Microsoft PowerPoint" is running
+  tell application "Microsoft PowerPoint"
+    open inFile
+    set pres to active presentation
+    save pres in outFile as save as PDF
+    close pres saving no
+    if not wasRunning then quit
+  end tell
+end run
+`;
+
 async function _macPowerPoint(input, output, opts) {
   // Igual ao Windows: cada slide vira PNG e o PDF é montado aqui.
   // Copia para dentro do container do PowerPoint: fora dele o macOS pede
@@ -203,14 +219,33 @@ async function _macPowerPoint(input, output, opts) {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const tmpIn = path.join(base, `${id}${path.extname(input).toLowerCase()}`);
   const tmpOut = path.join(base, `${id}-slides`);
+  const tmpPdf = path.join(base, `${id}.pdf`);
+  const desde = Date.now() - 1000;
   await fs.copyFile(input, tmpIn);
+  const log = typeof opts.log === "function" ? opts.log : () => {};
   try {
     const out = await _exec("osascript", ["-e", MAC_SCRIPT, tmpIn, tmpOut, opts.fontsChanged ? "1" : "0"], 10 * 60 * 1000);
-    // O PowerPoint do Mac cria uma pasta com "Slide1.png", "Slide2.png"…
-    const imagens = (await _listarPngs(base)).filter((f) => f.startsWith(tmpOut));
-    if (!imagens.length) throw new Error("O PowerPoint não exportou nenhum slide.");
-    await imagesToPdf(imagens, output);
-    return { staleFonts: out.trim() === "1" };
+    // O nome da pasta muda conforme a versão do PowerPoint: "<id>-slides/Slide1.png",
+    // "<id>/Slide1.png" ou "<id>-slides.png". Tudo que começa com o id é desta conversão;
+    // sem nada assim, vale qualquer PNG que apareceu na pasta durante a exportação.
+    const todas = await _listarPngs(base);
+    let imagens = todas.filter((f) => f.startsWith(path.join(base, id)));
+    if (!imagens.length) imagens = await _novas(todas, desde);
+    if (imagens.length) {
+      await imagesToPdf(imagens, output);
+      return { staleFonts: out.trim() === "1" };
+    }
+    // Sem imagens: o PDF do próprio PowerPoint. Os títulos podem sair um pouco
+    // diferentes no pdf.js, mas o culto não fica sem os slides.
+    log("[pptx] mac: PNG não veio", { base, pngs: todas.length, saida: out.trim() });
+    await _exec("osascript", ["-e", MAC_PDF_SCRIPT, tmpIn, tmpPdf], 10 * 60 * 1000);
+    if (!_existe(tmpPdf)) {
+      throw new Error(
+        `O PowerPoint não exportou nenhum slide (pasta: ${base}; PNGs encontrados: ${todas.length}).`
+      );
+    }
+    await fs.copyFile(tmpPdf, output);
+    return { staleFonts: out.trim() === "1", pdfText: true };
   } catch (e) {
     if (/-1743|not authori[sz]ed|não autorizado/i.test(e.message)) {
       throw new Error(
@@ -220,8 +255,21 @@ async function _macPowerPoint(input, output, opts) {
     throw e;
   } finally {
     fs.unlink(tmpIn).catch(() => {});
-    fs.rm(tmpOut, { recursive: true, force: true }).catch(() => {});
+    fs.unlink(tmpPdf).catch(() => {});
+    for (const nome of await fs.readdir(base).catch(() => [])) {
+      if (nome.startsWith(id)) fs.rm(path.join(base, nome), { recursive: true, force: true }).catch(() => {});
+    }
   }
+}
+
+/** PNGs criados depois de `desde` (a exportação que acabou de rodar). */
+async function _novas(arquivos, desde) {
+  const out = [];
+  for (const f of arquivos) {
+    const st = await fs.stat(f).catch(() => null);
+    if (st && st.mtimeMs >= desde) out.push(f);
+  }
+  return out;
 }
 
 /** PNGs de uma pasta (recursivo), na ordem natural: Slide2 antes de Slide10. */

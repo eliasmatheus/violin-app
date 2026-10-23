@@ -334,6 +334,7 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log, for
       tempDir: _tempDir(),
       fontsChanged: report.installed > 0,
       withWindow: report.embedded,
+      log,
       onSlide: ({ done, total }) =>
         onProgress({ phase: "converting", converter: converter.label, done, total }),
     });
