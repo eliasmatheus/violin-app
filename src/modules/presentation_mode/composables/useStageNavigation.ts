@@ -1,4 +1,4 @@
-import type { Ref } from "vue";
+import { onScopeDispose, type Ref } from "vue";
 import { useSlides } from "@/composables/useSlides";
 import type { ProgramBibleRef, ProgramItem } from "@/types/Presentation";
 import { expectationOf, filePathOf, type Playable } from "../program/playable";
@@ -14,6 +14,7 @@ import {
 } from "./useLiveNavigation";
 import { useOnlineQueue } from "./useOnlinePlayback";
 import { isDeck, usePdfDeck } from "./usePdfDeck";
+import { usePptxNative } from "./usePptxNative";
 import { useStage } from "./useStage";
 import { claimScreen } from "./useLayers";
 import { kindFromPath } from "../program/liturgy";
@@ -110,5 +111,9 @@ export function useStageNavigation(deps: {
     deps.onEnd
   );
   const { canNavigate, navigate, position } = navigation;
+
+  // PowerPoint com animações passou do último slide: segue para o próximo arquivo
+  // (da pasta ou do momento) no mesmo clique, sem parar no último slide do PDF.
+  onScopeDispose(usePptxNative().onFinished(() => navigate("next")));
   return { canNavigate, navigate, position, onlineQueue, pdfDeck };
 }

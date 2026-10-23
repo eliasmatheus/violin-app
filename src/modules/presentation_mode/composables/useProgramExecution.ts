@@ -144,6 +144,14 @@ export function useProgramExecution() {
   }
 
   /**
+   * O PowerPoint gerado de novo ("Gerar de novo", fonte instalada): o PDF novo
+   * entra no lugar do antigo, sem mudar o que o módulo considera no ar.
+   */
+  function projectPdf(pdf: string, name: string): void {
+    executeItem(liturgyItem({ id: crypto.randomUUID(), tipo: LiturgyItemTypeEnum.ARQUIVO, dir: pdf, item: name }));
+  }
+
+  /**
    * Um filho de momento: o arquivo vai como qualquer arquivo da biblioteca; o
    * anúncio abre a projeção de anúncios naquele ponto.
    */
@@ -162,5 +170,5 @@ export function useProgramExecution() {
     return false;
   }
 
-  return { execute, executeChild, projectPath, sendBible };
+  return { execute, executeChild, projectPath, projectPdf, sendBible };
 }

@@ -1,3 +1,4 @@
+import { POWERPOINT_ENABLED } from "../../composables/usePowerPoint";
 import { describe, expect, it } from "vitest";
 import type { ProgramItem } from "@/types/Presentation";
 import { acceptsInMoment, stepChild, withFiles } from "../moment";
@@ -9,8 +10,8 @@ const moment = (): ProgramItem => ({ id: "m", kind: "moment", title: "Anúncios"
 describe("momento", () => {
   it("aceita foto, vídeo e PDF/apresentação; recusa áudio e o que não é mídia", () => {
     expect(["a.jpg", "b.mp4", "c.pdf"].every(acceptsInMoment)).toBe(true);
-    // PowerPoint desligado por enquanto: só PDF.
-    expect(acceptsInMoment("d.pptx")).toBe(false);
+    // PowerPoint ligado: entra e vira PDF fiel na hora de ir ao ar.
+    expect(acceptsInMoment("d.pptx")).toBe(POWERPOINT_ENABLED);
     expect(["e.mp3", "f.txt"].some(acceptsInMoment)).toBe(false);
   });
 

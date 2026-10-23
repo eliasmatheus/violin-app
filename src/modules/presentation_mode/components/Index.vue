@@ -100,6 +100,8 @@
             />
           </div>
         </header>
+        <!-- PowerPoint convertendo: o que está acontecendo e quanto falta. -->
+        <PptxProgress />
         <div class="pm-stage__main">
           <!-- Prévia: o que está no ar fica em miniatura no canto; clicar volta para ele. -->
           <LivePip
@@ -132,6 +134,8 @@
           <PdfStage
             v-else-if="pdfDeck.active.value && liveZoom.scale.value <= 1"
             :locked="outputLocked"
+            :pptx-path="livePptxPath"
+            @regenerated="reprojectPowerPoint"
           />
           <!-- Vídeo, imagem, versículo, anúncio: o visor mostra o que está na tela. -->
           <StageVisor v-else-if="liveKind" />
@@ -264,7 +268,9 @@ import SeriesDialog from "./SeriesDialog.vue";
 import UpNextBlock from "./UpNextBlock.vue";
 import ReturnPlayerBar from "./ReturnPlayerBar.vue";
 import PdfStage from "./PdfStage.vue";
-import { preparePowerPoint } from "../composables/usePowerPoint";
+import PptxProgress from "./PptxProgress.vue";
+import { isPowerPoint, preparePowerPoint } from "../composables/usePowerPoint";
+import { usePptxNative } from "../composables/usePptxNative";
 import { takeOffAir } from "../composables/takeOffAir";
 import { returnOverrideFor } from "../composables/returnTarget";
 import { useProgramDownloads } from "../composables/useCloudFiles";
@@ -352,7 +358,7 @@ const {
   setOutputLocked,
   prepare,
 } = useProgram();
-const { execute, executeChild, projectPath, sendBible } = useProgramExecution();
+const { execute, executeChild, projectPath, projectPdf, sendBible } = useProgramExecution();
 const { importFromLiturgy, saveAsLiturgy } = useProgramLiturgy();
 const stage = useStage();
 const folders = useFolderItems();
@@ -736,7 +742,8 @@ const livePipProgress = computed(() => {
 
 useClicker({
   navigate,
-  toggleBlack: () => setCleared(!cleared.value),
+  // PowerPoint com animações por cima do PA: a tela preta é a dele.
+  toggleBlack: () => (pptxNative.active.value ? void pptxNative.toggleBlack() : setCleared(!cleared.value)),
   send: onEnter,
   zoomIn: () => liveZoom.zoomIn(),
   zoomOut: () => liveZoom.zoomOut(),
@@ -748,15 +755,78 @@ useClicker({
 
 const pathOf = (p: Playable | null) => filePathOf(p, itemOf(p));
 
+/** O PowerPoint por trás do PDF no ar (para apresentar com animações), ou null. */
+const pptxNative = usePptxNative();
+const livePptxPath = computed(() => {
+  const p = pathOf(liveOrigin.value);
+  return p && isPowerPoint(p) ? p : null;
+});
+
+/*
+ * Pasta de anúncios com vários PowerPoints: quem apresentava com animações e
+ * passou do último slide continua com animações no próximo PowerPoint, assim
+ * que o PDF dele estiver no ar (antes disso, a troca de PDF encerraria o modo).
+ */
+let keepNative: { from: string | null; until: number; unloaded: boolean } | null = null;
+onBeforeUnmount(
+  pptxNative.onFinished(
+    () => (keepNative = { from: livePptxPath.value, until: Date.now() + 60_000, unloaded: false })
+  )
+);
+// O próximo da fila não é PowerPoint: a continuação acaba ali.
+watch(
+  () => pathOf(stage.sent.value?.playable ?? null),
+  (p) => {
+    if (keepNative && p && !isPowerPoint(p)) keepNative = null;
+  }
+);
+watch(
+  () => [livePptxPath.value, pdfDeck.active.value] as const,
+  ([path, ready]) => {
+    if (!keepNative || Date.now() > keepNative.until) return void (keepNative = null);
+    // O PDF antigo sai antes de o novo carregar: só então o modo pode voltar.
+    if (!ready) keepNative.unloaded = true;
+    if (!path || !ready || !keepNative.unloaded || path === keepNative.from) return;
+    keepNative = null;
+    void pptxNative.start(path, 0);
+  }
+);
+
+/** PowerPoint gerado de novo: o PDF novo entra no lugar, na mesma página. */
+function reprojectPowerPoint(pdf: string): void {
+  pdfDeck.openNextAtPage(pdfDeck.page.value);
+  projectPdf(pdf, liveTitle.value);
+}
+
 useSeriesRecorder(() => pathOf(liveOrigin.value));
 
 // Arquivos do programa que estão só na nuvem descem antes do culto.
-useProgramDownloads(() => [
+const programNeededPaths = () => [
   ...programFilePaths(program.value),
   ...program.value.sessions
     .flatMap((s) => s.items)
     .flatMap((i) => (i.kind === "folder" && i.folder ? folders.neededPathsOf(i.folder) : [])),
-]);
+];
+useProgramDownloads(programNeededPaths);
+
+/*
+ * Os PowerPoints do programa — itens, momentos e pastas (a de anúncios) — já
+ * convertem antes do culto: no meio da pasta, o passador não espera o PowerPoint.
+ * Não com o PowerPoint apresentando: a conversão usa o mesmo programa.
+ */
+const preparedPptx = new Set<string>();
+watch(
+  () => [programNeededPaths().filter(isPowerPoint), pptxNative.active.value] as const,
+  ([paths, presenting]) => {
+    if (presenting) return;
+    for (const p of paths) {
+      if (preparedPptx.has(p)) continue;
+      preparedPptx.add(p);
+      preparePowerPoint(p);
+    }
+  },
+  { immediate: true }
+);
 
 // PowerPoint no palco já começa a converter: na hora de mandar, o PDF está pronto.
 watch(stage.preview, (p) =>
