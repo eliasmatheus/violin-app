@@ -366,10 +366,18 @@ export async function openMediaWindow(
   );
 }
 
-/** O operador abre com qualquer mídia: ele troca a grade de slides pela prévia do vídeo. */
-async function _openOperatorIfEnabled(media: MediaKind): Promise<void> {
+/**
+ * A tela do operador é a superfície da MÚSICA: abre com a grade de slides
+ * quando a opção está ligada, e só nesse caminho.
+ *
+ * Imagem, PDF e vídeo não abrem a janela mesmo com a opção ativa — a abertura
+ * manual (menu do player e paleta de comandos) continua valendo para qualquer
+ * mídia. Ao sair da música para arquivo/vídeo, `closeMusicProjectionWindows`
+ * recolhe a janela.
+ */
+async function _openOperatorIfEnabled(): Promise<void> {
   if ($userdata.get(KEYS.OPTIONS.OPEN_OPERATOR, false) as boolean)
-    await openMediaWindow("operator", media);
+    await openMediaWindow("operator", "music");
 }
 
 /*
@@ -408,7 +416,7 @@ async function _openProjectionWindows(): Promise<void> {
     await isWindowOpen(PROJECTION_TYPE.RETURN)
   )
     await _close(PROJECTION_TYPE.RETURN);
-  await _openOperatorIfEnabled("music");
+  await _openOperatorIfEnabled();
 }
 
 export function openProjectionWindows(): Promise<void> {
@@ -437,7 +445,6 @@ export async function openFileProjectionWindows(): Promise<void> {
    */
   const returnOn = $userdata.get(KEYS.OPTIONS.FILE_PROJECTION.SHOW_RETURN, false) as boolean;
   if (await _wantsMediaReturn(returnOn)) await openMediaWindow("return", "file");
-  await _openOperatorIfEnabled("file");
 }
 
 /**
@@ -730,7 +737,6 @@ export async function openVideoProjectionWindows(): Promise<void> {
     false
   ) as boolean;
   if (await _wantsMediaReturn(returnOn)) await openMediaWindow("return", "video");
-  await _openOperatorIfEnabled("video");
 }
 
 /** A janela que mostra o vídeo on-line está aberta? Sem ela, o player embutido toca na principal. */
@@ -943,7 +949,12 @@ export async function closeFileProjectionWindows(): Promise<void> {
   ]);
 }
 
-/** Ao entrar arquivo/vídeo, remove as duas telas que ainda exibiriam a música anterior. */
+/**
+ * Ao entrar arquivo/vídeo, remove as telas que ainda exibiriam a música
+ * anterior — projeção, retorno e a tela do operador. A do operador é a
+ * superfície da música; sem isso ela ficaria aberta e vazia ("Aguardando
+ * música...") sobre a imagem ou o PDF que assumiu o telão.
+ */
 export async function closeMusicProjectionWindows(): Promise<void> {
   const generation = ++_musicWindowGeneration;
   if (_musicWindowOpenings.size) {
@@ -963,15 +974,21 @@ export async function closeMusicProjectionWindows(): Promise<void> {
     if (!settled) {
       void done.then(() => {
         if (generation === _musicWindowGeneration) {
-          void Promise.all([_close(PROJECTION_TYPE.MUSIC), _close(PROJECTION_TYPE.RETURN)]).catch(
-            () => {}
-          );
+          void Promise.all([
+            _close(PROJECTION_TYPE.MUSIC),
+            _close(PROJECTION_TYPE.RETURN),
+            _close(PROJECTION_TYPE.OPERATOR),
+          ]).catch(() => {});
         }
       });
     }
   }
   if (generation !== _musicWindowGeneration) return;
-  await Promise.all([_close(PROJECTION_TYPE.MUSIC), _close(PROJECTION_TYPE.RETURN)]);
+  await Promise.all([
+    _close(PROJECTION_TYPE.MUSIC),
+    _close(PROJECTION_TYPE.RETURN),
+    _close(PROJECTION_TYPE.OPERATOR),
+  ]);
 }
 
 export async function closeBibleWindows(): Promise<void> {

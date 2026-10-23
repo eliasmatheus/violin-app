@@ -161,8 +161,34 @@ describe("estado da janela comum", () => {
 describe("foco da tela do operador", () => {
   it("a factory mostra com foco quando pedido e não devolve o foco à main", () => {
     expect(FACTORY).toContain("focusOnOpen = false");
-    expect(FACTORY).toContain("mostrarComFoco ? () => win.show() : () => win.showInactive()");
+    expect(FACTORY).toContain("receberFoco = focusOnOpen || feature === OPERATOR_FEATURE");
+    expect(FACTORY).toContain('mostrarComFoco ? () => _trazerParaFrente(win) : () => win.showInactive()');
     expect(FACTORY).toContain("if (!mostrarComFoco) _refocusMainWindow();");
+  });
+
+  it("a feature decide o foco — um renderer antigo sem `focusOnOpen` não deixa o operador atrás", () => {
+    expect(FACTORY).toContain('const OPERATOR_FEATURE = "operador";');
+    expect(FACTORY).toContain("receberFoco = focusOnOpen || feature === OPERATOR_FEATURE");
+  });
+
+  it("ao REABRIR a janela, ela volta para a frente em vez de ficar atrás da principal", () => {
+    expect(FACTORY).toContain("trazerParaFrente = receberFoco && !backgroundWindows");
+    expect(FACTORY).toContain("if (!trazerParaFrente) _refocusMainWindow();");
+    expect(FACTORY).toContain("refocusMain: !trazerParaFrente");
+    expect(FACTORY).toContain("_trazerParaFrente(existing)");
+  });
+
+  it("o refocus da projeção não rouba o foco que o operador acabou de receber", () => {
+    /* A projeção termina de carregar depois; o refocus dela checa quem está com o foco
+       e também um pedido recente — o SO confirma o foco de forma assíncrona. */
+    expect(FACTORY).toContain("operador.isFocused()");
+    expect(FACTORY).toContain("_pedidoFocoOperadorEm");
+    expect(FACTORY).toContain("FOCO_OPERADOR_PROTEGIDO_MS");
+    /* `moveTop` sobe mesmo se o Windows negar o primeiro plano; o pulso de
+       alwaysOnTop força o foco sem deixá-lo para sempre. */
+    expect(FACTORY).toContain("win.moveTop()");
+    expect(FACTORY).toContain("win.setAlwaysOnTop(true)");
+    expect(FACTORY).toContain("win.setAlwaysOnTop(false)");
   });
 
   it("o renderer pede o foco só para o operador", () => {

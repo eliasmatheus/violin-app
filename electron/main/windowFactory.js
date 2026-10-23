@@ -26,6 +26,12 @@ const { resolverPosicaoJanela } = require("./windowState.js");
 const SITE_LOADER_FEATURES = ["site_loader", "site_loader_return"];
 
 /**
+ * Feature da tela do operador — a única janela auxiliar que recebe o foco ao
+ * abrir. Projeções apenas exibem e devolvem o foco à janela principal.
+ */
+const OPERATOR_FEATURE = "operador";
+
+/**
  * Traz as telas de loading de Site para o topo.
  *
  * A janela externa é mostrada DEPOIS do loader, e no Windows/Linux as duas
@@ -182,6 +188,18 @@ function _syncMainBackgroundThrottling() {
   }
 }
 
+/**
+ * Instante do último pedido de foco para a tela do operador.
+ *
+ * O refocus da principal é agendado 80 ms depois de cada janela auxiliar se
+ * mostrar. A projeção termina de carregar DEPOIS do operador (rota mais leve),
+ * então o pedido dela chegava por último e roubava o foco. `isFocused()` sozinho
+ * não basta: o SO confirma o foco de forma assíncrona, e a checagem pode cair
+ * antes disso. Por isso o pedido recente também protege.
+ */
+let _pedidoFocoOperadorEm = 0;
+const FOCO_OPERADOR_PROTEGIDO_MS = 600;
+
 /** Devolve o foco à janela principal (se viva) após abrir uma janela auxiliar. */
 function _refocusMainWindow() {
   if (backgroundWindows) return;
@@ -189,11 +207,55 @@ function _refocusMainWindow() {
   // Pequeno delay para o fullscreen/always-on-top "settle" primeiro.
   setTimeout(() => {
     try {
+      const operador = _openWindows.get(OPERATOR_FEATURE);
+      const focoDoOperador =
+        !!operador &&
+        !operador.isDestroyed() &&
+        (operador.isFocused() ||
+          Date.now() - _pedidoFocoOperadorEm < FOCO_OPERADOR_PROTEGIDO_MS);
+      if (focoDoOperador) return;
       if (_mainWindow && !_mainWindow.isDestroyed() && !_mainWindow.isMinimized()) {
         _mainWindow.focus();
       }
     } catch (_) { /* ignore */ }
   }, 80);
+}
+
+/**
+ * Sobe a janela na frente e garante o foco.
+ *
+ * `show()` já foca, mas o Windows pode negar o primeiro plano a uma janela
+ * aberta por IPC. `moveTop` sobe no z-order mesmo nesse caso; se ainda assim o
+ * foco não veio, um pulso curto de `alwaysOnTop` a força para a frente e o
+ * nível é devolvido para não cobrir a janela principal para sempre.
+ */
+function _trazerParaFrente(win) {
+  if (!win || win.isDestroyed()) return;
+  _pedidoFocoOperadorEm = Date.now();
+  try {
+    win.show();
+    win.moveTop();
+    win.focus();
+  } catch (_) {
+    /* sem foco ainda é melhor que escondida */
+  }
+  if (process.platform !== "win32") return;
+  setTimeout(() => {
+    if (!win || win.isDestroyed() || win.isFocused()) return;
+    try {
+      win.setAlwaysOnTop(true);
+      win.focus();
+      setTimeout(() => {
+        try {
+          if (!win.isDestroyed()) win.setAlwaysOnTop(false);
+        } catch (_) {
+          /* ignore */
+        }
+      }, 250);
+    } catch (_) {
+      /* ignore */
+    }
+  }, 120);
 }
 
 /**
@@ -350,6 +412,11 @@ function willLoad(feature, route) {
  *   operador no lugar do monitor configurado — ver o bloco de decisão abaixo.
  */
 function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = false, preloadPath, devUrl, prodHtmlPath, width, height, alwaysOnTop = false, showInTaskbar = true, devTools = null, focusOnOpen = false }) {
+  /*
+   * A feature também decide, e não só o campo que o renderer manda: um build
+   * antigo (sem `focusOnOpen`) não pode deixar o operador atrás da principal.
+   */
+  const receberFoco = focusOnOpen || feature === OPERATOR_FEATURE;
   // Se já existe janela para essa feature, mostra-a sem roubar o foco da main.
   //
   // Quando ela está escondida é porque o monitor dela sumiu e o `reconcile` a
@@ -365,17 +432,32 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
      * ainda assim). Ver `_garantirRota`.
      */
     _garantirRota(feature, route, { devUrl, prodHtmlPath });
+    /*
+     * A tela do operador é a única auxiliar que se põe na frente: reabrir a
+     * cada música precisa trazê-la de volta, não só "mostrar". `showInactive`
+     * deixa a janela atrás da principal e o `_refocusMainWindow` consolidaria
+     * isso — era a janela "abrindo por trás" que o operador via.
+     */
+    const trazerParaFrente = receberFoco && !backgroundWindows;
     if (existing.isVisible()) {
-      existing.showInactive();
+      if (trazerParaFrente) _trazerParaFrente(existing);
+      else existing.showInactive();
     } else {
       const alvo = _targetDisplay(feature, monitorId);
       if (!alvo) return null; // segue escondida
-      _placeOnDisplay(existing, alvo, _windowMeta.get(feature) || {});
+      /*
+       * `_placeOnDisplay` mostra inativa e agenda o refocus da principal. Aqui
+       * o foco é do operador: o refocus sai de cena e o foco vem depois.
+       */
+      _placeOnDisplay(existing, alvo, _windowMeta.get(feature) || {}, {
+        refocusMain: !trazerParaFrente,
+      });
+      if (trazerParaFrente) _trazerParaFrente(existing);
     }
     _syncAuxBackgroundThrottling(existing);
     _syncMainBackgroundThrottling();
     _syncPowerBlocker();
-    _refocusMainWindow();
+    if (!trazerParaFrente) _refocusMainWindow();
     return existing;
   }
 
@@ -706,11 +788,12 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
      * As demais janelas auxiliares (projeção, Canva) só exibem — o operador
      * segue na janela principal e não pode ser interrompido.
      */
-    const mostrarComFoco = focusOnOpen && !backgroundWindows;
-    _operationMeasurer("window.show", { feature }, mostrarComFoco ? () => win.show() : () => win.showInactive());
-    if (mostrarComFoco) {
-      try { win.focus(); } catch (_) { /* ignore */ }
-    }
+    const mostrarComFoco = receberFoco && !backgroundWindows;
+    _operationMeasurer(
+      "window.show",
+      { feature },
+      mostrarComFoco ? () => _trazerParaFrente(win) : () => win.showInactive()
+    );
     /*
      * No MESMO turno do `showInactive`: esperar o evento `show` dava quadros
      * do Canva por cima antes do empurrão chegar.
@@ -902,7 +985,7 @@ function _syncPowerBlocker() {
  * tamanho, e reposicionar pelo valor capturado na abertura deixaria a janela
  * maior que a tela.
  */
-function _placeOnDisplay(win, display, meta) {
+function _placeOnDisplay(win, display, meta, { refocusMain = true } = {}) {
   const isLin = process.platform === "linux";
 
   const apply = () => {
@@ -963,7 +1046,7 @@ function _placeOnDisplay(win, display, meta) {
       } else if (meta.useMacPresentationLevel) {
         win.setAlwaysOnTop(true, "screen-saver");
       }
-      _refocusMainWindow();
+      if (refocusMain) _refocusMainWindow();
     } catch (e) {
       console.warn("[windowFactory] Falha ao reposicionar janela:", e?.message || e);
     }
