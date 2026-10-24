@@ -2603,6 +2603,16 @@ function _telaLibreOffice(display) {
 ipcMain.handle("pptx:status", (_event, payload) => pptx.status(_pptxEngine(payload)));
 
 /**
+ * Abre o painel onde o macOS 27 deixa autorizar o acesso ao container do
+ * PowerPoint. Sem argumentos: o renderer não escolhe URL nem painel.
+ */
+ipcMain.handle("pptx:openPermissionSettings", () => {
+  if (process.platform !== "darwin") return { ok: false };
+  void shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders");
+  return { ok: true };
+});
+
+/**
  * Converte e devolve o caminho do PDF. Fica pendente durante a conversão
  * (segundos a alguns minutos); o andamento chega por `pptx:progress`.
  * O caminho é validado no `pptx/index.js` (extensão, existência, tamanho).
@@ -2872,15 +2882,20 @@ ipcMain.handle("files:convertPresentation", async (event, filePath, opts) => {
         fonts: r.fonts || [],
         staleFonts: !!r.staleFonts,
         fontsError: r.fontsError || "",
+        permissionFallback: !!r.permissionFallback,
         features: r.features || null,
       };
     }
     const code = r?.code;
-    return {
-      ok: false,
-      error: code === "no_converter" ? "unsupported" : code === "not_found" ? "not_found" : "conversion_failed",
-      message: r?.message || "",
-    };
+    const erro =
+      code === "no_converter"
+        ? "unsupported"
+        : code === "not_found"
+          ? "not_found"
+          : code === "mac_permission"
+            ? "mac_permission"
+            : "conversion_failed";
+    return { ok: false, error: erro, message: r?.message || "" };
   } catch (e) {
     return { ok: false, error: "conversion_failed", message: String(e?.message || e).slice(0, 300) };
   }

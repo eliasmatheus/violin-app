@@ -38,6 +38,12 @@ describe("pptxImport", () => {
     });
     expect(falha).toEqual({ ok: false, code: "no_converter", message: "Instale o LibreOffice" });
     expect(parseConvertResult(null).ok).toBe(false);
+    const comFallback = parseConvertResult({
+      ok: true,
+      path: "/dados/files/pptx/a.pdf",
+      permissionFallback: true,
+    });
+    expect(comFallback).toMatchObject({ ok: true, permissionFallback: true });
   });
 
   it("lista as fontes que continuam faltando", () => {

@@ -55,6 +55,7 @@ export function parseConvertResult(raw: unknown): PptxConvertResult {
       fontsError: typeof r.fontsError === "string" ? r.fontsError : "",
       features: parseFeatures(r.features),
       nativeAvailable: r.nativeAvailable === true,
+      permissionFallback: r.permissionFallback === true,
     };
   }
   const fail = r as { code?: unknown; message?: unknown } | null;
@@ -124,6 +125,8 @@ export interface PptxImportState {
   slidesTotal?: number;
   /** A conferência das fontes falhou: o motivo, para o operador ver. */
   fontsError?: string;
+  /** O macOS bloqueou o container do PowerPoint: mostra "Abrir Ajustes"/"Tentar de novo". */
+  macPermission?: boolean;
   /** id do item já salvo na biblioteca, para "Projetar agora". */
   fileId?: string;
   /** Animações/mídias do arquivo e se dá para usar o modo nativo aqui. */

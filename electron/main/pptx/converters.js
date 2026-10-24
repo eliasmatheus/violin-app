@@ -32,6 +32,60 @@ const MAC_PPT_APP = "/Applications/Microsoft PowerPoint.app";
 /** O PowerPoint do Mac roda em sandbox: só lê/grava sem pedir permissão dentro do próprio container. */
 const MAC_PPT_CONTAINER = path.join(os.homedir(), "Library", "Containers", "com.microsoft.Powerpoint", "Data");
 
+/**
+ * O macOS 27 (Golden Gate) deixou de perguntar e passou a negar, por padrão, o
+ * acesso ao container de outro app. Sem a permissão em Ajustes → Privacidade e
+ * Segurança → Arquivos e Pastas, o `mkdir` falha com EPERM/Operation not permitted.
+ */
+const MAC_PERMISSION_MESSAGE =
+  "O macOS bloqueou o acesso do LouvorJA à pasta do PowerPoint. Abra Ajustes do Sistema → " +
+  "Privacidade e Segurança → Arquivos e Pastas, procure o LouvorJA (ou Electron, no modo " +
+  "de desenvolvimento) e permita o acesso ao Microsoft PowerPoint. Depois clique em Tentar de novo.";
+
+/** O erro veio da proteção de container do macOS? */
+function isPermissionError(e) {
+  const code = e && (e.code || e.errno);
+  if (code === "EPERM" || code === "EACCES" || code === 1 || code === 13) return true;
+  return /operation not permitted|permission denied|não permitido|sem permissão/i.test(
+    String((e && e.message) || "")
+  );
+}
+
+function macPermissionError() {
+  const err = new Error(MAC_PERMISSION_MESSAGE);
+  err.code = "mac_permission";
+  return err;
+}
+
+/**
+ * Confere se o PowerPoint do Mac consegue usar a pasta de trabalho.
+ *
+ * A pasta fica dentro do container do PowerPoint para ele ler e gravar sem
+ * pedir "Conceder acesso" a cada arquivo. No macOS 27, porém, o próprio
+ * LouvorJA precisa de permissão para entrar nesse container; a sonda detecta
+ * isso antes de qualquer trabalho pesado.
+ *
+ * @param {{tempDir?: string}} [opts]
+ * @returns {Promise<{ok: true, base: string} | {ok: false, permission: boolean, base?: string}>}
+ */
+async function macStagingDisponivel(opts = {}) {
+  const base = _existe(MAC_PPT_CONTAINER)
+    ? path.join(MAC_PPT_CONTAINER, "tmp", "louvorja")
+    : opts.tempDir;
+  if (!base) return { ok: false, permission: false };
+  try {
+    await fs.mkdir(base, { recursive: true });
+    // `mkdir` pode passar quando a pasta já existe; a sonda confirma a escrita.
+    const probe = path.join(base, `.lj-write-${process.pid}-${Date.now()}`);
+    await fs.writeFile(probe, "");
+    await fs.unlink(probe).catch(() => {});
+    return { ok: true, base };
+  } catch (e) {
+    if (isPermissionError(e)) return { ok: false, permission: true, base };
+    throw e;
+  }
+}
+
 function _exec(cmd, args, timeoutMs) {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
@@ -87,6 +141,22 @@ async function _windowsHasPowerPoint() {
 
 /** Programas que o operador pode escolher em Opções. */
 const ENGINES = ["auto", "powerpoint", "libreoffice"];
+
+/**
+ * Depois de o macOS negar o container do PowerPoint, decide o que fazer.
+ * No modo "auto" cai para o LibreOffice; escolhido "powerpoint", o operador
+ * recebe a explicação em vez de uma troca silenciosa.
+ * @param {{id: string, label?: string}} converter
+ * @param {string} engine
+ * @param {string|null} soffice
+ */
+function planoAposBloqueio(converter, engine, soffice) {
+  if (converter.id !== "powerpoint") return { converter, fallback: false };
+  if (engine === "auto" && soffice) {
+    return { converter: { id: "libreoffice", label: "LibreOffice", soffice }, fallback: true };
+  }
+  return { converter: null, fallback: false, permission: true };
+}
 
 /**
  * Qual programa vai gerar/apresentar, respeitando a escolha do operador.
@@ -214,16 +284,21 @@ async function _macPowerPoint(input, output, opts) {
   // Igual ao Windows: cada slide vira PNG e o PDF é montado aqui.
   // Copia para dentro do container do PowerPoint: fora dele o macOS pede
   // "Conceder acesso" a cada arquivo novo e a automação fica parada esperando.
-  const base = _existe(MAC_PPT_CONTAINER) ? path.join(MAC_PPT_CONTAINER, "tmp", "louvorja") : opts.tempDir;
-  await fs.mkdir(base, { recursive: true });
+  // O `index.js` já confere a permissão; a checagem aqui cobre chamadas diretas
+  // e o caso de a permissão ser revogada no meio do caminho.
+  const staging = opts.stagingBase
+    ? { ok: true, base: opts.stagingBase }
+    : await macStagingDisponivel(opts);
+  if (!staging.ok) throw macPermissionError();
+  const base = staging.base;
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const tmpIn = path.join(base, `${id}${path.extname(input).toLowerCase()}`);
   const tmpOut = path.join(base, `${id}-slides`);
   const tmpPdf = path.join(base, `${id}.pdf`);
   const desde = Date.now() - 1000;
-  await fs.copyFile(input, tmpIn);
   const log = typeof opts.log === "function" ? opts.log : () => {};
   try {
+    await fs.copyFile(input, tmpIn);
     const out = await _exec("osascript", ["-e", MAC_SCRIPT, tmpIn, tmpOut, opts.fontsChanged ? "1" : "0"], 10 * 60 * 1000);
     // O nome da pasta muda conforme a versão do PowerPoint: "<id>-slides/Slide1.png",
     // "<id>/Slide1.png" ou "<id>-slides.png". Tudo que começa com o id é desta conversão;
@@ -247,6 +322,13 @@ async function _macPowerPoint(input, output, opts) {
     await fs.copyFile(tmpPdf, output);
     return { staleFonts: out.trim() === "1", pdfText: true };
   } catch (e) {
+    if (e && e.code === "mac_permission") throw e;
+    // Só trata como bloqueio do container o erro que aconteceu dentro dele.
+    // Um EPERM ao gravar o PDF final é problema da pasta de dados, não do macOS.
+    const alvo = String((e && e.path) || "");
+    const destino = String((e && e.dest) || "");
+    const noContainer = !alvo || alvo.startsWith(base) || destino.startsWith(base);
+    if (isPermissionError(e) && noContainer) throw macPermissionError();
     if (/-1743|not authori[sz]ed|não autorizado/i.test(e.message)) {
       throw new Error(
         "O macOS bloqueou o controle do PowerPoint. Abra Ajustes do Sistema → Privacidade e Segurança → Automação e permita o LouvorJA controlar o Microsoft PowerPoint."
@@ -338,4 +420,16 @@ async function convertToPdf(converter, input, output, opts) {
   throw new Error("Nenhum conversor disponível.");
 }
 
-module.exports = { detectConverter, convertToPdf, findSoffice, ENGINES, MAC_SCRIPT, SLIDE_WIDTH_PX };
+module.exports = {
+  detectConverter,
+  convertToPdf,
+  findSoffice,
+  isPermissionError,
+  macStagingDisponivel,
+  macPermissionError,
+  planoAposBloqueio,
+  MAC_PERMISSION_MESSAGE,
+  ENGINES,
+  MAC_SCRIPT,
+  SLIDE_WIDTH_PX,
+};

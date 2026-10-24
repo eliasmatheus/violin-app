@@ -40,8 +40,35 @@ conversão segue e o operador é avisado (o PDF não entra no cache).
 
 No macOS o PowerPoint roda em sandbox: o arquivo é copiado para o container
 dele antes de abrir, senão o sistema pede "Conceder acesso" a cada arquivo. Na
-primeira vez o macOS pergunta se o LouvorJA pode controlar o PowerPoint
-(Ajustes → Privacidade e Segurança → Automação).
+primeira vez o macOS também pede autorização para o LouvorJA controlar o
+PowerPoint (Ajustes → Privacidade e Segurança → Automação).
+
+### macOS 27+: permissão para o container do PowerPoint
+
+Até o macOS 26, ao tentar entrar no container de outro app o sistema abria um
+diálogo ("… würde like to access data from other apps"). No **macOS 27** esse
+acesso passou a ser **negado por padrão, sem prompt**: o `mkdir` em
+`~/Library/Containers/com.microsoft.Powerpoint/Data/tmp/louvorja` falha com
+`EPERM: operation not permitted`.
+
+O LouvorJA detecta isso antes de abrir o PowerPoint e:
+
+- com o motor em **Automático**, usa o LibreOffice (se instalado) e avisa o
+  operador de que a fidelidade do PowerPoint depende da permissão;
+- com **PowerPoint** escolhido nas Opções, mostra a explicação e os botões
+  **Abrir Ajustes** e **Tentar de novo** na janela de importação.
+
+Para liberar: **Ajustes do Sistema → Privacidade e Segurança → Arquivos e
+Pastas**, localize o LouvorJA (no modo de desenvolvimento pode aparecer como
+**Electron**) e permita o acesso ao **Microsoft PowerPoint**. O painel só lista
+o app depois de uma tentativa de leitura/gravação — a própria importação que
+falhou já registra. A permissão fica ligada à assinatura do app; builds de
+desenvolvimento com assinatura ad-hoc podem pedir de novo a cada rebuild.
+
+> A permissão é para o **container** do PowerPoint, não para o arquivo .pptx
+> escolhido. Exportar o PDF manualmente (PowerPoint → Arquivo → Exportar) e
+> importar o PDF continua sendo a alternativa quando não se quer conceder o
+> acesso.
 
 ### Por que imagens, e não o PDF do PowerPoint
 
@@ -80,7 +107,8 @@ apagam.
 | `electron/main/pptx/windowsScript.js`     | script PowerShell (fontes + COM)                    |
 | `src/modules/media_library/pptxImport.ts` | validação da resposta e textos de andamento         |
 
-IPC: `pptx:status`, `pptx:convert` (`{ path }`) e o evento `pptx:progress`.
+IPC: `pptx:status`, `pptx:convert` (`{ path }`), `pptx:openPermissionSettings`
+(abre Arquivos e Pastas no macOS) e o evento `pptx:progress`.
 O caminho é validado no main (extensão, existência, tamanho).
 
 ## Modo nativo: animações, vídeos e áudios

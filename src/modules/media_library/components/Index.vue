@@ -342,6 +342,8 @@
         @project-native="projetarImportadoNativo"
         @install-font="instalarFonteManual"
         @drop-fonts="instalarFontesArrastadas"
+        @open-permission-settings="abrirAjustesPermissao"
+        @retry="tentarImportarDeNovo"
       />
 
       <!-- Rename dialog -->
@@ -1114,6 +1116,9 @@ const backgroundTasks = useBackgroundTasks();
 /** Janela de andamento do PowerPoint sendo preparado (null = fechada). */
 const importacao = ref<PptxImportState | null>(null);
 
+/** Última importação, para "Tentar de novo" depois de autorizar o macOS. */
+let retryImportacao: (() => void) | null = null;
+
 /**
  * Converte o .pptx num PDF fiel e guarda o PDF na biblioteca, com o nome do
  * arquivo original. A conversão roda no main (fontes + PowerPoint/LibreOffice)
@@ -1137,6 +1142,7 @@ async function importPowerPoint(
   const taskId = "pptx-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
   backgroundTasks.registerTask(taskId, tm("pptx.task", { name }));
   importacao.value = { name, path: filePath, phase: "fonts", converter: "", fonts: [], error: "" };
+  retryImportacao = () => void importPowerPoint(filePath, name, categoryId, substituir);
   const daJanela = () => importacao.value?.path === filePath;
   const off = api.onProgress((p) => {
     if (!p || p.path !== filePath) return;
@@ -1146,17 +1152,34 @@ async function importPowerPoint(
   });
   try {
     // Gerar de novo (substituir) sempre converte; importar usa o que já estiver pronto.
-    const result = parseConvertResult(await api.convert(filePath, !!substituir, motorApresentacao()));
+    const result = parseConvertResult(
+      await api.convert(filePath, !!substituir, motorApresentacao())
+    );
     if (!result.ok) {
-      backgroundTasks.updateTask(taskId, { status: "error", error: result.message });
+      const macPermission = result.code === "mac_permission";
+      const mensagem = macPermission ? tm("pptx.permission_denied") : result.message;
+      backgroundTasks.updateTask(taskId, { status: "error", error: mensagem });
       if (daJanela() && importacao.value) {
-        importacao.value = { ...importacao.value, phase: "error", error: result.message };
+        importacao.value = {
+          ...importacao.value,
+          phase: "error",
+          error: mensagem,
+          macPermission,
+        };
       } else {
-        $alert.error({ text: tm("pptx.failed", { message: result.message }), translate: false });
+        $alert.error({
+          text: macPermission
+            ? tm("pptx.permission_denied")
+            : tm("pptx.failed", { message: result.message }),
+          translate: false,
+        });
       }
       return null;
     }
     backgroundTasks.completeTask(taskId);
+    if (result.permissionFallback) {
+      $alert.info({ text: tm("pptx.permission_fallback"), translate: false });
+    }
     const pptx = {
       source: filePath,
       fonts: result.fonts,
@@ -1230,6 +1253,16 @@ async function importPowerPoint(
   } finally {
     off();
   }
+}
+
+/** Abre o painel de permissões do macOS (Arquivos e Pastas). */
+function abrirAjustesPermissao(): void {
+  void (Platform.api as LouvorjaApi | null)?.pptx?.openPermissionSettings?.();
+}
+
+/** Repete a importação depois de o operador autorizar o macOS. */
+function tentarImportarDeNovo(): void {
+  retryImportacao?.();
 }
 
 /** "Projetar agora" da janela de importação. */
@@ -1334,8 +1367,15 @@ const painelNativo = computed(() => {
   if (!pptx && !nativoAtivo.value) return null;
   return {
     // Vale o que este PC tem com o programa escolhido; antes da resposta, o que o item guardou.
-    available: !!pptx?.source && (nativoConferido.value ? nativoNestePc.value : pptx.nativeAvailable === true),
-    app: nativo.value.engine === "libreoffice" ? "LibreOffice" : nativo.value.engine === "powerpoint" ? "PowerPoint" : programaNativo.value,
+    available:
+      !!pptx?.source &&
+      (nativoConferido.value ? nativoNestePc.value : pptx.nativeAvailable === true),
+    app:
+      nativo.value.engine === "libreoffice"
+        ? "LibreOffice"
+        : nativo.value.engine === "powerpoint"
+          ? "PowerPoint"
+          : programaNativo.value,
     active: nativoAtivo.value,
     black: !!nativo.value.black,
     busy: nativoAbrindo.value,
@@ -1488,7 +1528,10 @@ async function iniciarNativo(file: MediaFile | null | undefined): Promise<void> 
   } catch (error) {
     palco.value = null;
     const message = (error as Error)?.message || String(error);
-    $alert.error({ text: tm("pptx.native_failed", { app: programaNativo.value, message }), translate: false });
+    $alert.error({
+      text: tm("pptx.native_failed", { app: programaNativo.value, message }),
+      translate: false,
+    });
   } finally {
     nativoAbrindo.value = false;
   }

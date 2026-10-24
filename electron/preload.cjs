@@ -359,6 +359,8 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
    */
   pptx: {
     status: (engine) => ipcRenderer.invoke("pptx:status", { engine }),
+    /** Abre Ajustes → Privacidade e Segurança → Arquivos e Pastas (macOS 27+). */
+    openPermissionSettings: () => ipcRenderer.invoke("pptx:openPermissionSettings"),
     /** Pendente durante a conversão; devolve `{ ok, path }` ou `{ ok: false, code, message }`. */
     /** `force`: ignora o PDF guardado ("Gerar de novo"). */
     convert: (path, force, engine) => ipcRenderer.invoke("pptx:convert", { path, force: force === true, engine }),

@@ -85,9 +85,17 @@
           {{ tm("pptx.open_presentation") }}
         </LjButton>
       </template>
-      <LjButton v-else-if="state?.phase === 'error'" size="sm" @click="emit('close')">
-        {{ tm("pptx.close") }}
-      </LjButton>
+      <template v-else-if="state?.phase === 'error'">
+        <template v-if="state.macPermission">
+          <LjButton size="sm" variant="subtle" @click="emit('openPermissionSettings')">
+            {{ tm("pptx.open_settings") }}
+          </LjButton>
+          <LjButton size="sm" variant="primary" @click="emit('retry')">
+            {{ tm("pptx.retry") }}
+          </LjButton>
+        </template>
+        <LjButton size="sm" @click="emit('close')">{{ tm("pptx.close") }}</LjButton>
+      </template>
       <LjButton v-else size="sm" @click="emit('close')">{{ tm("pptx.background") }}</LjButton>
     </template>
   </LjDialog>
@@ -117,6 +125,8 @@ const emit = defineEmits<{
   projectNative: [];
   installFont: [];
   dropFonts: [files: File[]];
+  openPermissionSettings: [];
+  retry: [];
 }>();
 
 /** A janela fica num portal: soltar a fonte aqui não chega ao drop da biblioteca. */

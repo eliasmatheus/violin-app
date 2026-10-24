@@ -105,6 +105,8 @@ declare global {
         features?: PptxFeatures;
         /** Este computador pode "Apresentar com o PowerPoint" (Windows + PowerPoint). */
         nativeAvailable?: boolean;
+        /** O macOS bloqueou o PowerPoint e a conversão caiu para o LibreOffice. */
+        permissionFallback?: boolean;
       }
     | { ok: false; code: string; message: string };
 
@@ -318,6 +320,7 @@ declare global {
             fonts?: PptxFont[];
             staleFonts?: boolean;
             fontsError?: string;
+            permissionFallback?: boolean;
             features?: PptxFeatures | null;
           }
         | { ok: false; error: string; message?: string }
@@ -500,6 +503,8 @@ declare global {
         platform: string;
         native?: boolean;
       }>;
+      /** Abre Ajustes → Privacidade e Segurança → Arquivos e Pastas (macOS 27+). */
+      openPermissionSettings: () => Promise<{ ok: boolean }>;
       /** Pendente durante a conversão (segundos a alguns minutos). */
       convert: (path: string, force?: boolean, engine?: "auto" | "powerpoint" | "libreoffice") => Promise<PptxConvertResult>;
       /** Diálogo nativo de fontes (.ttf/.otf); instala para o usuário. */

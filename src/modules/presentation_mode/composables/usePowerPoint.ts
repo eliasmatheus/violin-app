@@ -144,8 +144,13 @@ export function loadPowerPointInfo(path: string): void {
 export async function regeneratePowerPoint(path: string, name: string): Promise<string | null> {
   const res = await convert(path, { force: true });
   if (res?.ok) return res.pdf;
-  $snackbar.error(tm("failed", { name }), { timeout: 8000 });
+  $snackbar.error(tm(chaveDoErro(res?.error), { name }), { timeout: 8000 });
   return null;
+}
+
+/** Mensagem localizada para a falha de conversão (o main só manda o código). */
+function chaveDoErro(error: string | undefined): "unsupported" | "mac_permission" | "failed" {
+  return error === "unsupported" || error === "mac_permission" ? error : "failed";
 }
 
 export function isPowerPoint(path: string): boolean {
@@ -180,6 +185,9 @@ export async function powerPointAsPdf(path: string, name: string): Promise<strin
   }
   const res = await convertNamed(path, name);
   if (res?.ok) {
+    if (res.permissionFallback) {
+      $snackbar.warning(tm("permission_fallback", { name }), { timeout: 10000 });
+    }
     // Fonte que não deu para instalar sozinha: o slide sai, mas com outra letra.
     const faltam = (res as { missingFonts?: unknown }).missingFonts;
     if (Array.isArray(faltam) && faltam.length) {
@@ -189,8 +197,6 @@ export async function powerPointAsPdf(path: string, name: string): Promise<strin
   }
   const error = res?.error ?? "exception";
   Telemetry.track("presentation_pptx_failed", { error });
-  $snackbar.error(tm(error === "unsupported" ? "unsupported" : "failed", { name }), {
-    timeout: 8000,
-  });
+  $snackbar.error(tm(chaveDoErro(error), { name }), { timeout: 8000 });
   return null;
 }

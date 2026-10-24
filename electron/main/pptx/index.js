@@ -31,7 +31,15 @@ const { readFontNames } = require("./fontFiles.js");
 const { GoogleFontsSource } = require("./googleFonts.js");
 const { renameFont } = require("./fontRename.js");
 const { SystemFonts } = require("./systemFonts.js");
-const { detectConverter, convertToPdf } = require("./converters.js");
+const {
+  detectConverter,
+  convertToPdf,
+  findSoffice,
+  isPermissionError,
+  macStagingDisponivel,
+  planoAposBloqueio,
+  MAC_PERMISSION_MESSAGE,
+} = require("./converters.js");
 const { NativeShow } = require("./nativeShow.js");
 
 /** Extensões aceitas. Só as baseadas em ZIP (OOXML) têm leitura de fontes. */
@@ -247,8 +255,8 @@ async function ensureFonts(file, onProgress, log) {
 
 /**
  * @typedef {{name: string, status: "ok"|"office"|"embedded"|"installed"|"missing"|"unmatched", source: string|null}} PptxFont
- * @typedef {{ok: true, path: string, cached: boolean, converter: string, fonts: PptxFont[], staleFonts: boolean}
- *   | {ok: false, code: string, message: string}} PptxResult
+ * @typedef {{ok: true, path: string, cached: boolean, converter: string, fonts: PptxFont[], staleFonts: boolean,
+ *   permissionFallback?: boolean} | {ok: false, code: string, message: string}} PptxResult
  */
 
 /**
@@ -269,7 +277,7 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log, for
   if (!v.ok) return v;
   const { file } = v;
 
-  const converter = await detectConverter(process.platform, engine);
+  let converter = await detectConverter(process.platform, engine);
   if (!converter.id) {
     return {
       ok: false,
@@ -290,7 +298,6 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log, for
       /* só informativo */
     }
   }
-  const nativeAvailable = await _nativeSupported(converter);
 
   onProgress({ phase: "fonts" });
   let report = { items: [], installed: 0, embedded: false };
@@ -308,30 +315,59 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log, for
   const outDir = _outDir();
   await fs.mkdir(outDir, { recursive: true });
   const hash = (await _sha1File(file)).slice(0, 16);
-  const base = `${hash}-${_signature(report.items)}-${converter.id}-v${CACHE_VERSION}`;
-  const pdf = path.join(outDir, `${base}.pdf`);
-  const meta = path.join(outDir, `${base}.json`);
+  const signature = _signature(report.items);
+  const cacheFor = (conv) => {
+    const name = `${hash}-${signature}-${conv.id}-v${CACHE_VERSION}`;
+    return { name, pdf: path.join(outDir, `${name}.pdf`), meta: path.join(outDir, `${name}.json`) };
+  };
+  const cached = (paths) => !force && fss.existsSync(paths.pdf) && fss.existsSync(paths.meta);
+  let cache = cacheFor(converter);
+  let nativeAvailable = await _nativeSupported(converter);
+  let stagingBase;
+  let permissionFallback = false;
+
+  const cachedResult = (paths, extra = {}) => ({
+    ok: true,
+    path: paths.pdf,
+    cached: true,
+    converter: converter.label,
+    fonts: report.items,
+    staleFonts: false,
+    fontsError,
+    features,
+    nativeAvailable,
+    ...extra,
+  });
+
   // force = "Gerar de novo": o operador pediu outra conversão, não o que já está guardado.
-  if (!force && fss.existsSync(pdf) && fss.existsSync(meta)) {
-    return {
-      ok: true,
-      path: pdf,
-      cached: true,
-      converter: converter.label,
-      fonts: report.items,
-      staleFonts: false,
-      fontsError,
-      features,
-      nativeAvailable,
-    };
+  // O cache vale antes da permissão: um PDF já gerado continua abrindo sem tocar
+  // no container do PowerPoint.
+  if (cached(cache)) return cachedResult(cache);
+
+  if (process.platform === "darwin" && converter.id === "powerpoint") {
+    const staging = await macStagingDisponivel({ tempDir: _tempDir() });
+    if (!staging.ok) {
+      const plano = planoAposBloqueio(converter, engine, findSoffice("darwin"));
+      if (!plano.converter) {
+        return { ok: false, code: "mac_permission", message: MAC_PERMISSION_MESSAGE };
+      }
+      converter = plano.converter;
+      cache = cacheFor(converter);
+      nativeAvailable = await _nativeSupported(converter);
+      permissionFallback = plano.fallback;
+      if (cached(cache)) return cachedResult(cache, { permissionFallback: true });
+    } else {
+      stagingBase = staging.base;
+    }
   }
 
   onProgress({ phase: "converting", converter: converter.label });
   // termina em .pdf: o PowerPoint acrescenta ".pdf" a um nome com outra extensão
-  const tmp = path.join(outDir, `${base}.${process.pid}.tmp.pdf`);
+  const tmp = path.join(outDir, `${cache.name}.${process.pid}.tmp.pdf`);
   try {
     const r = await convertToPdf(converter, file, tmp, {
       tempDir: _tempDir(),
+      stagingBase,
       fontsChanged: report.installed > 0,
       withWindow: report.embedded,
       log,
@@ -343,18 +379,18 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log, for
     await fd.read(head, 0, 5, 0);
     await fd.close();
     if (head.toString("latin1") !== "%PDF-") throw new Error("O arquivo gerado não é um PDF.");
-    await fs.rename(tmp, pdf);
+    await fs.rename(tmp, cache.pdf);
     // Com o PowerPoint ocupado, as fontes novas podem não ter entrado: não guarda no cache.
     if (!r.staleFonts) {
       await fs.writeFile(
-        meta,
+        cache.meta,
         JSON.stringify({ source: path.basename(file), converter: converter.id, fonts: report.items, createdAt: Date.now() })
       );
     }
     onProgress({ phase: "done" });
     return {
       ok: true,
-      path: pdf,
+      path: cache.pdf,
       cached: false,
       converter: converter.label,
       fonts: report.items,
@@ -362,10 +398,14 @@ async function _convert(rawPath, { onProgress = () => {}, log = console.log, for
       fontsError,
       features,
       nativeAvailable,
+      permissionFallback,
     };
   } catch (e) {
     fs.unlink(tmp).catch(() => {});
     log("[pptx] conversão falhou:", e.message);
+    if (e?.code === "mac_permission" || isPermissionError(e)) {
+      return { ok: false, code: "mac_permission", message: MAC_PERMISSION_MESSAGE };
+    }
     return { ok: false, code: "convert_failed", message: String(e.message || e).slice(0, 600) };
   }
 }
