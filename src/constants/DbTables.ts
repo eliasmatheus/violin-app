@@ -12,11 +12,9 @@ export const DB_NAME = "louvorja-violin";
  *          modo apresentação, "presentation_mode.programs" (programas do culto no navegador)
  * v3 → v4: "presentation_mode.online" (vídeos, playlists e canais favoritos) e
  *          "presentation_mode.online_cache" (primeira página de cada playlist/canal)
- * v4 → v5: "presentation_mode.models" (modelos de culto sem pasta da igreja)
- * v5 → v6: junção das duas linhas — quem já estava em v3 (main) ou v5 (modo
- *          apresentação) ganha as tabelas que faltam
+ *          "presentation_mode.models" (modelos de culto sem pasta da igreja)
  */
-export const DB_VERSION = 6;
+export const DB_VERSION = 4;
 
 /**
  * Nomes de todas as tabelas do banco IndexedDB unificado `louvorja`.
