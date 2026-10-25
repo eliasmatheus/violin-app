@@ -176,6 +176,15 @@ describe("foco da tela do operador", () => {
     expect(FACTORY).toContain("if (!trazerParaFrente) _refocusMainWindow();");
     expect(FACTORY).toContain("refocusMain: !trazerParaFrente");
     expect(FACTORY).toContain("_trazerParaFrente(existing)");
+    /* Minimizada não volta com show(). */
+    expect(FACTORY).toContain("if (win.isMinimized()) win.restore();");
+  });
+
+  it("o mínimo da janela comum é o mesmo que o módulo de estado aceita", () => {
+    /* Sem minWidth/minHeight o usuário encolhia além do mínimo, o estado era
+       descartado e a próxima abertura vinha maximizada. */
+    expect(FACTORY).toContain("minWidth: LARGURA_MINIMA");
+    expect(FACTORY).toContain("minHeight: ALTURA_MINIMA");
   });
 
   it("o refocus da projeção não rouba o foco que o operador acabou de receber", () => {

@@ -14,7 +14,7 @@ const powerBlocker = require("./powerBlocker.js");
 const { createWindowCloseGate, DEFAULT_CLOSE_ACK_TIMEOUT_MS } = require("./windowCloseGate.js");
 const { backgroundWindows, prepareWindow } = require("./e2eWindowMode.js");
 const { isExternalRoute, loadTargetFor, webPreferencesFor } = require("./windowRoute.js");
-const { resolverPosicaoJanela } = require("./windowState.js");
+const { resolverPosicaoJanela, LARGURA_MINIMA, ALTURA_MINIMA } = require("./windowState.js");
 
 /**
  * Features da tela de loading da projeção de Site.
@@ -233,6 +233,8 @@ function _trazerParaFrente(win) {
   if (!win || win.isDestroyed()) return;
   _pedidoFocoOperadorEm = Date.now();
   try {
+    /* Minimizada não volta com `show()`: restaurar antes de focar. */
+    if (win.isMinimized()) win.restore();
     win.show();
     win.moveTop();
     win.focus();
@@ -499,13 +501,23 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
    */
   /* Site em janela (preferência do usuário) não entra: não é janela do app. */
   const janelaComEstado = !fullscreen && !isExternal;
+  /*
+   * Área útil, não bounds: o padrão (800×600 antes de maximizar) não deve
+   * nascer atrás da barra de menu do macOS nem da barra de tarefas.
+   */
+  const areaPadrao = target.workArea || target.bounds;
   const colocacao = !janelaComEstado
     ? null
     : resolverPosicaoJanela({
         estado: _windowStateStore ? _windowStateStore.get(feature) : null,
         displayDestino: target,
         displays: displays.connected(),
-        padrao: { x: bounds.x, y: bounds.y, width: width || 800, height: height || 600 },
+        padrao: {
+          x: areaPadrao.x,
+          y: areaPadrao.y,
+          width: width || 800,
+          height: height || 600,
+        },
       });
   const boundsJanela = colocacao?.bounds || {
     x: bounds.x,
@@ -519,6 +531,12 @@ function _openOnMonitor({ route, feature, monitorId, fullscreen = true, frame = 
     y: boundsJanela.y,
     width: boundsJanela.width,
     height: boundsJanela.height,
+    /*
+     * O estado da janela comum é descartado abaixo destes mínimos — sem
+     * `minWidth/minHeight` o usuário podia encolher além deles e, na próxima
+     * abertura, a janela "perdia" o tamanho salvo e nascia maximizada.
+     */
+    ...(janelaComEstado ? { minWidth: LARGURA_MINIMA, minHeight: ALTURA_MINIMA } : {}),
     fullscreen: false,
     kiosk: useMacPrimaryKiosk,
     frame,
