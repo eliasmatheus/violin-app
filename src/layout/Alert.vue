@@ -9,6 +9,7 @@
           role="alertdialog"
           aria-modal="true"
           tabindex="-1"
+          @keydown="onKeydown"
         >
           <header v-if="alert.title" class="alert-header">
             <LjIcon :icon="iconForVariant" size="20" class="alert-header-icon" />
@@ -46,6 +47,7 @@
               type="button"
               class="alert-btn"
               :class="`alert-btn--${btn.color || 'default'}`"
+              :data-alert-btn="index"
               @click="clickBtn(btn.value)"
             >
               {{ $t(btn.text) }}
@@ -71,8 +73,9 @@ const box = ref(null);
 
 // O foco tem de entrar na caixa assim que ela abre: no prompt, o campo é o
 // primeiro elemento e sem isso o usuário não consegue digitar sem clicar antes.
-// Sem campo, o foco fica na própria caixa e NÃO no primeiro botão: um alerta de
-// confirmação abriria com a ação já armada, e um Enter reflexo a dispararia.
+// Sem campo, o foco fica na própria caixa e não num botão; o Enter, aí, vai no
+// último botão (ver onKeydown) — é o "Esc, Enter" que o sonoplasta usa para
+// fechar o hino, como no LouvorJA clássico.
 watch(show, (visible) => {
   if (!visible) return;
   nextTick(() => {
@@ -97,6 +100,39 @@ const iconForVariant = computed(() => {
   };
   return map[variant.value] || ICONS.UI.INFORMATION_OUTLINE;
 });
+
+/*
+ * Teclado na pergunta, como no LouvorJA clássico: as setas (e o Tab) andam
+ * entre os botões, o Enter confirma o botão escolhido e o Esc fica com a
+ * primeira opção ("Não"). Sem botão escolhido, o Enter vai no último — o "Sim"
+ * da pergunta de fechar o slide: Esc e depois Enter fecham o hino.
+ */
+function onKeydown(event) {
+  const buttons = [...(box.value?.querySelectorAll("[data-alert-btn]") ?? [])];
+  if (!buttons.length) return;
+  const typing = event.target?.tagName === "INPUT" || event.target?.tagName === "TEXTAREA";
+  const current = buttons.indexOf(document.activeElement);
+  const move = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+  if (move && !typing) {
+    event.preventDefault();
+    event.stopPropagation();
+    const start = current === -1 ? (move > 0 ? -1 : buttons.length) : current;
+    buttons[(start + move + buttons.length) % buttons.length].focus();
+    return;
+  }
+  if (event.key === "Enter" && !typing) {
+    event.preventDefault();
+    event.stopPropagation();
+    const pick = current === -1 ? buttons.length - 1 : current;
+    clickBtn(alert.value?.buttons?.[pick]?.value);
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    clickBtn(alert.value?.buttons?.[0]?.value);
+  }
+}
 
 function clickBtn(value) {
   if (alert.value?.prompt) {
@@ -317,5 +353,11 @@ function clickBtn(value) {
 .alert-enter-from,
 .alert-leave-to {
   opacity: 0;
+}
+
+/* Escolha pelo teclado (setas): o operador precisa ver qual botão o Enter aperta. */
+.alert-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--lj-ui-focus);
 }
 </style>
