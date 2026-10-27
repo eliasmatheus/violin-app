@@ -138,4 +138,17 @@ describe("useQuickSearch — busca pronta para digitar", () => {
     expect(document.activeElement).toBe(search());
     expect(search().selectionEnd).toBe(3);
   });
+
+  it("clicou numa linha logo depois de abrir: a busca não puxa o foco de volta", async () => {
+    state.active_module = "hymnal";
+    wrapper = mount(Probe, { attachTo: document.body });
+    await frame();
+    expect(document.activeElement).toBe(search());
+
+    // Clique numa célula da tabela: o foco cai na página.
+    window.dispatchEvent(new Event("pointerdown"));
+    search().blur();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(document.activeElement).not.toBe(search());
+  });
 });

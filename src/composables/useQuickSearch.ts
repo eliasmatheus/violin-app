@@ -124,6 +124,17 @@ export function useQuickSearch(options: {
     focusSearch();
   };
 
+  // O operador clicou em algum lugar (uma linha da tabela, outro campo): o que
+  // ainda estava pendente — esperar um diálogo fechar, a conferência de foco —
+  // não vale mais. Sem isto, a conferência devolvia o foco à busca logo depois
+  // do clique numa linha. O teclado não cancela: o Enter que responde ao
+  // "Deseja fechar?" é justamente o que a espera aguarda.
+  const onPointerDown = () => {
+    attemptId++;
+    for (const t of timers) clearTimeout(t);
+    timers.clear();
+  };
+
   // Clicou de novo no botão da tela que já estava aberta: também vai para a busca.
   const onModuleOpen = (event: Event) => {
     if ((event as CustomEvent<{ id?: string }>).detail?.id === options.moduleId()) focusSearch();
@@ -132,11 +143,13 @@ export function useQuickSearch(options: {
   onMounted(() => {
     window.addEventListener("focus", onWindowFocus);
     window.addEventListener("lj:module-open", onModuleOpen);
+    window.addEventListener("pointerdown", onPointerDown, true);
     focusSearch();
   });
   onBeforeUnmount(() => {
     window.removeEventListener("focus", onWindowFocus);
     window.removeEventListener("lj:module-open", onModuleOpen);
+    window.removeEventListener("pointerdown", onPointerDown, true);
     attemptId++;
     for (const t of timers) clearTimeout(t);
     timers.clear();
