@@ -88,6 +88,11 @@
       "file_sing": "Arquivo Cantado",
       "file_playback": "Arquivo Playback"
     },
+    "color_picker": {
+      "presets": "Cores",
+      "custom": "Personalizada",
+      "hex": "HEX"
+    },
     "customization": {
       "title": "Formatação",
       "restore": "Restaurar",
