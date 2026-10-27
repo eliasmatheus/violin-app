@@ -11,11 +11,15 @@
       <div class="hymnal-form-group">
         <div class="hymnal-form-item search-box">
           <LjInput
+            ref="searchInput"
             v-model="search"
             :placeholder="tm('inputs.search')"
+            :title="i18nT('components.quick_play.hint')"
             :icon="ICONS.ACTIONS.SEARCH"
             :invalid="data.filter_count <= 0"
+            autocomplete="off"
             clearable
+            @keydown="onSearchKey"
           />
         </div>
       </div>
@@ -112,6 +116,8 @@ import $appdata from "@/helpers/AppData";
 import $userdata from "@/helpers/UserData";
 import { KEYS } from "@/constants/UserDataKeys";
 import { HYMNAL_ALBUM_IDS } from "@root/config/musicCatalog.mjs";
+import { useQuickSearch } from "@/composables/useQuickSearch";
+import { isQuickPlayEnter, quickPlay } from "@/helpers/QuickPlay";
 
 const props = defineProps({
   moduleId: { type: String, required: true },
@@ -131,6 +137,29 @@ const sequenceQueue = ref([]);
 const _sequenceTimer = ref(null);
 
 const tm = (text) => i18nT(`modules.${props.moduleId}.${text}`);
+
+/*
+ * Busca pelo teclado, como no LouvorJA clássico: abriu o Hinário, o cursor já
+ * está aqui; digitou o número e deu Enter, o hino vai para a tela (Shift+Enter,
+ * o playback). Voltando para cá, o número anterior fica selecionado.
+ */
+const searchInput = ref(null);
+const quickSearch = useQuickSearch({ moduleId: () => props.moduleId, input: searchInput });
+
+function onSearchKey(event) {
+  if (event.key === "Escape" && search.value) {
+    event.preventDefault();
+    search.value = "";
+    return;
+  }
+  if (!isQuickPlayEnter(event)) return;
+  event.preventDefault();
+  const first = (data.value?.data || []).find((item) => item.id_music != null);
+  if (!first || !search.value.trim()) return;
+  clearQueue();
+  selectedId.value = first.id_music;
+  if (quickPlay(first, event.shiftKey)) quickSearch.afterPlay();
+}
 
 const disabledAlbums = computed(() => {
   return $userdata.get(KEYS.OPTIONS.DISABLED_ALBUMS, []) || [];
