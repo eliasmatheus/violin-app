@@ -59,8 +59,8 @@ function _watchEta(): void {
           task.etaSeconds = estimator.eta(now);
         }
         for (const id of [..._estimators.keys()]) if (!alive.has(id)) _estimators.delete(id);
-      },
-    ),
+      }
+    )
   );
 }
 
@@ -77,7 +77,7 @@ function _ensureDownloadListeners(): void {
         const processed = (task._done ?? 0) + (task._failed ?? 0);
         task.progress = total > 0 ? Math.round((processed / total) * 100) : 0;
       }
-    }),
+    })
   );
 
   _downloadListeners.push(
@@ -89,7 +89,7 @@ function _ensureDownloadListeners(): void {
         const processed = task._done + (task._failed ?? 0);
         task.progress = total > 0 ? Math.round((processed / total) * 100) : 0;
       }
-    }),
+    })
   );
 
   _downloadListeners.push(
@@ -101,17 +101,25 @@ function _ensureDownloadListeners(): void {
         const processed = (task._done ?? 0) + task._failed;
         task.progress = total > 0 ? Math.round((processed / total) * 100) : 0;
       }
-    }),
+    })
   );
 
   _downloadListeners.push(
     Platform.download.onQueueDone((result: { downloaded?: number; failed?: number }) => {
       const task = _tasks.get("sync-collections");
       if (task && task.status === "running") {
-        const failed = typeof result?.failed === "number" &&
-          Number.isSafeInteger(result.failed) && result.failed > 0 ? result.failed : 0;
-        const downloaded = typeof result?.downloaded === "number" &&
-          Number.isSafeInteger(result.downloaded) && result.downloaded > 0 ? result.downloaded : 0;
+        const failed =
+          typeof result?.failed === "number" &&
+          Number.isSafeInteger(result.failed) &&
+          result.failed > 0
+            ? result.failed
+            : 0;
+        const downloaded =
+          typeof result?.downloaded === "number" &&
+          Number.isSafeInteger(result.downloaded) &&
+          result.downloaded > 0
+            ? result.downloaded
+            : 0;
         task._failed = Math.max(task._failed ?? 0, failed);
         task._done = Math.max(task._done ?? 0, downloaded);
         task._total = Math.max(task._total ?? 0, downloaded + failed);
@@ -119,7 +127,7 @@ function _ensureDownloadListeners(): void {
         task.progress = task.status === "completed" ? 100 : task.progress;
         task.completedAt = Date.now();
       }
-    }),
+    })
   );
 
   _downloadListeners.push(
@@ -129,9 +137,8 @@ function _ensureDownloadListeners(): void {
         task.status = "cancelled";
         task.completedAt = Date.now();
       }
-    }),
+    })
   );
-
 }
 
 export function useBackgroundTasks() {
@@ -139,11 +146,16 @@ export function useBackgroundTasks() {
   const tasks = computed(() => Array.from(_tasks.values()));
 
   const hasActiveTasks = computed(() =>
-    Array.from(_tasks.values()).some((t) => t.status === "running"),
+    Array.from(_tasks.values()).some((t) => t.status === "running")
   );
 
-  const activeCount = computed(() =>
-    Array.from(_tasks.values()).filter((t) => t.status === "running").length,
+  const activeCount = computed(
+    () => Array.from(_tasks.values()).filter((t) => t.status === "running").length
+  );
+
+  /** Só as concluídas: erro e cancelamento continuam visíveis até dispensar. */
+  const completedCount = computed(
+    () => Array.from(_tasks.values()).filter((t) => t.status === "completed").length
   );
 
   function registerTask(id: string, label: string, cancelFn?: () => void): void {
@@ -184,7 +196,11 @@ export function useBackgroundTasks() {
     const task = _tasks.get(id);
     if (!task) return;
     if (task._cancelFn) {
-      try { task._cancelFn(); } catch { /* noop */ }
+      try {
+        task._cancelFn();
+      } catch {
+        /* noop */
+      }
     }
     _tasks.delete(id);
     if (_tasks.size === 0) {
@@ -199,21 +215,59 @@ export function useBackgroundTasks() {
     }
   }
 
+  /**
+   * Remove as tarefas que terminaram com sucesso.
+   *
+   * `staggerMs` espaça as remoções para a animação de saída em cascata — cada
+   * `delete` é o que tira o card do DOM, então o intervalo vira o atraso entre
+   * os cards na tela. Resolve quando a última saiu.
+   */
+  async function clearCompleted({ staggerMs = 0 }: { staggerMs?: number } = {}): Promise<void> {
+    const ids = Array.from(_tasks.values())
+      .filter((task) => task.status === "completed")
+      .map((task) => task.id);
+    if (!ids.length) return;
+
+    if (staggerMs <= 0) {
+      for (const id of ids) _tasks.delete(id);
+      if (_tasks.size === 0) _cleanupDownloadListeners();
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      ids.forEach((id, index) => {
+        setTimeout(() => {
+          _tasks.delete(id);
+          if (index === ids.length - 1) {
+            if (_tasks.size === 0) _cleanupDownloadListeners();
+            resolve();
+          }
+        }, index * staggerMs);
+      });
+    });
+  }
+
   return {
     tasks,
     hasActiveTasks,
     activeCount,
+    completedCount,
     registerTask,
     updateTask,
     completeTask,
     cancelTask,
     dismissTask,
+    clearCompleted,
   };
 }
 
 function _cleanupDownloadListeners(): void {
   _downloadListeners.forEach((fn) => {
-    try { fn(); } catch { /* noop */ }
+    try {
+      fn();
+    } catch {
+      /* noop */
+    }
   });
   _downloadListeners.length = 0;
 }

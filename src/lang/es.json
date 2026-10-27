@@ -1354,6 +1354,7 @@
       "eta": "{time} restantes",
       "cancel": "Cancelar descarga",
       "dismiss": "Descartar",
+      "clear_completed": "Limpiar completadas",
       "title": "Procesos en segundo plano",
       "empty": "Ningún proceso en curso",
       "running": "En curso",
