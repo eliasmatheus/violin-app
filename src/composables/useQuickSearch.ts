@@ -51,21 +51,44 @@ export function useQuickSearch(options: {
     return !!id && $appdata.get(ACTIVE_MODULE) === id && options.enabled?.() !== false;
   };
 
-  /** Foca e seleciona o texto da busca (quando a tela é desta busca). */
+  /** Quanto esperar um diálogo que está fechando (o player, o "Deseja fechar?"). */
+  const RETRY_MS = 150;
+  const MAX_TRIES = 12;
+  let attemptId = 0;
+
+  /**
+   * Foca e seleciona o texto da busca (quando a tela é desta busca). Se um
+   * diálogo ainda está saindo da tela, espera por ele; e se, logo depois, o
+   * diálogo devolver o foco para a página (a Reka faz isso ao fechar), seleciona
+   * de novo — senão o número digitado em seguida se perderia.
+   */
   function focusSearch(): void {
     if (!isActive()) return;
-    void nextTick(() => {
-      // O v-show da aba só abre depois do tick: espera o quadro seguinte.
-      requestAnimationFrame(() => {
-        const field = options.input.value;
-        if (!field || !isActive()) return;
-        const own = field.el?.() ?? null;
-        if (own && (own.disabled || !own.offsetParent)) return;
-        if (busyElsewhere(own)) return;
-        if (field.select) field.select();
-        else field.focus();
-      });
-    });
+    const id = ++attemptId;
+    const attempt = (tries: number) => {
+      if (id !== attemptId) return;
+      const field = options.input.value;
+      if (!field || !isActive()) return;
+      const own = field.el?.() ?? null;
+      const hidden = !!own && (own.disabled || !own.offsetParent);
+      if (hidden || busyElsewhere(own)) {
+        if (tries < MAX_TRIES) setTimeout(() => attempt(tries + 1), RETRY_MS);
+        return;
+      }
+      if (field.select) field.select();
+      else field.focus();
+      // Conferência: o diálogo que fechou pode ter puxado o foco de volta.
+      setTimeout(() => {
+        if (id !== attemptId || !isActive()) return;
+        const active = document.activeElement;
+        if ((!active || active === document.body) && !busyElsewhere(own)) {
+          if (field.select) field.select();
+          else field.focus();
+        }
+      }, 250);
+    };
+    // O v-show da aba só abre depois do tick: espera o quadro seguinte.
+    void nextTick(() => requestAnimationFrame(() => attempt(0)));
   }
 
   /** Depois de mandar tocar: o campo sai do foco para os atalhos do player valerem. */
