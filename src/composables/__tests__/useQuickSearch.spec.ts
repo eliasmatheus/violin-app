@@ -106,4 +106,15 @@ describe("useQuickSearch — busca pronta para digitar", () => {
     await frame();
     expect(document.activeElement).not.toBe(search());
   });
+
+  it("clicou de novo no botão da tela já aberta: volta para a busca", async () => {
+    state.active_module = "hymnal";
+    wrapper = mount(Probe, { attachTo: document.body });
+    await frame();
+    search().blur();
+
+    window.dispatchEvent(new CustomEvent("lj:module-open", { detail: { id: "hymnal" } }));
+    await frame();
+    expect(document.activeElement).toBe(search());
+  });
 });

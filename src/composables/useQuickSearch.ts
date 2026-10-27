@@ -93,11 +93,20 @@ export function useQuickSearch(options: {
     focusSearch();
   };
 
+  // Clicou de novo no botão da tela que já estava aberta: também vai para a busca.
+  const onModuleOpen = (event: Event) => {
+    if ((event as CustomEvent<{ id?: string }>).detail?.id === options.moduleId()) focusSearch();
+  };
+
   onMounted(() => {
     window.addEventListener("focus", onWindowFocus);
+    window.addEventListener("lj:module-open", onModuleOpen);
     focusSearch();
   });
-  onBeforeUnmount(() => window.removeEventListener("focus", onWindowFocus));
+  onBeforeUnmount(() => {
+    window.removeEventListener("focus", onWindowFocus);
+    window.removeEventListener("lj:module-open", onModuleOpen);
+  });
 
   return { focusSearch, afterPlay };
 }
