@@ -20,6 +20,12 @@ const Hotkeys = (await import("@/helpers/Hotkeys")).default;
 
 let wrapper: VueWrapper | null = null;
 
+/** O botão marcado na pergunta aberta agora (a de um teste anterior pode estar saindo da tela). */
+function marcado(): string | undefined {
+  const caixas = document.querySelectorAll(".alert");
+  return caixas[caixas.length - 1]?.querySelector(".alert-btn--picked")?.textContent?.trim();
+}
+
 function abrirPergunta() {
   state.alert = {
     show: true,
@@ -32,9 +38,12 @@ function abrirPergunta() {
   };
 }
 
+/** A tecla nasce dentro do player (o foco fica preso nele), não na pergunta. */
 function tecla(key: string) {
-  const alvo = (document.activeElement as HTMLElement) ?? document.body;
-  alvo.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  const player = document.createElement("button");
+  document.body.appendChild(player);
+  player.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  player.remove();
 }
 
 beforeEach(() => {
@@ -70,9 +79,12 @@ describe("Alert — pergunta pelo teclado", () => {
 
   it("as setas escolhem o botão e o Enter confirma o escolhido", async () => {
     await montar();
-    tecla("ArrowLeft"); // de nada escolhido, a seta para a esquerda vai no último
-    tecla("ArrowLeft"); // e de novo, no "Não"
-    expect((document.activeElement as HTMLElement).textContent?.trim()).toBe("alert.no");
+    await nextTick();
+    // Abre com o "Sim" marcado; a seta para a esquerda vai para o "Não".
+    expect(marcado()).toBe("alert.yes");
+    tecla("ArrowLeft");
+    await nextTick();
+    expect(marcado()).toBe("alert.no");
     tecla("Enter");
     expect(get("alert.value")).toBe("no");
   });
@@ -90,6 +102,10 @@ describe("Alert — pergunta pelo teclado", () => {
     await montar();
     tecla("ArrowRight");
     expect(passarSlide).not.toHaveBeenCalled();
+    // E o Enter, mesmo nascendo dentro do player, responde a pergunta (a seta
+    // para a direita saiu do "Sim" e deu a volta no "Não").
+    tecla("Enter");
+    expect(get("alert.value")).toBe("no");
     Hotkeys.unregister("ArrowRight", passarSlide);
   });
 });

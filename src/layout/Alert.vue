@@ -9,7 +9,6 @@
           role="alertdialog"
           aria-modal="true"
           tabindex="-1"
-          @keydown="onKeydown"
         >
           <header v-if="alert.title" class="alert-header">
             <LjIcon :icon="iconForVariant" size="20" class="alert-header-icon" />
@@ -46,7 +45,10 @@
               :key="index"
               type="button"
               class="alert-btn"
-              :class="`alert-btn--${btn.color || 'default'}`"
+              :class="[
+                `alert-btn--${btn.color || 'default'}`,
+                { 'alert-btn--picked': picked === index },
+              ]"
               :data-alert-btn="index"
               @click="clickBtn(btn.value)"
             >
@@ -62,7 +64,7 @@
 <script setup>
 import { LjIcon } from "@/components/ui";
 import { ICONS } from "@/config/Icons";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import $appdata from "@/helpers/AppData";
 
 const alert = computed(() => $appdata.get("alert"));
@@ -104,35 +106,70 @@ const iconForVariant = computed(() => {
 /*
  * Teclado na pergunta, como no LouvorJA clássico: as setas (e o Tab) andam
  * entre os botões, o Enter confirma o botão escolhido e o Esc fica com a
- * primeira opção ("Não"). Sem botão escolhido, o Enter vai no último — o "Sim"
+ * primeira opção ("Não"). A pergunta abre com o último botão marcado — o "Sim"
  * da pergunta de fechar o slide: Esc e depois Enter fecham o hino.
+ *
+ * O ouvinte fica na window (captura), e não na caixa: o player é um diálogo da
+ * Reka que prende o foco dentro dele, então a pergunta — teleportada para fora —
+ * nunca recebe as teclas. Os atalhos globais (Hotkeys) saem da frente enquanto
+ * ela está aberta; aqui a tecla é consumida para não chegar ao player.
  */
+const picked = ref(-1);
+
 function onKeydown(event) {
-  const buttons = [...(box.value?.querySelectorAll("[data-alert-btn]") ?? [])];
+  if (!show.value) return;
+  const buttons = alert.value?.buttons ?? [];
   if (!buttons.length) return;
-  const typing = event.target?.tagName === "INPUT" || event.target?.tagName === "TEXTAREA";
-  const current = buttons.indexOf(document.activeElement);
-  const move = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
-  if (move && !typing) {
+  const consume = () => {
     event.preventDefault();
-    event.stopPropagation();
-    const start = current === -1 ? (move > 0 ? -1 : buttons.length) : current;
-    buttons[(start + move + buttons.length) % buttons.length].focus();
+    event.stopImmediatePropagation();
+  };
+  if (alert.value?.prompt) {
+    // No campo de texto, só Enter e Esc são da pergunta.
+    if (event.key === "Enter") {
+      consume();
+      clickBtn("ok");
+    } else if (event.key === "Escape") {
+      consume();
+      clickBtn(buttons[0]?.value);
+    }
     return;
   }
-  if (event.key === "Enter" && !typing) {
-    event.preventDefault();
-    event.stopPropagation();
-    const pick = current === -1 ? buttons.length - 1 : current;
-    clickBtn(alert.value?.buttons?.[pick]?.value);
+  const n = buttons.length;
+  const move =
+    { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key] ??
+    (event.key === "Tab" ? (event.shiftKey ? -1 : 1) : 0);
+  if (move) {
+    consume();
+    const from = picked.value === -1 ? (move > 0 ? -1 : n) : picked.value;
+    picked.value = (from + move + n) % n;
+    box.value?.querySelector(`[data-alert-btn="${picked.value}"]`)?.focus?.();
+    return;
+  }
+  if (event.key === "Enter" || event.key === " ") {
+    consume();
+    clickBtn(buttons[picked.value === -1 ? n - 1 : picked.value]?.value);
     return;
   }
   if (event.key === "Escape") {
-    event.preventDefault();
-    event.stopPropagation();
-    clickBtn(alert.value?.buttons?.[0]?.value);
+    consume();
+    clickBtn(buttons[0]?.value);
   }
 }
+
+watch(
+  show,
+  (visible) => {
+    // O botão que o Enter aperta já aparece marcado: o último ("Sim"/"OK").
+    const n = alert.value?.buttons?.length ?? 0;
+    picked.value = visible && !alert.value?.prompt && n ? n - 1 : -1;
+    if (typeof window === "undefined") return;
+    if (visible) window.addEventListener("keydown", onKeydown, { capture: true });
+    else window.removeEventListener("keydown", onKeydown, { capture: true });
+  },
+  { immediate: true }
+);
+onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown, { capture: true }));
 
 function clickBtn(value) {
   if (alert.value?.prompt) {
@@ -356,7 +393,8 @@ function clickBtn(value) {
 }
 
 /* Escolha pelo teclado (setas): o operador precisa ver qual botão o Enter aperta. */
-.alert-btn:focus-visible {
+.alert-btn:focus-visible,
+.alert-btn--picked {
   outline: none;
   box-shadow: var(--lj-ui-focus);
 }
