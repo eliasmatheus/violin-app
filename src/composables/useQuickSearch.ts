@@ -55,6 +55,14 @@ export function useQuickSearch(options: {
   const RETRY_MS = 150;
   const MAX_TRIES = 12;
   let attemptId = 0;
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const later = (fn: () => void, ms: number) => {
+    const t = setTimeout(() => {
+      timers.delete(t);
+      fn();
+    }, ms);
+    timers.add(t);
+  };
 
   /**
    * Foca e seleciona o texto da busca (quando a tela é desta busca). Se um
@@ -72,13 +80,13 @@ export function useQuickSearch(options: {
       const own = field.el?.() ?? null;
       const hidden = !!own && (own.disabled || !own.offsetParent);
       if (hidden || busyElsewhere(own)) {
-        if (tries < MAX_TRIES) setTimeout(() => attempt(tries + 1), RETRY_MS);
+        if (tries < MAX_TRIES) later(() => attempt(tries + 1), RETRY_MS);
         return;
       }
       if (field.select) field.select();
       else field.focus();
       // Conferência: o diálogo que fechou pode ter puxado o foco de volta.
-      setTimeout(() => {
+      later(() => {
         if (id !== attemptId || !isActive()) return;
         const active = document.activeElement;
         if ((!active || active === document.body) && !busyElsewhere(own)) {
@@ -129,6 +137,9 @@ export function useQuickSearch(options: {
   onBeforeUnmount(() => {
     window.removeEventListener("focus", onWindowFocus);
     window.removeEventListener("lj:module-open", onModuleOpen);
+    attemptId++;
+    for (const t of timers) clearTimeout(t);
+    timers.clear();
   });
 
   return { focusSearch, afterPlay };

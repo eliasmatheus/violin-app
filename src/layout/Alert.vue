@@ -395,7 +395,7 @@ function clickBtn(value) {
 /* Escolha pelo teclado (setas): o operador precisa ver qual botão o Enter aperta. */
 .alert-btn:focus-visible,
 .alert-btn--picked {
-  outline: none;
-  box-shadow: var(--lj-ui-focus);
+  outline: 3px solid var(--lj-ui-accent, #f59e0b);
+  outline-offset: 2px;
 }
 </style>

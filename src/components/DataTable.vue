@@ -660,6 +660,18 @@ function compareFilterData() {
   last_filter.value = filter;
   filterData();
 }
+
+/**
+ * O resultado da busca AGORA, sem esperar o debounce de digitação: quem digita
+ * "12" e tecla Enter na hora não pode receber a lista ainda sem filtro (o
+ * primeiro dela é o hino 1). Usado pelo Enter das buscas (useQuickSearch).
+ */
+function currentResults() {
+  filterData();
+  return filter_data.value;
+}
+
+defineExpose({ currentResults });
 </script>
 
 <style>

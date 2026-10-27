@@ -26,6 +26,7 @@
     </template>
 
     <l-table
+      ref="table"
       v-model="data"
       :search="search"
       letter=""
@@ -144,6 +145,7 @@ const tm = (text) => i18nT(`modules.${props.moduleId}.${text}`);
  * o playback). Voltando para cá, o número anterior fica selecionado.
  */
 const searchInput = ref(null);
+const table = ref(null);
 const quickSearch = useQuickSearch({ moduleId: () => props.moduleId, input: searchInput });
 
 function onSearchKey(event) {
@@ -154,7 +156,9 @@ function onSearchKey(event) {
   }
   if (!isQuickPlayEnter(event)) return;
   event.preventDefault();
-  const first = (data.value?.data || []).find((item) => item.id_music != null);
+  // Lista filtrada agora: o Enter logo depois do número não espera o debounce.
+  const results = table.value?.currentResults?.() ?? data.value?.data ?? [];
+  const first = results.find((item) => item.id_music != null);
   if (!first || !search.value.trim()) return;
   clearQueue();
   selectedId.value = first.id_music;

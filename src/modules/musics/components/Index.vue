@@ -104,6 +104,7 @@
 
     <Table
       v-show="!mobileLayout || mobileView === 'music'"
+      ref="table"
       v-model="data"
       :search="search"
       :letter="letter"
@@ -411,6 +412,7 @@ const search = ref("");
  * playback); ao voltar para cá, o texto anterior fica selecionado.
  */
 const searchInput = ref(null);
+const table = ref(null);
 const quickSearch = useQuickSearch({
   moduleId: () => manifest.id,
   input: searchInput,
@@ -425,9 +427,9 @@ function onSearchKey(event) {
   }
   if (!isQuickPlayEnter(event)) return;
   event.preventDefault();
-  const first = (data.value?.data || []).find(
-    (item) => item.id_music != null || item.custom_song_id
-  );
+  // Lista filtrada agora: o Enter logo depois da digitação não espera o debounce.
+  const results = table.value?.currentResults?.() ?? data.value?.data ?? [];
+  const first = results.find((item) => item.id_music != null || item.custom_song_id);
   if (!first || !search.value.trim()) return;
   if (quickPlay(first, event.shiftKey)) quickSearch.afterPlay();
 }
