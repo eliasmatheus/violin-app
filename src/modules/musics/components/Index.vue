@@ -428,7 +428,7 @@ function onSearchKey(event) {
   if (!isQuickPlayEnter(event)) return;
   event.preventDefault();
   // Lista filtrada agora: o Enter logo depois da digitação não espera o debounce.
-  const results = table.value?.currentResults?.() ?? data.value?.data ?? [];
+  const results = table.value?.currentResults() ?? [];
   const first = results.find((item) => item.id_music != null || item.custom_song_id);
   if (!first || !search.value.trim()) return;
   if (quickPlay(first, event.shiftKey)) quickSearch.afterPlay();

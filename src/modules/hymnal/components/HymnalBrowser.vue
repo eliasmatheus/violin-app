@@ -157,7 +157,7 @@ function onSearchKey(event) {
   if (!isQuickPlayEnter(event)) return;
   event.preventDefault();
   // Lista filtrada agora: o Enter logo depois do número não espera o debounce.
-  const results = table.value?.currentResults?.() ?? data.value?.data ?? [];
+  const results = table.value?.currentResults() ?? [];
   const first = results.find((item) => item.id_music != null);
   if (!first || !search.value.trim()) return;
   clearQueue();
