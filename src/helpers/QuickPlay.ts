@@ -1,12 +1,12 @@
-import Media from "@/composables/useMedia";
 import $snackbar from "@/helpers/Snackbar";
-import { openCustomMusic } from "@/helpers/CustomMusicCatalog";
+import { executeMusic } from "@/helpers/MusicExecution";
 import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import { i18nAtual } from "@/i18n";
 
 /**
  * Tocar a música achada na busca pelo teclado — o "digita o número e dá Enter"
- * do LouvorJA clássico. Enter toca cantado (slides + voz); Shift+Enter, o
+ * do LouvorJA clássico. Enter faz o mesmo que o primeiro botão da linha (o
+ * cantado; na personalizada que só tem playback, o playback); Shift+Enter, o
  * playback. Sem playback, avisa e não toca: no culto, a voz entrando no lugar
  * do playback que o operador pediu seria pior que nada.
  *
@@ -16,7 +16,7 @@ import { i18nAtual } from "@/i18n";
 export interface QuickPlayItem {
   id_music?: number | string | null;
   custom_song_id?: string | null;
-  has_instrumental_music?: boolean | null;
+  has_instrumental_music?: boolean | number | null;
   name?: string;
 }
 
@@ -31,27 +31,30 @@ function t(key: string, params?: Record<string, unknown>): string {
 /** Devolve `true` se mandou tocar. */
 export function quickPlay(item: QuickPlayItem | null | undefined, playback = false): boolean {
   if (!item) return false;
-  if (item.custom_song_id) {
-    void openCustomMusic(
-      item.custom_song_id,
-      playback ? MusicActionEnum.INSTRUMENTAL : MusicActionEnum.AUDIO
-    );
-    return true;
-  }
   const id = Number(item.id_music);
-  if (!Number.isFinite(id) || id <= 0) return false;
+  if (!item.custom_song_id && !(Number.isFinite(id) && id > 0)) return false;
   if (playback && !item.has_instrumental_music) {
     $snackbar.warning(t("no_playback", { name: item.name ?? "" }));
     return false;
   }
-  Media.open({
-    id_music: id,
-    mode: playback ? MusicActionEnum.INSTRUMENTAL : MusicActionEnum.AUDIO,
-  });
+  void executeMusic(
+    { id_music: id, custom_song_id: item.custom_song_id },
+    playback ? MusicActionEnum.INSTRUMENTAL : undefined
+  );
   return true;
 }
 
-/** Enter de um campo de busca: Shift pede o playback. Ignora a composição de acentos (IME). */
+/**
+ * Enter de um campo de busca: Shift pede o playback. Ignora a composição de
+ * acentos (IME) e a tecla segurada, que repetiria o pedido.
+ */
 export function isQuickPlayEnter(event: KeyboardEvent): boolean {
-  return event.key === "Enter" && !event.isComposing && !event.ctrlKey && !event.metaKey && !event.altKey;
+  return (
+    event.key === "Enter" &&
+    !event.isComposing &&
+    !event.repeat &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey
+  );
 }

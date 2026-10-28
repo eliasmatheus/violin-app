@@ -30,14 +30,32 @@ describe("quickPlay — Enter da busca", () => {
   });
 
   it("sem playback, avisa e não toca a voz no lugar", () => {
-    expect(quickPlay({ id_music: 12, has_instrumental_music: false, name: "Hino" }, true)).toBe(false);
+    expect(quickPlay({ id_music: 12, has_instrumental_music: false, name: "Hino" }, true)).toBe(
+      false
+    );
     expect(open).not.toHaveBeenCalled();
     expect(warning).toHaveBeenCalledTimes(1);
   });
 
   it("música personalizada toca pelo UUID", () => {
-    expect(quickPlay({ custom_song_id: "abc", id_music: null }, true)).toBe(true);
+    expect(
+      quickPlay({ custom_song_id: "abc", id_music: -3, has_instrumental_music: true }, true)
+    ).toBe(true);
     expect(openCustomMusic).toHaveBeenCalledWith("abc", "instrumental");
+  });
+
+  it("Enter na personalizada deixa o documento escolher, como o botão da linha", () => {
+    // Só playback: o cantado da linha fica desabilitado e quem toca é o playback.
+    expect(quickPlay({ custom_song_id: "abc", id_music: -3, has_instrumental_music: true })).toBe(
+      true
+    );
+    expect(openCustomMusic).toHaveBeenCalledWith("abc", undefined);
+  });
+
+  it("Shift+Enter na personalizada sem playback avisa e não toca", () => {
+    expect(quickPlay({ custom_song_id: "abc", id_music: -3, name: "Minha" }, true)).toBe(false);
+    expect(openCustomMusic).not.toHaveBeenCalled();
+    expect(warning).toHaveBeenCalledTimes(1);
   });
 
   it("sem resultado, não faz nada", () => {
@@ -53,5 +71,8 @@ describe("quickPlay — Enter da busca", () => {
     expect(isQuickPlayEnter(ev({ ctrlKey: true }))).toBe(false);
     expect(isQuickPlayEnter(ev({ altKey: true }))).toBe(false);
     expect(isQuickPlayEnter(new KeyboardEvent("keydown", { key: "a" }))).toBe(false);
+    expect(isQuickPlayEnter(ev({ isComposing: true }))).toBe(false);
+    // Tecla segurada repetiria o pedido de tocar.
+    expect(isQuickPlayEnter(ev({ repeat: true }))).toBe(false);
   });
 });

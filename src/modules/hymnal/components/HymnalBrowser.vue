@@ -119,6 +119,8 @@ import { KEYS } from "@/constants/UserDataKeys";
 import { HYMNAL_ALBUM_IDS } from "@root/config/musicCatalog.mjs";
 import { useQuickSearch } from "@/composables/useQuickSearch";
 import { isQuickPlayEnter, quickPlay } from "@/helpers/QuickPlay";
+import { executeMusic } from "@/helpers/MusicExecution";
+import { MusicActionEnum } from "@/enums/MusicActionEnum";
 
 const props = defineProps({
   moduleId: { type: String, required: true },
@@ -201,7 +203,7 @@ function _pollSequence() {
     if (_lastSeqProgress >= 0.95) {
       _clearSequenceTimer();
       const nextId = sequenceQueue.value.shift();
-      Media.open({ id_music: nextId, mode: "audio" });
+      void executeMusic({ id_music: nextId }, MusicActionEnum.AUDIO);
       _lastSeqProgress = 0;
     } else if (_lastSeqProgress > 0 && _lastSeqProgress < 0.95) {
       _clearSequenceTimer();
@@ -223,7 +225,7 @@ function playAll() {
   _lastSeqProgress = 0;
   _clearSequenceTimer();
   _sequenceTimer.value = setInterval(_pollSequence, 300);
-  Media.open({ id_music: ordered[0].id_music, mode: "audio" });
+  void executeMusic({ id_music: ordered[0].id_music }, MusicActionEnum.AUDIO);
 }
 
 function clearQueue() {
@@ -237,23 +239,23 @@ const HYMN_ACTIONS = {
   },
   sing: () => {
     clearQueue();
-    Media.open({ id_music: selectedId.value, mode: "audio" });
+    void executeMusic({ id_music: selectedId.value }, MusicActionEnum.AUDIO);
   },
   playback: () => {
     clearQueue();
-    Media.open({ id_music: selectedId.value, mode: "instrumental" });
+    void executeMusic({ id_music: selectedId.value }, MusicActionEnum.INSTRUMENTAL);
   },
   no_audio: () => {
     clearQueue();
-    Media.open(selectedId.value);
+    void executeMusic({ id_music: selectedId.value }, MusicActionEnum.NO_AUDIO);
   },
   audio_sing: () => {
     clearQueue();
-    Media.openAudio(selectedId.value);
+    void executeMusic({ id_music: selectedId.value }, MusicActionEnum.AUDIO_ONLY);
   },
   audio_playback: () => {
     clearQueue();
-    Media.openAudio({ id_music: selectedId.value, mode: "instrumental" });
+    void executeMusic({ id_music: selectedId.value }, MusicActionEnum.PLAYBACK_ONLY);
   },
   sequence: () => playAll(),
   report_error: () =>
