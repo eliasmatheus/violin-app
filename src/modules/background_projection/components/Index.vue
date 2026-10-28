@@ -145,7 +145,7 @@
         <template #footer>
           <LjButton size="sm" @click="showRenameDialog = false">{{ tm("cancel") }}</LjButton>
           <LjButton size="sm" variant="primary" :disabled="!renameInput" @click="confirmRename">
-            {{ tm("rename") }}
+            {{ tm("save") }}
           </LjButton>
         </template>
       </LjDialog>
