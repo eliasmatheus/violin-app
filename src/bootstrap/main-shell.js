@@ -72,6 +72,7 @@ import {
 } from "@/helpers/Overlay";
 import Shortcuts from "@/helpers/Shortcuts";
 import Telemetry from "@/helpers/Telemetry";
+import $snackbar from "@/helpers/Snackbar";
 import Hotkeys from "@/helpers/Hotkeys";
 import { useShell } from "@/composables/useShell";
 import { BROADCAST_TYPE } from "@helpers/BroadcastTypes";
@@ -730,6 +731,21 @@ function _bootStage(stage, properties = {}) {
     ...properties,
   });
   Telemetry.histogram("louvorja.boot.stage.duration", durationMs, { stage });
+}
+
+// Sem escrita na pasta de dados (macOS negou Documentos, antivírus bloqueou), o
+// main abre na pasta do programa. Calado, o app parecia ter perdido tudo.
+async function warnDataDirFallback(i18n) {
+  const issue = await Promise.resolve(Platform.storage?.dataDirIssue?.()).catch(() => null);
+  if (!issue) return;
+  Telemetry.track("storage_data_dir_fallback", { reason: issue.reason });
+  $snackbar.warning(
+    i18n.global.t("options.storage.folder_fallback_notice", { dir: issue.wanted }),
+    {
+      timeout: 15000,
+      key: "data-dir-fallback",
+    }
+  );
 }
 
 $storage.hydrate().then(async () => {
@@ -2407,7 +2423,17 @@ $storage.hydrate().then(async () => {
     // abre o IndexedDB. Rodar em série custava um round-trip de I/O à toa.
     if (isAuxiliaryRenderer) ModuleManager.bindI18n(i18n);
     const moduleManagerReady = isAuxiliaryRenderer ? Promise.resolve() : ModuleManager.init(i18n);
-    const idbReady = $idb.init();
+    // Sem o banco local o app ainda abre: o catálogo vem da rede. Deixar a
+    // rejeição subir parava o boot antes do mount e da telemetria — janela
+    // vazia em toda abertura, sem nenhum registro do motivo.
+    const idbReady = $idb.init().then(
+      () => true,
+      (error) => {
+        console.error("[main] IndexedDB indisponível; abrindo sem o banco local:", error);
+        Telemetry.captureException(error, { source: "boot_indexeddb" });
+        return false;
+      }
+    );
 
     if (import.meta.env.DEV) {
       try {
@@ -2418,8 +2444,8 @@ $storage.hydrate().then(async () => {
       }
     }
 
-    await Promise.all([moduleManagerReady, idbReady]);
-    _bootStage("dependencies_ready");
+    const [, indexeddbReady] = await Promise.all([moduleManagerReady, idbReady]);
+    _bootStage("dependencies_ready", { indexeddb_ready: indexeddbReady });
 
     // Sincroniza devices do IndexedDB para o main process (cache em memória).
     // Deve rodar após $idb.init() e antes do app.mount() para garantir que
@@ -2434,6 +2460,7 @@ $storage.hydrate().then(async () => {
     app.mount("#app");
     window.__ljPwaRecovery?.markMounted();
     _bootStage("mounted");
+    if (!isAuxiliaryRenderer) void warnDataDirFallback(i18n);
 
     // Estado atual, não a ação de alternar: sem isto, saber "quantos usuários
     // usam Libras" dependia de esperar alguém tocar no interruptor depois do
