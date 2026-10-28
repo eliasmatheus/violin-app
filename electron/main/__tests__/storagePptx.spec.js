@@ -5,9 +5,9 @@ import os from "node:os";
 import path from "node:path";
 
 /**
- * `files/pptx` guarda os PDFs gerados a partir de PowerPoint. A Biblioteca de
- * Mídia aponta para eles, e eles não vêm do servidor: nenhuma limpeza do
- * acervo baixado (clearFiles, clearUnused, enforceQuota) pode apagá-los.
+ * `<dados>/pptx` guarda os PDFs gerados a partir de PowerPoint, fora de `files/`.
+ * A Biblioteca de Mídia aponta para eles, e eles não vêm do servidor: nenhuma
+ * limpeza do acervo baixado (clearFiles, clearUnused, enforceQuota) pode alcançá-los.
  */
 const require = createRequire(import.meta.url);
 const fs = require("fs-extra");
@@ -48,29 +48,31 @@ afterEach(async () => {
 const arquivo = (rel, bytes) => fs.outputFile(path.join(filesDir, rel), "x".repeat(bytes));
 const existe = (rel) => fs.pathExists(path.join(filesDir, rel));
 const PDF = "pptx/abc-123-powerpoint.pdf";
+const pdfDoOperador = () => fs.outputFile(path.join(base, PDF), "x".repeat(1000));
+const pdfIntacto = () => fs.pathExists(path.join(base, PDF));
 
 describe("storage — os PDFs de PowerPoint não são sobra do acervo", () => {
-  it("clearFiles apaga o acervo e preserva files/pptx", async () => {
+  it("clearFiles apaga o acervo e preserva <dados>/pptx", async () => {
     await arquivo("musica.mp3", 10);
-    await arquivo(PDF, 100);
+    await pdfDoOperador();
     await storage.clearFiles();
     expect(await existe("musica.mp3")).toBe(false);
-    expect(await existe(PDF)).toBe(true);
+    expect(await pdfIntacto()).toBe(true);
   });
 
   it("clearUnused não apaga o PDF por não estar na lista do servidor", async () => {
     await arquivo("sobra.mp3", 10);
-    await arquivo(PDF, 100);
+    await pdfDoOperador();
     await storage.clearUnused([]);
     expect(await existe("sobra.mp3")).toBe(false);
-    expect(await existe(PDF)).toBe(true);
+    expect(await pdfIntacto()).toBe(true);
   });
 
   it("enforceQuota não conta nem remove o PDF", async () => {
-    await arquivo(PDF, 1000);
+    await pdfDoOperador();
     await arquivo("musica.mp3", 10);
     const r = await storage.enforceQuota(50);
     expect(r.removed).toBe(0);
-    expect(await existe(PDF)).toBe(true);
+    expect(await pdfIntacto()).toBe(true);
   });
 });
