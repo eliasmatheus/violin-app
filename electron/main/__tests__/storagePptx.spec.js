@@ -26,11 +26,15 @@ beforeEach(async () => {
       dataDirIssue: () => null,
       profileRestartRequired: () => false,
       filesDir: () => filesDir,
+      videosDir: () => path.join(base, "Videos"),
+      canvaDir: () => path.join(base, "canva"),
       jsonCacheDir: () => path.join(base, "json_db"),
     },
   };
   const originalLoad = Module._load;
   Module._load = function (request, ...args) {
+    // Com o acervo compartilhado, limpar exige ser o escritor da pasta.
+    if (request === "./storageAccess.js") return { canMaintain: () => true, assertMaintain: () => {} };
     return request === "electron" ? { shell: {} } : originalLoad.call(this, request, ...args);
   };
   try {
