@@ -13,6 +13,8 @@ export interface BackgroundTask {
   completedAt?: number;
   /** Segundos que faltam, estimados pelo ritmo da própria tarefa; `null` até haver base. */
   etaSeconds?: number | null;
+  /** Passou do tempo mínimo, mas ainda não atingiu o percentual para estimar. */
+  etaCalculating?: boolean;
   _cancelFn?: () => void;
   _done?: number;
   _failed?: number;
@@ -20,6 +22,17 @@ export interface BackgroundTask {
 }
 
 type CleanupFn = () => void;
+
+/**
+ * A barra do painel só fica indeterminada quando não há percentual nem total
+ * conhecido. Tarefas com `_total` (Libras, coletâneas) sabem o caminho desde o
+ * início, então desenham 0% em vez de animar para sempre.
+ */
+export function taskProgressIsIndeterminate(
+  task: Pick<BackgroundTask, "progress" | "_total">
+): boolean {
+  return !task.progress && !task._total;
+}
 
 const _tasks = reactive(new Map<string, BackgroundTask>());
 const _downloadListeners: CleanupFn[] = [];
@@ -46,6 +59,7 @@ function _watchEta(): void {
         for (const task of _tasks.values()) {
           if (task.status !== "running") {
             task.etaSeconds = null;
+            task.etaCalculating = false;
             continue;
           }
           alive.add(task.id);
@@ -57,6 +71,7 @@ function _watchEta(): void {
           }
           estimator.push(now, task.progress ?? 0);
           task.etaSeconds = estimator.eta(now);
+          task.etaCalculating = estimator.calculating(now);
         }
         for (const id of [..._estimators.keys()]) if (!alive.has(id)) _estimators.delete(id);
       }
@@ -170,6 +185,8 @@ export function useBackgroundTasks() {
       label,
       status: "running",
       progress: 0,
+      etaSeconds: null,
+      etaCalculating: false,
       startedAt: Date.now(),
       _cancelFn: cancelFn,
       _done: 0,

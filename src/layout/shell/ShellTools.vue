@@ -138,7 +138,7 @@
               <template v-if="task.status === 'running'">
                 <LjProgress
                   :value="task.progress ?? 0"
-                  :indeterminate="!task.progress"
+                  :indeterminate="taskProgressIsIndeterminate(task)"
                   :height="4"
                 />
                 <span class="bg-task__detail">
@@ -146,6 +146,9 @@
                 </span>
                 <span v-if="task.etaSeconds != null" class="bg-task__detail bg-task__eta">
                   {{ t("shell.background_tasks.eta", { time: formatEta(task.etaSeconds) }) }}
+                </span>
+                <span v-else-if="task.etaCalculating" class="bg-task__detail bg-task__eta">
+                  {{ t("shell.background_tasks.eta_calculating") }}
                 </span>
               </template>
               <span v-else class="bg-task__detail">
@@ -276,7 +279,11 @@ import {
   nextBackgroundEpoch,
   readStoredBackgroundState,
 } from "@/presentation/BackgroundPresentationState";
-import { useBackgroundTasks, type BackgroundTask } from "@/composables/useBackgroundTasks";
+import {
+  taskProgressIsIndeterminate,
+  useBackgroundTasks,
+  type BackgroundTask,
+} from "@/composables/useBackgroundTasks";
 import { useConnectivity } from "@/composables/useConnectivity";
 import Platform from "@/helpers/Platform";
 import { canOpenWebWindows } from "@/helpers/projection/webWindow";

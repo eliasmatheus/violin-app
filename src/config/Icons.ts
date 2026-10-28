@@ -476,7 +476,7 @@ export const ICONS = {
     API: "api",
   },
   /**
-   * Ícones SVG  da pasta /assets/icons usados no componente Icon
+   * Ícones SVG da pasta /assets/icons usados no componente Icon
    */
   CUSTOM: {
     AVT: "avt",
