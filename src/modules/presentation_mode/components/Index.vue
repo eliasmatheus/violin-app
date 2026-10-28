@@ -354,7 +354,7 @@ const {
   setOutputLocked,
   prepare,
 } = useProgram();
-const { execute, executeChild, projectPath, sendBible } = useProgramExecution();
+const { execute, executeChild, projectPath, projectCanva, sendBible } = useProgramExecution();
 const { importFromLiturgy, saveAsLiturgy } = useProgramLiturgy();
 const stage = useStage();
 const folders = useFolderItems();
@@ -495,6 +495,9 @@ function dispatch(
     onlineQueue.start(playable.videoId);
     openOnline(playable.videoId, playable.title);
     Telemetry.track("presentation_library_online_projected", {});
+  } else if (playable.type === "canva") {
+    projectCanva(playable.designId, playable.title);
+    Telemetry.track("canva_project_requested", { mode: "site", via: "presentation_mode" });
   }
   stage.markSent(playable, expected);
   airHistory.record(playable, { mode, muted });

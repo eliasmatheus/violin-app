@@ -1,4 +1,6 @@
 import $userdata from "@/helpers/UserData";
+import $snackbar from "@/helpers/Snackbar";
+import { i18nAtual } from "@/i18n";
 import Broadcast from "@/helpers/Broadcast";
 import ProjectionWindows from "@/helpers/ProjectionWindows";
 import Telemetry from "@/helpers/Telemetry";
@@ -20,6 +22,7 @@ import { useBibleLibrary } from "./useBibleLibrary";
 import { isPowerPoint, powerPointAsPdf } from "./usePowerPoint";
 import { useCloudFiles } from "./useCloudFiles";
 import { isUrl } from "../program/paths";
+import { canvaDesignOf } from "../program/items";
 
 /**
  * A versão escolhida no topo do módulo vence a pedida. Playback imposto a uma
@@ -137,6 +140,11 @@ export function useProgramExecution() {
     }
     if (item.source) {
       if (item.source.tipo === LiturgyItemTypeEnum.MUSICA && playMusicOnStage(item.source, mode)) return true;
+      const design = canvaDesignOf(item);
+      if (design) {
+        projectCanva(design, item.title, item.source.url);
+        return true;
+      }
       // Arquivo do disco segue o caminho da biblioteca: nuvem e PowerPoint são tratados lá.
       const dir = item.source.dir ?? "";
       if (item.source.tipo === LiturgyItemTypeEnum.ARQUIVO && dir && !isUrl(dir)) {
@@ -166,6 +174,30 @@ export function useProgramExecution() {
   }
 
   /**
+   * Design do Canva no navegador: a página ao vivo na janela de site, pelo
+   * mesmo caminho do item Site da liturgia (o main aperta "Apresentar em tela
+   * cheia" em toda página do canva.com). O `view_url` expira, então cada envio
+   * pede um novo; sem conexão, vale o guardado no item.
+   */
+  function projectCanva(designId: string, title: string, storedUrl = ""): void {
+    void (async () => {
+      let url = storedUrl;
+      try {
+        const fresh = await window.louvorjaApi?.canva?.designUrl(designId);
+        if (fresh?.ok && fresh.url) url = fresh.url;
+      } catch {
+        // Fica o link guardado.
+      }
+      if (!url) {
+        const t = i18nAtual()?.global?.t as ((_key: string) => string) | undefined;
+        $snackbar.error(t?.("modules.presentation_mode.canva.site_failed") ?? "Canva");
+        return;
+      }
+      executeItem(liturgyItem({ id: crypto.randomUUID(), tipo: LiturgyItemTypeEnum.SITE, url, item: title }));
+    })();
+  }
+
+  /**
    * Um filho de momento: o arquivo vai como qualquer arquivo da biblioteca; o
    * anúncio abre a projeção de anúncios naquele ponto.
    */
@@ -184,5 +216,5 @@ export function useProgramExecution() {
     return false;
   }
 
-  return { execute, executeChild, projectPath, sendBible };
+  return { execute, executeChild, projectPath, projectCanva, sendBible };
 }
