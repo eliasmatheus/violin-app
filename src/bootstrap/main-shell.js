@@ -72,6 +72,7 @@ import {
 } from "@/helpers/Overlay";
 import Shortcuts from "@/helpers/Shortcuts";
 import Telemetry from "@/helpers/Telemetry";
+import $snackbar from "@/helpers/Snackbar";
 import Hotkeys from "@/helpers/Hotkeys";
 import { useShell } from "@/composables/useShell";
 import { BROADCAST_TYPE } from "@helpers/BroadcastTypes";
@@ -87,6 +88,11 @@ import { BiblePresentationAuthority } from "@/presentation/BiblePresentationStat
 import { ModulePresentationAuthority } from "@/presentation/ModulePresentationState";
 import { nextOverlayEpoch } from "@/presentation/OverlayVisibilityState";
 import { canLinkOverlay, projectedFileKind, youtubeVideoId } from "@/modules/liturgy/overlayLink";
+import {
+  ativarOverlayVinculado,
+  desativarOverlayVinculado,
+  prepararExecucao,
+} from "@/modules/liturgy/linkedOverlay";
 import {
   AnnouncementsPresentationAuthority,
   announcementPosition,
@@ -725,6 +731,21 @@ function _bootStage(stage, properties = {}) {
     ...properties,
   });
   Telemetry.histogram("louvorja.boot.stage.duration", durationMs, { stage });
+}
+
+// Sem escrita na pasta de dados (macOS negou Documentos, antivírus bloqueou), o
+// main abre na pasta do programa. Calado, o app parecia ter perdido tudo.
+async function warnDataDirFallback(i18n) {
+  const issue = await Promise.resolve(Platform.storage?.dataDirIssue?.()).catch(() => null);
+  if (!issue) return;
+  Telemetry.track("storage_data_dir_fallback", { reason: issue.reason });
+  $snackbar.warning(
+    i18n.global.t("options.storage.folder_fallback_notice", { dir: issue.wanted }),
+    {
+      timeout: 15000,
+      key: "data-dir-fallback",
+    }
+  );
 }
 
 $storage.hydrate().then(async () => {
@@ -1698,6 +1719,15 @@ $storage.hydrate().then(async () => {
                 let projected = false;
                 let overlayItem = litItem;
                 const overlayContext = {};
+                /*
+                 * Mesmo ciclo do módulo: o item que assume o telão recolhe o
+                 * overlay vinculado do anterior antes de projetar. Anotação,
+                 * botão de overlay e som de fundo não assumem.
+                 */
+                await prepararExecucao(
+                  litItem,
+                  litItem.tipo === "musica" ? litItem.subtipo || "sung" : undefined
+                );
                 switch (litItem.tipo) {
                   case "musica": {
                     if (litItem.escolha || !litItem.id_music) break;
@@ -1932,25 +1962,8 @@ $storage.hydrate().then(async () => {
                 }
 
                 // O vínculo só aparece na projeção que este comando abriu de fato.
-                if (
-                  projected &&
-                  litItem.linked_overlay_id &&
-                  canLinkOverlay(overlayItem, overlayContext)
-                ) {
-                  try {
-                    const linkedSlots = await readAllOverlaySlots();
-                    const linkedSlot = linkedSlots.find((s) => s.id === litItem.linked_overlay_id);
-                    if (linkedSlot) {
-                      linkedSlot.enabled = true;
-                      await writeOverlaySlot(linkedSlot);
-                      UserData.set(KEYS.MODULES.OVERLAY.ENABLED, true);
-                      Broadcast.send(BROADCAST_TYPE.OVERLAY_CONFIG_CHANGED, {
-                        slot: linkedSlot,
-                      });
-                    }
-                  } catch (e) {
-                    console.error("[http] liturgy-execute: overlay vinculado falhou:", e);
-                  }
+                if (projected && canLinkOverlay(overlayItem, overlayContext)) {
+                  await ativarOverlayVinculado(overlayItem);
                 }
               } catch (e) {
                 console.error("[http] liturgy-execute falhou:", litItem.tipo, e);
@@ -2410,7 +2423,17 @@ $storage.hydrate().then(async () => {
     // abre o IndexedDB. Rodar em série custava um round-trip de I/O à toa.
     if (isAuxiliaryRenderer) ModuleManager.bindI18n(i18n);
     const moduleManagerReady = isAuxiliaryRenderer ? Promise.resolve() : ModuleManager.init(i18n);
-    const idbReady = $idb.init();
+    // Sem o banco local o app ainda abre: o catálogo vem da rede. Deixar a
+    // rejeição subir parava o boot antes do mount e da telemetria — janela
+    // vazia em toda abertura, sem nenhum registro do motivo.
+    const idbReady = $idb.init().then(
+      () => true,
+      (error) => {
+        console.error("[main] IndexedDB indisponível; abrindo sem o banco local:", error);
+        Telemetry.captureException(error, { source: "boot_indexeddb" });
+        return false;
+      }
+    );
 
     if (import.meta.env.DEV) {
       try {
@@ -2421,8 +2444,8 @@ $storage.hydrate().then(async () => {
       }
     }
 
-    await Promise.all([moduleManagerReady, idbReady]);
-    _bootStage("dependencies_ready");
+    const [, indexeddbReady] = await Promise.all([moduleManagerReady, idbReady]);
+    _bootStage("dependencies_ready", { indexeddb_ready: indexeddbReady });
 
     // Sincroniza devices do IndexedDB para o main process (cache em memória).
     // Deve rodar após $idb.init() e antes do app.mount() para garantir que
@@ -2437,6 +2460,7 @@ $storage.hydrate().then(async () => {
     app.mount("#app");
     window.__ljPwaRecovery?.markMounted();
     _bootStage("mounted");
+    if (!isAuxiliaryRenderer) void warnDataDirFallback(i18n);
 
     // Estado atual, não a ação de alternar: sem isto, saber "quantos usuários
     // usam Libras" dependia de esperar alguém tocar no interruptor depois do
@@ -2805,6 +2829,8 @@ $storage.hydrate().then(async () => {
             Projection.close(id);
             Broadcast.send(BROADCAST_TYPE.MODULE_PROJECTION_CLOSE, { module: id });
           }
+          /* Nada de projeção no telão: o overlay vinculado não tem a quem pertencer. */
+          void desativarOverlayVinculado();
         };
 
         /*
@@ -2823,6 +2849,11 @@ $storage.hydrate().then(async () => {
         if (fp.isProjecting.value && fp.currentType.value === "announcements") {
           fp.stopProjection();
           Projection.close("announcements");
+          /*
+           * Anúncios não passam pelo `Media.close`, então não emitem
+           * `MEDIA_CLOSE` — o overlay vinculado precisa ser recolhido aqui.
+           */
+          void desativarOverlayVinculado();
         }
         // Projeção de arquivos de imagem e vídeo
         else if (Broadcast.getLastPayload(BROADCAST_TYPE.FILE_PROJECTION)) {

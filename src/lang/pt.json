@@ -88,6 +88,11 @@
       "file_sing": "Arquivo Cantado",
       "file_playback": "Arquivo Playback"
     },
+    "color_picker": {
+      "presets": "Cores",
+      "custom": "Personalizada",
+      "hex": "HEX"
+    },
     "customization": {
       "title": "Formatação",
       "restore": "Restaurar",
@@ -633,7 +638,7 @@
       "partial_discard": "Apagar",
       "partial_discard_confirm": "Apagar os {n} arquivos já baixados de \"{name}\"?",
       "partial_discarded": "\"{name}\": arquivos apagados.",
-      "remove": "Remover {n} do aparelho",
+      "remove": "Remover {n} do dispositivo",
       "remove_confirm": "Remover {n} item(ns) baixado(s) do aparelho? Você pode baixar de novo depois."
     },
     "bible_download": {
@@ -654,7 +659,9 @@
       "save": "Salvar",
       "saving": "Salvando…",
       "save_done": "{n} versão(ões) removida(s) do disco.",
-      "cancel": "Cancelar Download"
+      "cancel": "Cancelar Download",
+      "remove": "Remover {n} do dispositivo",
+      "remove_confirm": "Remover {n} versão(ões) da Bíblia deste dispositivo? Você pode baixar de novo depois."
     },
     "storage": {
       "title": "Armazenamento",
@@ -674,6 +681,7 @@
       "folder": "Pasta de dados",
       "restart_required": "Reinicie o aplicativo para concluir a mudança de todos os dados para esta pasta.",
       "folder_fallback": "Não consegui escrever em {dir}; os dados estão na pasta do programa. Escolha outra pasta ou libere o acesso.",
+      "folder_fallback_notice": "Sem acesso a {dir}. Seus dados estão sendo guardados na pasta do programa até você liberar o acesso ou escolher outra pasta em Sincronizar Arquivos → Armazenamento.",
       "open_folder": "Abrir pasta",
       "change_folder": "Alterar pasta…",
       "classic": {
@@ -1355,6 +1363,7 @@
       "eta": "{time} restantes",
       "cancel": "Cancelar download",
       "dismiss": "Dispensar",
+      "clear_completed": "Limpar concluídas",
       "title": "Processos em segundo plano",
       "empty": "Nenhum processo em andamento",
       "running": "Em andamento",
@@ -1376,7 +1385,8 @@
       "gloss": "Glosa",
       "libras_music": "Tradução Libras — Músicas",
       "libras_bible": "Tradução Libras — Bíblia",
-      "scheduled_scan": "Escaneando itens agendados"
+      "scheduled_scan": "Escaneando itens agendados",
+      "eta_calculating": "Calculando tempo restante…"
     },
     "appmenu_items": {
       "about": "Sobre...",
@@ -1665,13 +1675,18 @@
       "no_selection": "Nenhuma música selecionada.",
       "cached": "Traduzido",
       "not_cached": "Não traduzido",
-      "remove": "Remover tradução",
-      "remove_confirm": "Remover a tradução Libras de \"{name}\"?",
+      "remove": "Remover {n} do dispositivo",
+      "remove_confirm": "Remover {n} grupo(s) de traduções Libras deste dispositivo? Você pode traduzir de novo depois.",
       "save": "Salvar",
       "saving": "Salvando…",
       "save_done": "{count} tradução(ões) removida(s).",
       "category": "Categoria",
-      "songs": "música(s)"
+      "songs": "música(s)",
+      "partial_files": "{have} de {total} músicas traduzidas",
+      "partial_continue": "Continuar",
+      "partial_discard": "Apagar",
+      "partial_discard_confirm": "Apagar as {n} músicas já traduzidas de \"{name}\"?",
+      "partial_discarded": "Traduções parciais apagadas."
     },
     "bible": {
       "title": "Bíblia",
@@ -1693,9 +1708,14 @@
       "chapters": "{count} capítulo(s)",
       "save": "Salvar",
       "saving": "Salvando…",
-      "save_done": "{count} entrada(s) removida(s).",
-      "remove": "Remover tradução",
-      "remove_confirm": "Remover a tradução Libras de {count} capítulo(s) desta versão?"
+      "save_done": "{count} versão(ões) removida(s).",
+      "remove": "Remover {n} do dispositivo",
+      "remove_confirm": "Remover {n} versão(ões) da Bíblia em Libras deste dispositivo? Você pode traduzir de novo depois.",
+      "partial_files": "{have} de {total} capítulos traduzidos",
+      "partial_continue": "Continuar",
+      "partial_discard": "Apagar",
+      "partial_discard_confirm": "Apagar os {n} capítulos já traduzidos de \"{name}\"?",
+      "partial_discarded": "Traduções parciais apagadas."
     },
     "storage": {
       "title": "Armazenamento",
