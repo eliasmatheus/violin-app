@@ -2410,7 +2410,17 @@ $storage.hydrate().then(async () => {
     // abre o IndexedDB. Rodar em série custava um round-trip de I/O à toa.
     if (isAuxiliaryRenderer) ModuleManager.bindI18n(i18n);
     const moduleManagerReady = isAuxiliaryRenderer ? Promise.resolve() : ModuleManager.init(i18n);
-    const idbReady = $idb.init();
+    // Sem o banco local o app ainda abre: o catálogo vem da rede. Deixar a
+    // rejeição subir parava o boot antes do mount e da telemetria — janela
+    // vazia em toda abertura, sem nenhum registro do motivo.
+    const idbReady = $idb.init().then(
+      () => true,
+      (error) => {
+        console.error("[main] IndexedDB indisponível; abrindo sem o banco local:", error);
+        Telemetry.captureException(error, { source: "boot_indexeddb" });
+        return false;
+      }
+    );
 
     if (import.meta.env.DEV) {
       try {
@@ -2421,8 +2431,8 @@ $storage.hydrate().then(async () => {
       }
     }
 
-    await Promise.all([moduleManagerReady, idbReady]);
-    _bootStage("dependencies_ready");
+    const [, indexeddbReady] = await Promise.all([moduleManagerReady, idbReady]);
+    _bootStage("dependencies_ready", { indexeddb_ready: indexeddbReady });
 
     // Sincroniza devices do IndexedDB para o main process (cache em memória).
     // Deve rodar após $idb.init() e antes do app.mount() para garantir que
