@@ -52,29 +52,32 @@ afterEach(async () => {
 const arquivo = (rel, bytes) => fs.outputFile(path.join(filesDir, rel), "x".repeat(bytes));
 const existe = (rel) => fs.pathExists(path.join(filesDir, rel));
 const PDF = "pptx/abc-123-powerpoint.pdf";
+// Caminhos de mídia oficial: o acervo compartilhado só limpa o que é dele.
+const MUSICA = "musics/pt/Album/musica.mp3";
+const SOBRA = "musics/pt/Album/sobra.mp3";
 const pdfDoOperador = () => fs.outputFile(path.join(base, PDF), "x".repeat(1000));
 const pdfIntacto = () => fs.pathExists(path.join(base, PDF));
 
 describe("storage — os PDFs de PowerPoint não são sobra do acervo", () => {
   it("clearFiles apaga o acervo e preserva <dados>/pptx", async () => {
-    await arquivo("musica.mp3", 10);
+    await arquivo(MUSICA, 10);
     await pdfDoOperador();
     await storage.clearFiles();
-    expect(await existe("musica.mp3")).toBe(false);
+    expect(await existe(MUSICA)).toBe(false);
     expect(await pdfIntacto()).toBe(true);
   });
 
   it("clearUnused não apaga o PDF por não estar na lista do servidor", async () => {
-    await arquivo("sobra.mp3", 10);
+    await arquivo(SOBRA, 10);
     await pdfDoOperador();
     await storage.clearUnused([]);
-    expect(await existe("sobra.mp3")).toBe(false);
+    expect(await existe(SOBRA)).toBe(false);
     expect(await pdfIntacto()).toBe(true);
   });
 
   it("enforceQuota não conta nem remove o PDF", async () => {
     await pdfDoOperador();
-    await arquivo("musica.mp3", 10);
+    await arquivo(MUSICA, 10);
     const r = await storage.enforceQuota(50);
     expect(r.removed).toBe(0);
     expect(await pdfIntacto()).toBe(true);
