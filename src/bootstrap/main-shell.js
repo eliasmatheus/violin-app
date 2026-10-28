@@ -2808,9 +2808,12 @@ $storage.hydrate().then(async () => {
          * e com a mesma confirmação que a projeção de slides tem.
          */
         if (ProjectionWindows.isSiteProjectionActive()) {
-          $alert.yesno("modules.media.alerts.close_projection", (btn) => {
-            if (btn === "yes") void ProjectionWindows.closeSiteWindow();
-          });
+          $alert.yesno(
+            { text: "modules.media.alerts.close_projection", default_button: "yes" },
+            (btn) => {
+              if (btn === "yes") void ProjectionWindows.closeSiteWindow();
+            }
+          );
           return;
         }
 
@@ -2827,21 +2830,24 @@ $storage.hydrate().then(async () => {
         }
         // Projeção de arquivos de imagem e vídeo
         else if (Broadcast.getLastPayload(BROADCAST_TYPE.FILE_PROJECTION)) {
-          $alert.yesno("modules.media.alerts.close_projection", (btn) => {
+          $alert.yesno(
+            { text: "modules.media.alerts.close_projection", default_button: "yes" },
+            (btn) => {
+              if (btn === "yes") {
+                Broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, { action: "clear" });
+                Media.close(true);
+                closeEverythingElse();
+              }
+            }
+          );
+        } else if (_mediaIsActive()) {
+          // Música/Slides (com confirmação se ativa)
+          $alert.yesno({ text: "modules.media.alerts.close", default_button: "yes" }, (btn) => {
             if (btn === "yes") {
-              Broadcast.send(BROADCAST_TYPE.FILE_PROJECTION, { action: "clear" });
               Media.close(true);
               closeEverythingElse();
             }
           });
-        } else if (_mediaIsActive()) {
-          // Música/Slides (com confirmação se ativa)
-          $alert.yesno("modules.media.alerts.close", (btn) => {
-            if (btn === "yes") {
-              Media.close(true);
-              closeEverythingElse();
-            }
-          );
         } else {
           closeEverythingElse();
         }

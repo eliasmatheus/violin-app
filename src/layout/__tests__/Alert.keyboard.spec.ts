@@ -26,11 +26,12 @@ function marcado(): string | undefined {
   return caixas[caixas.length - 1]?.querySelector(".alert-btn--picked")?.textContent?.trim();
 }
 
-function abrirPergunta() {
+function abrirPergunta(title = "Deseja fechar este slide?", default_button: string | null = "yes") {
   state.alert = {
     show: true,
-    title: "Deseja fechar este slide?",
+    title,
     translate: false,
+    default_button,
     buttons: [
       { text: "alert.no", color: "error", value: "no" },
       { text: "alert.yes", color: "info", value: "yes" },
@@ -56,14 +57,14 @@ afterEach(() => {
   Hotkeys.destroy();
 });
 
-async function montar() {
+async function montar(...pergunta: Parameters<typeof abrirPergunta>) {
   // Como no app: o Alert já está montado e a pergunta abre depois.
   state.alert = { show: false };
   wrapper = mount(Alert, {
     attachTo: document.body,
     global: { mocks: { $t: (k: string) => k }, stubs: { Transition: false } },
   });
-  abrirPergunta();
+  abrirPergunta(...pergunta);
   await nextTick();
   await nextTick();
   await nextTick();
@@ -107,5 +108,34 @@ describe("Alert — pergunta pelo teclado", () => {
     tecla("Enter");
     expect(get("alert.value")).toBe("no");
     Hotkeys.unregister("ArrowRight", passarSlide);
+  });
+
+  it("confirmação sem botão padrão não abre armada: Enter não confirma nada", async () => {
+    await montar("Limpar todos os arquivos baixados?", null);
+    await nextTick();
+    expect(marcado()).toBeUndefined();
+    tecla("Enter");
+    tecla(" ");
+    expect(get("alert.show")).toBe(true);
+    expect(get("alert.value")).not.toBe("yes");
+
+    // Só a escolha deliberada pelas setas arma o Sim.
+    tecla("ArrowRight");
+    tecla("ArrowRight");
+    await nextTick();
+    expect(marcado()).toBe("alert.yes");
+    tecla("Enter");
+    expect(get("alert.value")).toBe("yes");
+  });
+
+  it("pergunta nova com outra ainda aberta recomeça a marcação", async () => {
+    await montar();
+    await nextTick();
+    expect(marcado()).toBe("alert.yes");
+    abrirPergunta("Excluir a playlist?", null);
+    await nextTick();
+    expect(marcado()).toBeUndefined();
+    tecla("Enter");
+    expect(get("alert.show")).toBe(true);
   });
 });

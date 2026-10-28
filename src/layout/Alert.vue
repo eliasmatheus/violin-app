@@ -75,9 +75,8 @@ const box = ref(null);
 
 // O foco tem de entrar na caixa assim que ela abre: no prompt, o campo é o
 // primeiro elemento e sem isso o usuário não consegue digitar sem clicar antes.
-// Sem campo, o foco fica na própria caixa e não num botão; o Enter, aí, vai no
-// último botão (ver onKeydown) — é o "Esc, Enter" que o sonoplasta usa para
-// fechar o hino, como no LouvorJA clássico.
+// Sem campo, o foco fica na própria caixa e NÃO no primeiro botão: um alerta de
+// confirmação abriria com a ação já armada, e um Enter reflexo a dispararia.
 watch(show, (visible) => {
   if (!visible) return;
   nextTick(() => {
@@ -105,9 +104,11 @@ const iconForVariant = computed(() => {
 
 /*
  * Teclado na pergunta, como no LouvorJA clássico: as setas (e o Tab) andam
- * entre os botões, o Enter confirma o botão escolhido e o Esc fica com a
- * primeira opção ("Não"). A pergunta abre com o último botão marcado — o "Sim"
- * da pergunta de fechar o slide: Esc e depois Enter fecham o hino.
+ * entre os botões, o Enter confirma o botão marcado e o Esc fica com a
+ * primeira opção ("Não"). Sem botão marcado, o Enter não faz nada. Só abre com
+ * um marcado a pergunta que declara `default_button` — as de encerrar o que
+ * está no telão, onde Esc e depois Enter fecham o hino. Excluir, limpar ou
+ * sair nunca abrem armadas.
  *
  * O ouvinte fica na window (captura), e não na caixa: o player é um diálogo da
  * Reka que prende o foco dentro dele, então a pergunta — teleportada para fora —
@@ -148,7 +149,7 @@ function onKeydown(event) {
   }
   if (event.key === "Enter" || event.key === " ") {
     consume();
-    clickBtn(buttons[picked.value === -1 ? n - 1 : picked.value]?.value);
+    if (picked.value !== -1) clickBtn(buttons[picked.value]?.value);
     return;
   }
   if (event.key === "Escape") {
@@ -157,12 +158,23 @@ function onKeydown(event) {
   }
 }
 
+// O botão que o Enter aperta já aparece marcado, quando a pergunta tem um. Uma
+// pergunta nova pode chegar com outra ainda aberta: a marcação recomeça por ela.
+watch(
+  () => [show.value, alert.value?.buttons, alert.value?.default_button, alert.value?.prompt],
+  () => {
+    const buttons = alert.value?.buttons ?? [];
+    picked.value =
+      show.value && !alert.value?.prompt
+        ? buttons.findIndex((btn) => btn.value === alert.value?.default_button)
+        : -1;
+  },
+  { immediate: true }
+);
+
 watch(
   show,
   (visible) => {
-    // O botão que o Enter aperta já aparece marcado: o último ("Sim"/"OK").
-    const n = alert.value?.buttons?.length ?? 0;
-    picked.value = visible && !alert.value?.prompt && n ? n - 1 : -1;
     if (typeof window === "undefined") return;
     if (visible) window.addEventListener("keydown", onKeydown, { capture: true });
     else window.removeEventListener("keydown", onKeydown, { capture: true });
