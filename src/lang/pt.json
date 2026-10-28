@@ -670,6 +670,7 @@
       "folder": "Pasta de dados",
       "restart_required": "Reinicie o aplicativo para concluir a mudança de todos os dados para esta pasta.",
       "folder_fallback": "Não consegui escrever em {dir}; os dados estão na pasta do programa. Escolha outra pasta ou libere o acesso.",
+      "folder_fallback_notice": "Sem acesso a {dir}. Seus dados estão sendo guardados na pasta do programa até você liberar o acesso ou escolher outra pasta em Sincronizar Arquivos → Armazenamento.",
       "open_folder": "Abrir pasta",
       "change_folder": "Alterar pasta…",
       "classic": {

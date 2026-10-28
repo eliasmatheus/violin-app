@@ -72,6 +72,7 @@ import {
 } from "@/helpers/Overlay";
 import Shortcuts from "@/helpers/Shortcuts";
 import Telemetry from "@/helpers/Telemetry";
+import $snackbar from "@/helpers/Snackbar";
 import Hotkeys from "@/helpers/Hotkeys";
 import { useShell } from "@/composables/useShell";
 import { BROADCAST_TYPE } from "@helpers/BroadcastTypes";
@@ -725,6 +726,21 @@ function _bootStage(stage, properties = {}) {
     ...properties,
   });
   Telemetry.histogram("louvorja.boot.stage.duration", durationMs, { stage });
+}
+
+// Sem escrita na pasta de dados (macOS negou Documentos, antivírus bloqueou), o
+// main abre na pasta do programa. Calado, o app parecia ter perdido tudo.
+async function warnDataDirFallback(i18n) {
+  const issue = await Promise.resolve(Platform.storage?.dataDirIssue?.()).catch(() => null);
+  if (!issue) return;
+  Telemetry.track("storage_data_dir_fallback", { reason: issue.reason });
+  $snackbar.warning(
+    i18n.global.t("options.storage.folder_fallback_notice", { dir: issue.wanted }),
+    {
+      timeout: 15000,
+      key: "data-dir-fallback",
+    }
+  );
 }
 
 $storage.hydrate().then(async () => {
@@ -2447,6 +2463,7 @@ $storage.hydrate().then(async () => {
     app.mount("#app");
     window.__ljPwaRecovery?.markMounted();
     _bootStage("mounted");
+    if (!isAuxiliaryRenderer) void warnDataDirFallback(i18n);
 
     // Estado atual, não a ação de alternar: sem isto, saber "quantos usuários
     // usam Libras" dependia de esperar alguém tocar no interruptor depois do
