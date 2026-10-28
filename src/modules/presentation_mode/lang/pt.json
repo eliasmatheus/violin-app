@@ -19,6 +19,7 @@
       "stop_stage_return": "Parar retorno",
       "library_files": "Arquivos",
       "library_media": "Mídia",
+      "library_media_library": "Biblioteca",
       "library_audio": "Áudio",
       "library_musics": "Músicas",
       "library_bible": "Bíblia",
@@ -235,6 +236,7 @@
     "remove_from_return": "Tirar do retorno",
     "play_muted": "Reproduzir sem áudio",
     "media": "Mídia",
+    "media_library": "Biblioteca",
     "audio": "Áudio",
     "opened_by_program": "Aberta pelo programa:",
     "close_program_folder": "Fechar a faixa do programa"
@@ -660,5 +662,17 @@
     "reset": "Voltar a 100%",
     "hint_main": "Letra das músicas na tela principal. Muda na hora; a miniatura mostra o resultado.",
     "hint_stage": "Frase atual e próxima no retorno de palco. Muda na hora; a miniatura mostra o resultado."
+  },
+  "native": {
+    "categories": "Categorias da Biblioteca de Mídia",
+    "uncategorized": "Sem categoria",
+    "empty": "A Biblioteca de Mídia está vazia. Fotos, vídeos e PDFs adicionados lá aparecem aqui.",
+    "empty_category": "Nada nesta categoria.",
+    "open": "Abrir a Biblioteca de Mídia",
+    "manage": "Gerenciar",
+    "refresh": "Atualizar",
+    "unavailable": "{n} item só abre na Biblioteca de Mídia | {n} itens só abrem na Biblioteca de Mídia",
+    "unavailable_hint": "Guardados dentro da Biblioteca de Mídia, sem arquivo no computador (como fotos HEIC arrastadas). Projete-os por lá.",
+    "desktop_only": "A Biblioteca de Mídia no Modo apresentação está disponível no aplicativo de computador."
   }
 }

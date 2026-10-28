@@ -156,6 +156,11 @@ const props = defineProps<{
   extraMenu?: (entry: LibraryEntry) => LjMenuItem[];
   /** Sem o painel de detalhes por perto (palco): some o (i) e o "Detalhes" do menu. */
   noDetails?: boolean;
+  /**
+   * Arquivos que não são da pasta da biblioteca (os da Biblioteca de Mídia):
+   * sem renomear, esconder nem Lixeira — mexeriam no original de outro módulo.
+   */
+  noFileActions?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -325,7 +330,7 @@ function menuFor(entry: LibraryEntry): EntryMenu {
 /* ─── Renomear, não mostrar, Lixeira, Finder ─── */
 
 function fileActions(entry: LibraryEntry): LjMenuItem[] {
-  if (!Platform.isDesktop) return [];
+  if (!Platform.isDesktop || props.noFileActions) return [];
   const live = entry.path === props.livePath;
   return [
     { separator: true },
@@ -367,7 +372,7 @@ const renameValue = ref("");
 let committing = false;
 
 async function startRename(entry: LibraryEntry): Promise<void> {
-  if (entry.isDir || !Platform.isDesktop) return;
+  if (entry.isDir || !Platform.isDesktop || props.noFileActions) return;
   renameValue.value = entry.name;
   renaming.value = entry.path;
   // Seleciona só o nome, sem a extensão — como o Finder e o Explorer.

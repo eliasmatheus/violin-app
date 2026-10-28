@@ -19,6 +19,7 @@
       "stop_stage_return": "Detener retorno",
       "library_files": "Archivos",
       "library_media": "Medios",
+      "library_media_library": "Biblioteca",
       "library_audio": "Audio",
       "library_musics": "Músicas",
       "library_bible": "Biblia",
@@ -235,6 +236,7 @@
     "remove_from_return": "Quitar del retorno",
     "play_muted": "Reproducir sin audio",
     "media": "Medios",
+    "media_library": "Biblioteca",
     "audio": "Audio",
     "opened_by_program": "Abierta por el programa:",
     "close_program_folder": "Cerrar la franja del programa"
@@ -660,5 +662,17 @@
     "reset": "Volver a 100%",
     "hint_main": "Letra de las canciones en la pantalla principal. Cambia al instante; la miniatura muestra el resultado.",
     "hint_stage": "Frase actual y siguiente en el retorno de escenario. Cambia al instante; la miniatura muestra el resultado."
+  },
+  "native": {
+    "categories": "Categorías de la Biblioteca de Medios",
+    "uncategorized": "Sin categoría",
+    "empty": "La Biblioteca de Medios está vacía. Las fotos, videos y PDF agregados allí aparecen aquí.",
+    "empty_category": "Nada en esta categoría.",
+    "open": "Abrir la Biblioteca de Medios",
+    "manage": "Gestionar",
+    "refresh": "Actualizar",
+    "unavailable": "{n} ítem solo se abre en la Biblioteca de Medios | {n} ítems solo se abren en la Biblioteca de Medios",
+    "unavailable_hint": "Guardados dentro de la Biblioteca de Medios, sin archivo en la computadora (como fotos HEIC arrastradas). Proyéctelos desde allí.",
+    "desktop_only": "La Biblioteca de Medios en el Modo presentación está disponible en la aplicación de computadora."
   }
 }
