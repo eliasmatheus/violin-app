@@ -422,6 +422,7 @@ export const ICONS = {
     ELECTRON: "atom",
     DELPHI: "device-imac",
     API: "api",
+    APP_MOBILE: "device-mobile",
   },
   /**
    * Ícones SVG  da pasta /assets/icons usados no componente Icon

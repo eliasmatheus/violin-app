@@ -754,7 +754,14 @@
       "lazy_load": "Carregar áudios sob demanda",
       "show_return": "Exibir na tela de retorno",
       "use_system_media_player": "Abrir áudio e vídeo no programa do Windows",
-      "use_system_media_player_hint": "Quando ativado, arquivos .mp3, .mp4 e similares da liturgia são abertos no programa padrão do sistema. Se não houver associação, o player interno é usado."
+      "use_system_media_player_hint": "Quando ativado, arquivos .mp3, .mp4 e similares da liturgia são abertos no programa padrão do sistema. Se não houver associação, o player interno é usado.",
+      "presentation_engine": "Programa para apresentações (PowerPoint)",
+      "engine_auto": "Automático (PowerPoint, se instalado; senão LibreOffice)",
+      "engine_missing": "não instalado neste computador",
+      "engine_hint_auto": "Usa o PowerPoint quando ele está instalado, porque é quem mostra o .pptx igual ao original. Sem ele, usa o LibreOffice.",
+      "engine_hint_powerpoint": "Fiel para arquivos do PowerPoint (.pptx). Arquivos feitos no LibreOffice (.odp) podem perder alguns efeitos. As animações só funcionam no Windows.",
+      "engine_hint_libreoffice": "Funciona no Windows, no Mac e no Linux, mas arquivos feitos no PowerPoint (.pptx) podem ficar diferentes: algumas animações, transições e posições de texto mudam ou não funcionam, e as fontes precisam estar instaladas.",
+      "engine_hint_fallback": "Como ele não está instalado aqui, o LouvorJA usa o outro programa."
     },
     "file_projection": {
       "title": "Projeção de Arquivos",

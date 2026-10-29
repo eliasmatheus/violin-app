@@ -7,6 +7,7 @@ import Telemetry from "@/helpers/Telemetry";
 import { useLiveContent } from "./useLiveContent";
 import { isPowerPoint, POWERPOINT_ENABLED } from "./usePowerPoint";
 import type { NavigableSource } from "./useLiveNavigation";
+import { usePptxNative } from "./usePptxNative";
 
 /**
  * O PDF no ar (slides do pregador, também os PowerPoint convertidos): a página
@@ -32,6 +33,8 @@ const thumbs = reactive(new Map<number, string>());
 let installed = false;
 /** O próximo PDF a abrir começa no fim (o operador voltou para ele). */
 let startAtEnd = false;
+/** O próximo PDF a abrir começa nesta página (o mesmo PowerPoint, gerado de novo). */
+let startAtPage = 0;
 let loadSeq = 0;
 
 function install(): void {
@@ -46,7 +49,9 @@ function install(): void {
       if (next === url.value) return;
       const seq = ++loadSeq;
       const atEnd = startAtEnd;
+      const atPage = startAtPage;
       startAtEnd = false;
+      startAtPage = 0;
       url.value = next;
       page.value = 1;
       total.value = 0;
@@ -59,13 +64,29 @@ function install(): void {
         if (seq !== loadSeq) return void loaded.cleanup();
         doc.value = loaded;
         total.value = loaded.numPages;
-        if (atEnd) goTo(loaded.numPages);
+        if (atEnd) moveTo(loaded.numPages);
+        else if (atPage > 1) moveTo(Math.min(atPage, loaded.numPages));
       } catch (e) {
         Telemetry.captureException(e, { source: "presentation_mode.pdf_deck" });
       }
     },
     { immediate: true }
   );
+
+  /*
+   * PowerPoint com animações por cima do PA: a página do PDF segue o slide em
+   * que ele está (retorno e grade certos). Trocou o que está no ar, ele sai.
+   */
+  const native = usePptxNative();
+  watch(
+    () => (native.active.value ? (native.state.value.index ?? 0) + 1 : null),
+    (n) => {
+      if (n) moveTo(n);
+    }
+  );
+  watch(url, (next, prev) => {
+    if (prev && next !== prev && native.active.value) void native.end();
+  });
 
   // A janela de projeção confirma a página (e corrige se o pedido passou do fim).
   Broadcast.listen((msg) => {
@@ -75,7 +96,17 @@ function install(): void {
   });
 }
 
+/** Clique na grade: com o PowerPoint apresentando, quem vai ao slide é ele. */
 function goTo(target: number): boolean {
+  const native = usePptxNative();
+  if (native.active.value) {
+    if (target >= 1 && target <= total.value) void native.goto(target - 1);
+    return true;
+  }
+  return moveTo(target);
+}
+
+function moveTo(target: number): boolean {
   const live = useLiveContent();
   const playbackId = live.file.value?.playback_id;
   if (!playbackId || !total.value) return false;
@@ -121,6 +152,14 @@ export function usePdfDeck() {
     position: () =>
       active.value ? { unit: "page", index: page.value - 1, total: total.value } : undefined,
     step(to) {
+      // PowerPoint apresentando: o passador anda nos efeitos dele (cada animação é um passo).
+      const native = usePptxNative();
+      if (native.active.value) {
+        if (to === "next") void native.next();
+        else if (to === "prev") void native.prev();
+        else void native.goto(to === "first" ? 0 : Math.max(0, total.value - 1));
+        return true;
+      }
       const target =
         to === "first"
           ? 1
@@ -129,7 +168,7 @@ export function usePdfDeck() {
             : to === "next"
               ? page.value + 1
               : page.value - 1;
-      return goTo(target);
+      return moveTo(target);
     },
   };
 
@@ -142,5 +181,6 @@ export function usePdfDeck() {
     goTo,
     source,
     openNextAtEnd: () => (startAtEnd = true),
+    openNextAtPage: (n: number) => (startAtPage = n),
   };
 }

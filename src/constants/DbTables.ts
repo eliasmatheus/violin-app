@@ -3,23 +3,7 @@ import { ModuleEnum } from "@/enums/ModuleEnum";
 export const DB_NAME = "louvorja-violin";
 
 /**
- * Incrementar DB_VERSION quando adicionar novas tabelas para poder atualizar o banco somente quando
- * for fazer a release para PRD.
- * Para testes, use `indexedDB.deleteDatabase("louvorja")` no console do navegador para resetar o banco
- *
- * v1 → v2: adicionada tabela "devices" (dispositivos autorizados)
- * v2 → v3: arquivos locais escolhidos na liturgia web/PWA (main) e, na linha do
- *          modo apresentação, "presentation_mode.programs" (programas do culto no navegador)
- * v3 → v4: "presentation_mode.online" (vídeos, playlists e canais favoritos) e
- *          "presentation_mode.online_cache" (primeira página de cada playlist/canal)
- * v4 → v5: "presentation_mode.models" (modelos de culto sem pasta da igreja)
- * v5 → v6: junção das duas linhas — quem já estava em v3 (main) ou v5 (modo
- *          apresentação) ganha as tabelas que faltam
- */
-export const DB_VERSION = 6;
-
-/**
- * Nomes de todas as tabelas do banco IndexedDB unificado `louvorja`.
+ * Nomes de todas as tabelas do banco IndexedDB unificado `louvorja-violin`.
  * Cada módulo usa o prefixo do módulo seguido do nome da entidade.
  *
  * As tabelas de catálogo (musics, hymnal, albums, bible_*, online_*)
@@ -27,10 +11,9 @@ export const DB_VERSION = 6;
  * (ex.: playlist.channel_id, video.playlist_id, album.musics[].id_music).
  * O roteamento chave → tabela fica em `src/helpers/Database.ts`.
  *
- * Ao adicionar uma nova tabela:
- *   1. Adicione a chave aqui
- *   2. Incremente `DB_VERSION` neste arquivo
- *   3. O `upgrade()` criará a store automaticamente
+ * Nova tabela entra só aqui: não há versão do banco para incrementar.
+ * `src/helpers/IndexedDB.ts` abre o banco na versão que estiver no disco e
+ * sobe uma versão sozinho quando falta alguma tabela desta lista.
  */
 export const DB_TABLE = {
   SETTINGS: "settings",

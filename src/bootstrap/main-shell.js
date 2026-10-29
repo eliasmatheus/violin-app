@@ -54,6 +54,7 @@ import { musicCommandSessionRejectionReason } from "@/presentation/MusicPresenta
 import { MusicActionEnum } from "@/enums/MusicActionEnum";
 import Broadcast from "@/helpers/Broadcast";
 import Database from "@/helpers/Database";
+import { readRemoteMusicAlbum } from "@/helpers/RemoteMusicAlbum";
 import Liturgy from "@/helpers/Liturgy";
 import { AUDIO_EXT } from "@/constants/FileTypes";
 import { openSlja, SLJA_EXT } from "@/helpers/SljaPlayer";
@@ -2083,6 +2084,16 @@ $storage.hydrate().then(async () => {
               break;
           }
           break;
+        case "http:music-album": {
+          let reply = { album: null };
+          try {
+            reply = await readRemoteMusicAlbum(data);
+          } catch (error) {
+            console.warn("[http:music-album] falha ao ler álbum local:", error?.message || error);
+          }
+          if (data?.requestId) Platform.httpServer?.respond?.(data.requestId, reply);
+          break;
+        }
         case "http:custom-music": {
           // Acervo pessoal mora no IndexedDB — só o renderer lê. A parte
           // pessoal é **adição**: qualquer falha aqui responde lista vazia e a
@@ -2359,7 +2370,17 @@ $storage.hydrate().then(async () => {
     // abre o IndexedDB. Rodar em série custava um round-trip de I/O à toa.
     if (isAuxiliaryRenderer) ModuleManager.bindI18n(i18n);
     const moduleManagerReady = isAuxiliaryRenderer ? Promise.resolve() : ModuleManager.init(i18n);
-    const idbReady = $idb.init();
+    // Sem o banco local o app ainda abre: o catálogo vem da rede. Deixar a
+    // rejeição subir parava o boot antes do mount e da telemetria — janela
+    // vazia em toda abertura, sem nenhum registro do motivo.
+    const idbReady = $idb.init().then(
+      () => true,
+      (error) => {
+        console.error("[main] IndexedDB indisponível; abrindo sem o banco local:", error);
+        Telemetry.captureException(error, { source: "boot_indexeddb" });
+        return false;
+      }
+    );
 
     if (import.meta.env.DEV) {
       try {
@@ -2370,8 +2391,8 @@ $storage.hydrate().then(async () => {
       }
     }
 
-    await Promise.all([moduleManagerReady, idbReady]);
-    _bootStage("dependencies_ready");
+    const [, indexeddbReady] = await Promise.all([moduleManagerReady, idbReady]);
+    _bootStage("dependencies_ready", { indexeddb_ready: indexeddbReady });
 
     // Sincroniza devices do IndexedDB para o main process (cache em memória).
     // Deve rodar após $idb.init() e antes do app.mount() para garantir que

@@ -32,7 +32,7 @@ const HTTP_RENDERER_RESPONSE_CHANNEL = "http:renderer-response";
  * pessoais. O `preloadIpcContract.spec` cobre a lista de prefixos justamente
  * para o próximo esquecimento falhar no teste e não em produção.
  */
-const HTTP_RENDERER_REQUEST_ID_RE = /^(slides|announcements|libras|online-videos|custom-music|background-sound|volume|media-library):[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const HTTP_RENDERER_REQUEST_ID_RE = /^(slides|announcements|libras|online-videos|custom-music|music-album|background-sound|volume|media-library):[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 contextBridge.exposeInMainWorld("louvorjaApi", {
   /** Resolve o caminho real de um File arrastado/selecionado (Electron 32+). */
@@ -354,6 +354,40 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
   },
 
   /*
+   * PowerPoint fiel: o main instala as fontes que faltam e o PowerPoint (ou o
+   * LibreOffice) salva o .pptx como PDF. Ver `electron/main/pptx/`.
+   */
+  pptx: {
+    status: (engine) => ipcRenderer.invoke("pptx:status", { engine }),
+    /** Abre Ajustes → Privacidade e Segurança → Arquivos e Pastas (macOS 27+). */
+    openPermissionSettings: () => ipcRenderer.invoke("pptx:openPermissionSettings"),
+    /** Pendente durante a conversão; devolve `{ ok, path }` ou `{ ok: false, code, message }`. */
+    /** `force`: ignora o PDF guardado ("Gerar de novo"). */
+    convert: (path, force, engine) => ipcRenderer.invoke("pptx:convert", { path, force: force === true, engine }),
+    /** Abre o diálogo nativo de fontes e instala as escolhidas. */
+    installFonts: () => ipcRenderer.invoke("pptx:installFonts"),
+    /** Modo nativo: o PowerPoint apresenta no PA (animações e mídias). */
+    features: (path) => ipcRenderer.invoke("pptx:features", { path }),
+    nativeStart: (path, startIndex, engine) => ipcRenderer.invoke("pptx:nativeStart", { path, startIndex, engine }),
+    nativeNav: (action, index) => ipcRenderer.invoke("pptx:nativeNav", { action, index }),
+    nativeEnd: () => ipcRenderer.invoke("pptx:nativeEnd"),
+    nativeState: () => ipcRenderer.invoke("pptx:nativeState"),
+    onNativeState: (cb) => {
+      const handler = (_e, data) => cb?.(data);
+      ipcRenderer.on("pptx:native-state", handler);
+      return () => ipcRenderer.off("pptx:native-state", handler);
+    },
+    /** Instala fontes arrastadas (.ttf, .otf ou .zip). */
+    installFontPaths: (paths) => ipcRenderer.invoke("pptx:installFontPaths", { paths }),
+    /** Andamento (fontes, conversão). Devolve a função de cleanup. */
+    onProgress: (cb) => {
+      const handler = (_e, data) => cb?.(data);
+      ipcRenderer.on("pptx:progress", handler);
+      return () => ipcRenderer.off("pptx:progress", handler);
+    },
+  },
+
+  /*
    * Integração Canva. Segredos (Client Secret, access/refresh token) não
    * passam por aqui: só resultado já validado no main. Ver
    * `electron/main/canva/` — o cofre é `storage/canva_secrets.json`.
@@ -516,7 +550,9 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
     /** Nome deste computador, para "salvo no computador X". */
     computerName: () => ipcRenderer.invoke("files:computerName"),
     /** PowerPoint → PDF pelo PowerPoint instalado (com cache). */
-    convertPresentation: (filePath) => ipcRenderer.invoke("files:convertPresentation", filePath),
+    /** `opts.force`: "Gerar de novo" (ignora o PDF guardado). */
+    convertPresentation: (filePath, opts) =>
+      ipcRenderer.invoke("files:convertPresentation", filePath, opts && opts.force === true ? { force: true } : undefined),
     /** Verifica quais arquivos remotos já estão no disco. */
     checkLocal: (remotePaths) => ipcRenderer.invoke("storage:checkLocal", remotePaths),
     /** Remove arquivos de mídia do cache local (paths remotos relativos). */
@@ -776,7 +812,7 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
    * Registra um callback para eventos emitidos pelo servidor HTTP ao renderer.
    * Eventos: "http:song-slides", "http:open-song", "http:drawing-number",
    * "http:drawing-name", "http:libras-bundle", "http:projections-close",
-   * "http:online-videos", "http:custom-music", "http:background-sound",
+   * "http:online-videos", "http:custom-music", "http:music-album", "http:background-sound",
    * "http:volume", "http:media-library"
    * Retorna função de cleanup que remove todos os listeners.
    *
@@ -793,6 +829,7 @@ contextBridge.exposeInMainWorld("louvorjaApi", {
       "http:projections-close",
       "http:online-videos",
       "http:custom-music",
+      "http:music-album",
       "http:background-sound",
       "http:volume",
       "http:media-library",

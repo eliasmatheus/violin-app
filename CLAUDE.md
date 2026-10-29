@@ -258,8 +258,9 @@ alguém precisa saber o endereço antes de abri-la.
 
 ```
 <dados>/
-├── files/      acervo — áudio, capas, imagens; e files/canva/ com os exports do Canva
+├── files/      acervo — áudio, capas, imagens; files/canva/ com os exports do Canva
 ├── storage/    preferências — user_data.json, config.json, monitor_prefs.json
+├── pptx/       PDFs gerados de PowerPoint e as fontes deles (docs/pptx.md) — fora do acervo
 ├── library/    documentos — liturgias salvas, playlists, coletâneas, itens agendados
 ├── Videos/     vídeos online baixados e suas marcas de manter
 ├── json_db/    cache das respostas JSON

@@ -368,6 +368,8 @@ export const KEYS = {
       FADE_DURATION: `${OPTIONS_FILE_PROJECTION}.fade_duration`,
       FULLSCREEN: `${OPTIONS_FILE_PROJECTION}.fullscreen`,
       SHOW_RETURN: `${OPTIONS_FILE_PROJECTION}.show_return`,
+      /** Quem gera e apresenta PowerPoint: "auto" | "powerpoint" | "libreoffice". */
+      PRESENTATION_ENGINE: `${OPTIONS_FILE_PROJECTION}.presentation_engine`,
     },
     // A projeção de URL não tem preferência própria além da tela de retorno:
     // tela cheia e "sempre no topo" seguem as de projeção de arquivo, como já

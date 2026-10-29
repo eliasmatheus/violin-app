@@ -1,7 +1,19 @@
 <template>
   <div class="pm-pdf" data-testid="pm-pdf">
+    <!--
+      PowerPoint no ar: o PDF passa os slides parados; "Apresentar com animações"
+      põe o próprio PowerPoint (ou o LibreOffice) por cima do PA.
+    -->
+    <!-- PowerPoint no ar: animações, fontes e "Apresentar com animações". -->
+    <PptxBar
+      v-if="pptxPath"
+      :pptx-path="pptxPath"
+      :page="deck.page.value"
+      :locked="locked"
+      @regenerated="(pdf: string) => emit('regenerated', pdf)"
+    />
     <!-- O zoom da página no ar: ampliar leva ao visor, onde dá para arrastar o recorte. -->
-    <ZoomControls v-if="deck.total.value" />
+    <ZoomControls v-if="deck.total.value && !native.active.value" />
     <p v-if="!deck.total.value" class="pm-pdf__loading">{{ tm("library.loading") }}</p>
     <div v-else ref="grid" class="pm-pdf__grid">
       <button
@@ -31,16 +43,20 @@ import { nextTick, ref, watch, type Directive } from "vue";
 import { ModuleEnum } from "@/enums/ModuleEnum";
 import { useModuleI18n } from "@/composables/useModuleI18n";
 import { usePdfDeck } from "../composables/usePdfDeck";
+import { usePptxNative } from "../composables/usePptxNative";
 import ZoomControls from "./ZoomControls.vue";
+import PptxBar from "./PptxBar.vue";
 
 /**
  * Os slides do PDF no ar, como a grade de uma música: clicar vai à página; a
  * no ar em laranja, a próxima em azul. Miniaturas só das páginas à vista.
  */
 
-defineProps<{ locked: boolean }>();
+defineProps<{ locked: boolean; pptxPath?: string | null }>();
+const emit = defineEmits<{ regenerated: [pdf: string] }>();
 const { tm } = useModuleI18n(ModuleEnum.PRESENTATION_MODE);
 const deck = usePdfDeck();
+const native = usePptxNative();
 
 /** Pede a miniatura quando a página entra na área visível. */
 const vIntersect: Directive<HTMLElement, () => void> = {
