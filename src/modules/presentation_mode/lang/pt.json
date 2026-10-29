@@ -179,7 +179,11 @@
     "screen_off": "DESLIGADA",
     "screen_idle": "FUNDO",
     "missing_stage_full": "O retorno de palco fechou — reabrir",
-    "no_stage_monitor": "Nenhum monitor · clique para escolher"
+    "no_stage_monitor": "Nenhum monitor · clique para escolher",
+    "diverge": "Nas Opções, {what} vão para “{target}”, não para a Tela principal.",
+    "diverge_files": "os arquivos",
+    "diverge_videos": "os vídeos on-line",
+    "diverge_fix": "Usar a Tela principal"
   },
   "stage": {
     "on_air": "NO AR",

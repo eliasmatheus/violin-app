@@ -179,7 +179,11 @@
     "screen_off": "APAGADA",
     "screen_idle": "FONDO",
     "missing_stage_full": "El retorno de escenario se cerró — reabrir",
-    "no_stage_monitor": "Ningún monitor · haz clic para elegir"
+    "no_stage_monitor": "Ningún monitor · haz clic para elegir",
+    "diverge": "En Opciones, {what} van a “{target}”, no a la Pantalla principal.",
+    "diverge_files": "los archivos",
+    "diverge_videos": "los videos en línea",
+    "diverge_fix": "Usar la Pantalla principal"
   },
   "stage": {
     "on_air": "AL AIRE",
